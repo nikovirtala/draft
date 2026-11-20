@@ -1,1 +1,9 @@
 node_modules/
+dist/
+out/
+coverage/
+*.tsbuildinfo
+test-results/
+playwright-report/
+apps/desktop/e2e/artifacts/
+.agents/

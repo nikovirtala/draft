@@ -1,17 +1,30 @@
 {
   "name": "draft",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "prepare": "adr hooks install && issues hooks install"
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.21.0",
+  "engines": {
+    "node": ">=26"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "scripts": {
+    "prepare": "adr hooks install && issues hooks install",
+    "typecheck": "pnpm -r run typecheck",
+    "lint": "biome check .",
+    "format": "biome check --write .",
+    "test": "pnpm -r run test",
+    "test:e2e": "pnpm --filter @nikovirtala/draft-desktop run test:e2e",
+    "build": "pnpm -r run build",
+    "check": "pnpm typecheck && pnpm lint && pnpm test && pnpm build"
+  },
   "devDependencies": {
+    "@biomejs/biome": "2.6.8",
+    "@commitlint/cli": "21.2.4",
+    "@commitlint/config-conventional": "21.2.4",
     "@nikovirtala/adr": "0.7.0",
-    "@nikovirtala/issues": "0.7.0"
+    "@nikovirtala/issues": "0.7.0",
+    "@types/node": "24.19.2",
+    "fast-check": "4.10.3",
+    "typescript": "7.0.2",
+    "vitest": "5.1.1"
   }
 }
