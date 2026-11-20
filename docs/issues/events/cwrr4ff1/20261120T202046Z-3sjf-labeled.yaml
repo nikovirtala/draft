@@ -1,0 +1,16 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M7X9WS16QZRFAC23S1ES3SJF
+subject: cwrr4ff1
+type: labeled
+at: 2026-11-20T20:20:46Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: niko.virtala@hey.com
+data:
+  set:
+    - type:chore
