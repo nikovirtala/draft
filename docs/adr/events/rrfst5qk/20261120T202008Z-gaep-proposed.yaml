@@ -1,0 +1,17 @@
+envelope: ledger/v1
+kind: decision
+schema: decision/v1
+id: 01M7X9VKJWPBB80Z82YRV6GAEP
+subject: rrfst5qk
+type: proposed
+at: 2026-11-20T20:20:08Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: niko.virtala@hey.com
+data:
+  title: Run the Claude Agent SDK from Electron's main process
+  template: nygard
+  template_version: 1
