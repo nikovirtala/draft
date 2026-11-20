@@ -1,0 +1,18 @@
+# issues configuration. Every key is optional: https://github.com/nikovirtala/ark/tree/main/packages/issues#config-issuestoml
+[log]
+default_template = "task"
+# "none", or "committed" to keep index.md generated and fresh in every commit (ADR-0010)
+index = "none"
+
+[labels]
+exclusive = ["priority", "type"]
+
+[policy]
+close_requires_human = false
+mcp_can_close = true
+# Every write commits; --no-commit only stages.
+auto_commit = true
+
+[commit]
+# {title} holds the title in quotes for new, and the issue's number (or id on a branch) with its title in quotes for every other write, as in: close ?42 "split the orders service".
+# subject = "docs(issues): {action} {title}"
