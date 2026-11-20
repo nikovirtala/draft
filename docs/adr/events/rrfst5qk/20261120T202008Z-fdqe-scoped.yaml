@@ -1,0 +1,16 @@
+envelope: ledger/v1
+kind: decision
+schema: decision/v1
+id: 01M7X9VKWXW680J1KFWPN7FDQE
+subject: rrfst5qk
+type: scoped
+at: 2026-11-20T20:20:08Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: niko.virtala@hey.com
+data:
+  set:
+    - apps/desktop/src/main/agent-sdk.ts
