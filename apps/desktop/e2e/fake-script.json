@@ -1,0 +1,34 @@
+{
+  "turns": [
+    {
+      "match": "sessions",
+      "steps": [
+        { "text": "Let me check Kiro Remote.", "chunk": 3, "delayMs": 30 },
+        { "tool": "kiro_list_sessions", "input": { "limit": 20 } },
+        {
+          "text": "Two sessions are open. 01KAHX7Z1M2N3P4Q5R6S7T8V9W is fixing the flaky end-to-end test and is still running. 01KAHX8A1B2C3D4E5F6G7H8J9K is writing the release notes and is waiting for your permission to run a command.",
+          "chunk": 3,
+          "delayMs": 25
+        }
+      ]
+    },
+    {
+      "match": "launch",
+      "steps": [
+        {
+          "tool": "kiro_launch_session",
+          "input": {
+            "prompt": "Update the README for the first slice",
+            "repos": ["nikovirtala/draft"],
+            "title": "Update the README"
+          }
+        },
+        {
+          "text": "The session is launching.\n\n```view\n{\"component\":\"text\",\"text\":\"Launched from draft.\"}\n```\n\n```view\n{\"component\":\"table\",\"rows\":[]}\n```",
+          "delayMs": 0
+        }
+      ]
+    }
+  ],
+  "fallback": "I have nothing scripted for that."
+}
