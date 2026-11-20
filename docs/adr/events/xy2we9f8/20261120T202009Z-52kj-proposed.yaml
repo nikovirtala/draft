@@ -1,0 +1,17 @@
+envelope: ledger/v1
+kind: decision
+schema: decision/v1
+id: 01M7X9VN2YY7JN9KCTWDM452KJ
+subject: xy2we9f8
+type: proposed
+at: 2026-11-20T20:20:09Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: niko.virtala@hey.com
+data:
+  title: Sign in to Kiro Remote with draft's own OAuth flow
+  template: nygard
+  template_version: 1
