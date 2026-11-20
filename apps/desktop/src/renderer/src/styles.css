@@ -1,0 +1,390 @@
+/* Wisteria Lily */
+:root {
+  --titlebar: #f0e9d6;
+  --background: #f9f1e1;
+  --card: #fef8ec;
+  --border: #e6d7b2;
+  --bubble: #f2e7ca;
+  --text: #005661;
+  --secondary: #5d6b6d;
+  --accent-border: #a66bff;
+  --accent-text: #7442c8;
+  --accent-tint: #ede1ff;
+  --primary: #973cff;
+  --primary-text: #fef8ec;
+  --waiting: #8a5200;
+  --waiting-bg: #fdefd3;
+  --running: #00b368;
+  --sans: "Inter Variable", "Inter", system-ui, sans-serif;
+  --serif: "Source Serif 4 Variable", "Source Serif 4", Georgia, serif;
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--background);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: var(--accent-text);
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.titlebar {
+  -webkit-app-region: drag;
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 10px 20px;
+  /* Room for the macOS traffic lights with the hidden inset title bar. */
+  padding-left: max(20px, env(titlebar-area-x, 0px));
+  background: var(--titlebar);
+  border-bottom: 1px solid var(--border);
+  user-select: none;
+}
+
+.brand {
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.title {
+  color: var(--secondary);
+  font-size: 13px;
+}
+
+.conversation {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.column {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 28px 24px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.empty {
+  color: var(--secondary);
+  text-align: center;
+  margin-top: 30vh;
+}
+
+/* The two voices: mine in sans in a bubble, the agent's in serif on the page. */
+.message p {
+  margin: 0 0 0.6em;
+}
+
+.message p:last-child {
+  margin-bottom: 0;
+}
+
+.message.user {
+  align-self: flex-end;
+  max-width: 78%;
+}
+
+.message.user .body {
+  background: var(--bubble);
+  border-radius: 14px 14px 4px 14px;
+  padding: 9px 14px;
+  font-family: var(--sans);
+}
+
+.message.agent {
+  align-self: stretch;
+  font-family: var(--serif);
+  font-size: 17px;
+  line-height: 1.55;
+}
+
+.message .stubs {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-family: var(--sans);
+  font-size: 14px;
+}
+
+code.id,
+code {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.82em;
+  color: var(--accent-text);
+}
+
+.caret {
+  display: inline-block;
+  width: 0.5em;
+  height: 1.05em;
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  background: var(--accent-border);
+  animation: blink 1s steps(2, start) infinite;
+}
+
+@keyframes blink {
+  to {
+    visibility: hidden;
+  }
+}
+
+/* Status stub */
+.stub {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 6px 8px 6px 12px;
+}
+
+.stub-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 28px;
+  white-space: nowrap;
+}
+
+.stub .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--secondary);
+  flex: none;
+}
+
+.stub.status-running .dot {
+  background: var(--running);
+}
+
+.stub.status-awaiting_permission .dot {
+  background: var(--waiting);
+}
+
+.stub-title {
+  font-weight: 560;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.stub-status {
+  color: var(--secondary);
+  font-size: 13px;
+}
+
+.stub.status-running .stub-status {
+  color: var(--running);
+  font-weight: 560;
+}
+
+.stub.status-awaiting_permission .stub-status {
+  color: var(--waiting);
+  font-weight: 560;
+}
+
+.pending {
+  color: var(--waiting);
+  background: var(--waiting-bg);
+  border-radius: 999px;
+  padding: 1px 9px;
+  font-size: 12.5px;
+  font-weight: 560;
+}
+
+.spacer {
+  flex: 1;
+}
+
+button.icon {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--secondary);
+  cursor: pointer;
+}
+
+button.icon:hover {
+  background: var(--accent-tint);
+  color: var(--accent-text);
+}
+
+button:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--accent-border);
+  outline-offset: 1px;
+}
+
+.stub-details {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 14px;
+  margin: 8px 0 4px 18px;
+  font-size: 13px;
+}
+
+.stub-details dt {
+  color: var(--secondary);
+}
+
+.stub-details dd {
+  margin: 0;
+}
+
+/* Permission prompt */
+.prompt {
+  font-family: var(--sans);
+  background: var(--accent-tint);
+  border: 1px solid var(--accent-border);
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+
+.prompt-title {
+  margin: 0 0 8px;
+}
+
+.prompt-input {
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 12.5px;
+  white-space: pre-wrap;
+  max-height: 180px;
+  overflow: auto;
+}
+
+.prompt-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.primary-button,
+.secondary-button {
+  font: inherit;
+  font-weight: 560;
+  border-radius: 9px;
+  padding: 7px 16px;
+  cursor: pointer;
+}
+
+.primary-button {
+  background: var(--primary);
+  color: var(--primary-text);
+  border: 1px solid var(--primary);
+}
+
+.primary-button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.secondary-button {
+  background: var(--card);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+/* Composer */
+.composer {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+  max-width: 760px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 12px 24px 20px;
+}
+
+.composer textarea {
+  flex: 1;
+  resize: none;
+  font: inherit;
+  color: var(--text);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 9px 12px;
+  min-height: 40px;
+  max-height: 200px;
+  field-sizing: content;
+}
+
+.composer textarea::placeholder {
+  color: var(--secondary);
+}
+
+.fallback {
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 12.5px;
+  white-space: pre-wrap;
+  color: var(--secondary);
+  background: var(--card);
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.error {
+  color: var(--waiting);
+  background: var(--waiting-bg);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 13px;
+}
+
+.refused {
+  max-width: 680px;
+  margin: 12vh auto 0;
+  padding: 0 24px;
+}
+
+.refused h1 {
+  font-family: var(--serif);
+  font-weight: 600;
+  font-size: 26px;
+}
+
+.refused pre {
+  white-space: pre-wrap;
+  background: var(--card);
+  border: 1px solid var(--accent-border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-size: 13px;
+}
+
+.secondary {
+  color: var(--secondary);
+  font-size: 13px;
+}
