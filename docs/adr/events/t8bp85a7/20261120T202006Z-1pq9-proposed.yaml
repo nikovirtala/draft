@@ -1,0 +1,17 @@
+envelope: ledger/v1
+kind: decision
+schema: decision/v1
+id: 01M7X9VJ3FZXBMMCX4T1HA1PQ9
+subject: t8bp85a7
+type: proposed
+at: 2026-11-20T20:20:06Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: niko.virtala@hey.com
+data:
+  title: Use node:sqlite in Electron's main process for views
+  template: nygard
+  template_version: 1
