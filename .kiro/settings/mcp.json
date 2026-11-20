@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "adr": {
+      "command": "npx",
+      "args": ["-y", "@nikovirtala/adr@0.7.0", "mcp"],
+      "env": { "ARK_AGENT": "kiro", "ARK_ON_BEHALF_OF": "${ARK_ON_BEHALF_OF}" },
+      "disabled": false,
+      "autoApprove": []
+    },
+    "issues": {
+      "command": "npx",
+      "args": ["-y", "@nikovirtala/issues@0.7.0", "mcp"],
+      "env": { "ARK_AGENT": "kiro", "ARK_ON_BEHALF_OF": "${ARK_ON_BEHALF_OF}" },
+      "disabled": false,
+      "autoApprove": []
+    }
+  }
+}

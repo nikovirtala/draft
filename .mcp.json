@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "adr": {
+      "command": "npx",
+      "args": ["-y", "@nikovirtala/adr@0.7.0", "mcp"],
+      "env": { "ARK_AGENT": "claude-code", "ARK_ON_BEHALF_OF": "${ARK_ON_BEHALF_OF:-}" }
+    },
+    "issues": {
+      "command": "npx",
+      "args": ["-y", "@nikovirtala/issues@0.7.0", "mcp"],
+      "env": { "ARK_AGENT": "claude-code", "ARK_ON_BEHALF_OF": "${ARK_ON_BEHALF_OF:-}" }
+    }
+  }
+}
