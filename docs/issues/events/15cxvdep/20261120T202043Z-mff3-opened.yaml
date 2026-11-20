@@ -1,0 +1,17 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M7X9WNE3B4KKN40QT8S5MFF3
+subject: 15cxvdep
+type: opened
+at: 2026-11-20T20:20:43Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: niko.virtala@hey.com
+data:
+  title: Add resolvers for GitHub pull requests, ark issues and artifact pages
+  template: task
+  template_version: 1
