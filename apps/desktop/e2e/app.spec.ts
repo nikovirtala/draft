@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { FakeKiroRemote } from "@nikovirtala/draft-core/testing";
+import { appendRawLines, FakeKiroRemote } from "@nikovirtala/draft-core/testing";
 import {
   type ElectronApplication,
   _electron as electron,
@@ -68,6 +68,7 @@ async function launch(): Promise<{ electronApp: ElectronApplication; page: Page 
       DRAFT_POLL_MAX_MS: "1200",
       DRAFT_SPAN_FILE: spanFile,
       DRAFT_MODEL: "claude-opus-5-5",
+      DRAFT_ENVIRONMENT: "e2e",
       OTEL_EXPORTER_OTLP_ENDPOINT: "",
     },
   });
@@ -140,15 +141,102 @@ test("one conversation with live Kiro session stubs, restored from the log", asy
   await expect(page.getByTestId("stub").nth(0).getByTestId("stub-details")).toBeVisible();
   await page.getByTestId("message-agent").nth(0).scrollIntoViewIfNeeded();
   await shot(page, "06-restored-after-restart");
+
+  // The user is a stable local identity from config.json, and only the user's events carry it.
+  const user = JSON.parse(readFileSync(join(dataDir, "config.json"), "utf8")).user;
+  expect(user.id).toMatch(/^[0-9a-z]{26}$/);
+  const logPath = join(dataDir, "log.jsonl");
+  const readLog = () =>
+    readFileSync(logPath, "utf8")
+      .trim()
+      .split("\n")
+      .map((l) => JSON.parse(l));
+  for (const e of readLog()) {
+    if (e.actor.kind === "user")
+      expect(e.actor).toEqual({ kind: "user", id: user.id, name: user.name });
+    else expect(e.actor.id).not.toBe(user.id);
+  }
+
+  // 7. draft dies while a step runs: Kiro Remote takes the launch, but its answer never comes back.
+  const launches = () => kiro.calls.filter((c) => c.tool === "kiro_launch_session").length;
+  expect(launches()).toBe(1);
+  kiro.hang.add("kiro_launch_session");
+  await page.getByLabel("Message").fill("Please launch a session to update the README.");
+  await page.keyboard.press("Enter");
+  await page.getByTestId("prompt").getByRole("button", { name: "Allow", exact: true }).click();
+  await expect.poll(launches).toBe(2);
+  const dying = electronApp.process();
+  const exited = new Promise((resolve) => dying.once("exit", resolve));
+  dying.kill("SIGKILL");
+  await exited;
+  kiro.hang.clear();
+  expect(readLog().at(-1)?.type).toBe("step.started");
+
+  // After the restart the step is an interrupt, and it is never run again.
+  ({ electronApp, page } = await launch());
+  const interrupt = page.getByTestId("interrupt");
+  await expect(interrupt).toContainText("may or may not have happened");
+  await expect(interrupt).toContainText("Update the README for the first slice");
+  await page.waitForTimeout(3000);
+  expect(launches()).toBe(2);
+  await interrupt.scrollIntoViewIfNeeded();
+  await shot(page, "08-interrupted-step-after-crash");
+  await electronApp.close();
+  expect(launches()).toBe(2);
+
+  // 8. A newer draft wrote an event this one doesn't know: it is kept and shown, not refused.
+  const conversation = readLog()[1].data.conversation as string;
+  writeFileSync(
+    logPath,
+    appendRawLines(readFileSync(logPath, "utf8"), [
+      {
+        id: "01M8000000000000000000000A",
+        at: new Date().toISOString(),
+        address: `${conversation}/01m8000000000000000000000a@1`,
+        conversation,
+        type: "thread.summarized",
+        schema: 1,
+        actor: { kind: "agent", id: "draft-agent", model: "claude-opus-6", version: "9.9.9" },
+        traceId: null,
+        data: { summary: "Written by a newer draft" },
+      },
+    ]),
+  );
+  ({ electronApp, page } = await launch());
+  await expect(page.getByTestId("unknown-event")).toContainText("thread.summarized");
+  await expect(page.getByTestId("message-user")).toHaveCount(3);
+  await expect(page.getByTestId("interrupt")).toHaveCount(1);
+  await page.getByTestId("unknown-event").scrollIntoViewIfNeeded();
+  await shot(page, "09-unknown-event-kept");
   await electronApp.close();
 
-  // Evidence: five consecutive events of the chain.
-  const lines = readFileSync(join(dataDir, "log.jsonl"), "utf8").trim().split("\n");
+  // Evidence: five consecutive events of the chain, and the steps.
+  const lines = readFileSync(logPath, "utf8").trim().split("\n");
   writeFileSync(join(artifacts, "log-excerpt.jsonl"), `${lines.slice(2, 7).join("\n")}\n`);
+  writeFileSync(
+    join(artifacts, "steps-excerpt.jsonl"),
+    `${lines.filter((l) => /"type":"step\./.test(l)).join("\n")}\n`,
+  );
   writeFileSync(join(artifacts, "log.jsonl"), `${lines.join("\n")}\n`);
+  const steps = readLog().filter((e) => e.type.startsWith("step."));
+  expect(steps.map((e) => e.type)).toEqual(["step.started", "step.completed", "step.started"]);
+  expect(steps[1].data.started).toBe(steps[0].address);
 
-  // 7. A tampered log is refused, and the window says why.
-  const tampered = lines.map((l) =>
+  // Every span carries draft's deploy provenance.
+  const spans = readFileSync(spanFile, "utf8")
+    .trim()
+    .split("\n")
+    .map((l) => JSON.parse(l));
+  expect(spans.length).toBeGreaterThan(0);
+  for (const span of spans) {
+    expect(span.resource["service.version"]).toBe("0.0.0");
+    expect(span.resource["vcs.ref.head.revision"]).toMatch(/^([0-9a-f]{40}|unknown)$/);
+    expect(span.resource["vcs.repository.url.full"]).toBe("https://github.com/nikovirtala/draft");
+    expect(span.resource["deployment.environment.name"]).toBe("e2e");
+  }
+
+  // 9. A tampered log is refused, and the window says why.
+  const tampered = lines.map((l: string) =>
     l.replace("Which Kiro sessions are open right now?", "Which sessions are open?"),
   );
   writeFileSync(join(dataDir, "log.jsonl"), `${tampered.join("\n")}\n`);
