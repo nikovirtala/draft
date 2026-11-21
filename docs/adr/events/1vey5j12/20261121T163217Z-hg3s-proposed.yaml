@@ -1,0 +1,17 @@
+envelope: ledger/v1
+kind: decision
+schema: decision/v1
+id: 01M7ZF74FC0KEEPKHJJMH3HG3S
+subject: 1vey5j12
+type: proposed
+at: 2026-11-21T16:32:17Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: 244629292+kiro-agent@users.noreply.github.com
+data:
+  title: Run a context's agent in the folder its person trusted, and leave Kiro's own trust to Kiro
+  template: nygard
+  template_version: 1
