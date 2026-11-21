@@ -1,0 +1,17 @@
+envelope: ledger/v1
+kind: decision
+schema: decision/v1
+id: 01M7ZETPVM3V84QXVTVV0J8M7D
+subject: wkcnp3zr
+type: proposed
+at: 2026-11-21T16:25:30Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: niko.virtala@hey.com
+data:
+  title: Write to GitHub only as the person, with their own git, gh and adr, from a UI action
+  template: nygard
+  template_version: 1
