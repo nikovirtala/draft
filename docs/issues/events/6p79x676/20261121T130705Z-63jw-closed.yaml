@@ -1,0 +1,16 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M7Z3FCNNKXCKNAGDEZZE63JW
+subject: 6p79x676
+type: closed
+at: 2026-11-21T13:07:05Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: niko.virtala@hey.com
+reason: "AcpRuntime (apps/desktop/src/main/acp) replaces the Agent SDK runtime, which is removed with its dependencies and tests. A real turn ran on kiro-cli 3.5.0 (acp --agent-engine=v3 --auth-method=cli), streaming, with Kiro Remote over HTTP: Kiro asked for kiro_launch_session, decideTool started the step before the answer, and tool_call_update completed it. claude-agent-acp 0.109.0 was checked up to the prompt (session setup, mode default, the API key message); its real turn is x2h5e7q2. Decisions: ADRs 06wp7907, h89hcrk6."
+data:
+  resolution: done
