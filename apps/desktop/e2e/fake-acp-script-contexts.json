@@ -1,0 +1,29 @@
+{
+  "agent": {
+    "name": "fake-acp-agent",
+    "version": "1.0.0",
+    "model": "fake-model-1"
+  },
+  "starts": "kiro",
+  "style": "kiro",
+  "usage": {
+    "inputTokens": 400,
+    "outputTokens": 20,
+    "totalTokens": 420
+  },
+  "turns": [
+    {
+      "match": "where are you",
+      "steps": [{ "text": "I am working in {cwd}", "chunk": 8, "delayMs": 5 }]
+    },
+    {
+      "match": "where are you",
+      "steps": [{ "text": "Still in {cwd}", "chunk": 8, "delayMs": 5 }]
+    },
+    {
+      "match": "where are you",
+      "steps": [{ "text": "Back in {cwd}", "chunk": 8, "delayMs": 5 }]
+    }
+  ],
+  "fallback": "Noted.\n\nNothing else to add."
+}

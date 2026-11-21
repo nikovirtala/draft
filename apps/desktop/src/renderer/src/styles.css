@@ -1110,6 +1110,7 @@ textarea:focus-visible {
 }
 
 .copy-reference {
+  white-space: nowrap;
   font: inherit;
   font-size: 12px;
   color: var(--secondary);
