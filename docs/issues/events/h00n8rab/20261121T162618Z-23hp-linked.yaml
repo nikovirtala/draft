@@ -1,0 +1,16 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M7ZEW5R5Q6MMESPYQ2S023HP
+subject: h00n8rab
+type: linked
+at: 2026-11-21T16:26:18Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: niko.virtala@hey.com
+data:
+  to: adr:k8af6zrg
+  rel: implements
