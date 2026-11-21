@@ -1,0 +1,15 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M7ZGR4XGP5TFXSSDXDPDKM11
+subject: 18tas8hn
+type: commented
+at: 2026-11-21T16:59:03Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: niko.virtala@hey.com
+data:
+  text: "Done in this change: the MCP client sends a step's key to a tool whose input schema advertises idempotencyKey (kiro-remote 9be84d2 added it), and the fake proves the same key returns the first result and that no key goes to a schema without one. Left: a real ACP agent builds its own Kiro Remote calls, so those cannot carry the step's key, and a retry is a new step with a new key, so it does not dedupe against the agent's first attempt. Needs the key to reach the agent's calls (a proxy, or telling the agent a key before the call)."
