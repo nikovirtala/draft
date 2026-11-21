@@ -503,3 +503,247 @@ textarea:focus-visible {
 .interrupt .secondary {
   margin: 0;
 }
+
+/* Blocks, placements, the panel and focus */
+.app.window-app {
+  background: var(--background);
+}
+
+.titlebar .spacer {
+  flex: 1;
+}
+
+.workspace {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.workspace.with-panel {
+  grid-template-columns: minmax(0, 1fr) minmax(380px, 44%);
+}
+
+.left,
+.panel {
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.panel {
+  border-left: 1px solid var(--border);
+  background: var(--background);
+}
+
+.conversation-pane {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.block-full {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.block-full.status-running,
+.block-full.status-awaiting_permission {
+  flex: none;
+}
+
+.block-full:not(.thread-view) {
+  padding: 12px 16px;
+}
+
+.block-header {
+  padding: 8px 14px 6px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--card);
+}
+
+.block-full:not(.thread-view) .block-header {
+  margin: -12px -16px 8px;
+}
+
+.thread-view .column {
+  padding-top: 18px;
+}
+
+.thread-agent-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 2px 0 4px;
+}
+
+.thread-agent-row .agent-state {
+  margin-left: 0;
+}
+
+.thread-agent-row select {
+  font: inherit;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 2px 6px;
+}
+
+.prompt.switch .secondary {
+  margin: 4px 0 10px;
+}
+
+/* A block that moved leaves a stub where it was made, saying where it went. */
+.stub.away,
+.thread-stub.away {
+  opacity: 0.8;
+  border-style: dashed;
+}
+
+.where {
+  color: var(--accent-text);
+  background: var(--accent-tint);
+  border-radius: 999px;
+  padding: 1px 9px;
+  font-size: 12.5px;
+  font-weight: 560;
+}
+
+.stub[data-selected="true"],
+.thread-stub[data-selected="true"],
+.block-full.thread-view:focus-within {
+  border-color: var(--accent-border);
+}
+
+.threads {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-family: var(--sans);
+  font-size: 14px;
+}
+
+.thread-stub {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent-border);
+  border-radius: 10px;
+  padding: 6px 8px 6px 12px;
+}
+
+.thread-stub.waiting {
+  border-left-color: var(--waiting);
+}
+
+.thread-mark {
+  color: var(--accent-text);
+  font-weight: 700;
+}
+
+.thread-agent {
+  color: var(--secondary);
+  font-size: 13px;
+}
+
+.thread-chip {
+  color: var(--secondary);
+  background: var(--bubble);
+  border-radius: 999px;
+  padding: 1px 9px;
+  font-size: 12.5px;
+  font-weight: 560;
+}
+
+.thread-chip.new {
+  color: var(--accent-text);
+  background: var(--accent-tint);
+}
+
+.thread-chip.waiting {
+  color: var(--waiting);
+  background: var(--waiting-bg);
+}
+
+.thread-chip.working {
+  color: var(--running);
+}
+
+.thread-preview {
+  margin: 4px 0 4px 18px;
+  color: var(--secondary);
+  font-size: 13.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.message-actions {
+  margin-top: 2px;
+  height: 28px;
+  opacity: 0;
+  transition: opacity 0.1s;
+  font-family: var(--sans);
+}
+
+.message:hover .message-actions,
+.message:focus-within .message-actions {
+  opacity: 1;
+}
+
+.branch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.branch-agents {
+  display: inline-flex;
+  gap: 4px;
+  margin-left: 4px;
+}
+
+.branch-agent {
+  font: inherit;
+  font-size: 12.5px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.branch-agent:hover {
+  background: var(--accent-tint);
+}
+
+/* Attention, and focus */
+.attention {
+  -webkit-app-region: no-drag;
+  display: flex;
+  gap: 14px;
+  align-items: baseline;
+  font-size: 13px;
+  font-weight: 560;
+  color: var(--waiting);
+}
+
+.attention[data-focused="true"] .focus-mark {
+  color: var(--accent-text);
+}
+
+.app[data-focused="true"] .titlebar {
+  background: var(--accent-tint);
+}
+
+.window-bar .title {
+  color: var(--text);
+  font-weight: 560;
+}

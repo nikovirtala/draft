@@ -318,7 +318,7 @@ export class AcpRuntime implements AgentRuntime {
     try {
       appendFileSync(
         this.o.transcript,
-        `{"at":"${new Date().toISOString()}","dir":"${direction}","msg":${redacted}}\n`,
+        `{"at":"${new Date().toISOString()}","agent":${JSON.stringify(this.o.spec.id)},"dir":"${direction}","msg":${redacted}}\n`,
       );
     } catch {
       // A transcript is a diagnostic; failing to write it never stops a turn.

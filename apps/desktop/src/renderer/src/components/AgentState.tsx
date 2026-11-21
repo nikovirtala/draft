@@ -1,9 +1,14 @@
 import type { ConversationState } from "../../../shared/ipc.ts";
 
+/** A short name for an agent by its configured id. */
+export function agentName(id: string): string {
+  const names: Record<string, string> = { kiro: "Kiro", claude: "Claude", fake: "the agent" };
+  return names[id] ?? id;
+}
+
 /** A short name for the agent: its configured id, and the model it reports. */
 export function agentLabel(agent: ConversationState["agent"]): string {
-  const names: Record<string, string> = { kiro: "Kiro", claude: "Claude", fake: "the agent" };
-  return names[agent.id] ?? agent.id;
+  return agentName(agent.id);
 }
 
 /** The agent's name, its state, and the control that pauses or plays it. */

@@ -75,6 +75,11 @@ const BUILTIN: Record<string, Omit<AgentSpec, "id">> = {
   },
 };
 
+/** The ids of the agents draft knows how to start without configuration. */
+export function builtinAgentIds(): string[] {
+  return Object.keys(BUILTIN);
+}
+
 export interface AgentConfig {
   /** The default agent's id. */
   agent: string;
