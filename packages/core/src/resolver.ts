@@ -29,6 +29,16 @@ export interface Resolver {
    * state always raises the same interrupts. A resolver whose targets never need anyone has none.
    */
   interrupts?(target: Target, state: Record<string, unknown>): InterruptCandidate[];
+  /**
+   * Why an interrupt this resolver raised no longer applies, in the target's state now, when it
+   * can say more than "the source no longer reports it": an acceptance request names the evidence
+   * that went red. Null leaves the generic reason.
+   */
+  clearedBecause?(
+    open: { key: string; detail: Record<string, unknown> },
+    target: Target,
+    state: Record<string, unknown>,
+  ): string | null;
 }
 
 export class KiroSessionResolver implements Resolver {

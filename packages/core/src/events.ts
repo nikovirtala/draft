@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { AcceptanceEffectSchema } from "./acceptance.ts";
 import { tryParseAddress } from "./address.ts";
 import { canonicalJson, sha256Hex } from "./canonical.ts";
 import { isUlid } from "./ids.ts";
@@ -202,11 +203,16 @@ export const EventData = {
      */
     retryOf: AddressString(true).optional(),
   }),
-  /** The step ran and its tool reported success. */
+  /**
+   * The step ran and its tool reported success. A step that carried out a person's answer to an
+   * acceptance request also records what it did: the commit or merge it made, the evidence as it
+   * was when the person answered, and how to undo it.
+   */
   "step.completed": z.object({
     started: AddressString(true),
     idempotencyKey: z.string().min(1),
     resultSummary: z.string(),
+    effect: AcceptanceEffectSchema.optional(),
   }),
   /** The step ran and its tool reported an error. */
   "step.failed": z.object({
@@ -334,9 +340,11 @@ export const SCHEMA_VERSIONS: Record<EventType, number> = {
   "step.started": 1,
   "step.completed": 1,
   "step.failed": 1,
-  "interrupt.raised": 1,
-  "interrupt.cleared": 1,
-  "interrupt.settled": 1,
+  // 2: the interrupt kind `acceptance` exists. A build that doesn't know it keeps these events
+  // without reading them, instead of refusing the log.
+  "interrupt.raised": 2,
+  "interrupt.cleared": 2,
+  "interrupt.settled": 2,
   "thread.conclusion_proposed": 1,
   "thread.wrapped_up": 1,
   "thread.conclusion_declined": 1,
@@ -360,6 +368,10 @@ export type MessagePostedV1Data = z.infer<typeof MessagePostedV1>;
 /** Older versions of a type's data that this build still reads. Old versions are upcast on read; the log is never rewritten. */
 const OLDER_DATA: { [T in EventType]?: Record<number, z.ZodType> } = {
   "message.posted": { 1: MessagePostedV1 },
+  // Version 1 had fewer interrupt kinds; everything it wrote is valid under today's schema.
+  "interrupt.raised": { 1: EventData["interrupt.raised"] },
+  "interrupt.cleared": { 1: EventData["interrupt.cleared"] },
+  "interrupt.settled": { 1: EventData["interrupt.settled"] },
 };
 
 /** What `message.posted` of any version read carries; use `audienceOf` for the audience. */
