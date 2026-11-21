@@ -88,13 +88,15 @@ export interface ConversationOptions {
   projection: Projection;
   agent: AgentRuntime;
   resolvers: readonly Resolver[];
-  /** The local user; the agent and resolvers have their own actors. */
-  user?: Extract<Actor, { kind: "user" }>;
+  /** The person at this device. The agent and resolvers have their own actors. */
+  user: UserActor;
   context?: string;
   title?: string;
   poller?: PollerOptions;
   newId?: () => string;
 }
+
+export type UserActor = Extract<Actor, { kind: "user" }>;
 
 const SYSTEM: Actor = { kind: "system", id: "draft", version: DRAFT_VERSION };
 
@@ -109,7 +111,7 @@ export class ConversationService {
   private readonly projection: Projection;
   private readonly agent: AgentRuntime;
   private readonly resolvers: Map<string, Resolver>;
-  private readonly user: Extract<Actor, { kind: "user" }>;
+  private readonly user: UserActor;
   private readonly newId: (() => string) | undefined;
   private readonly listeners = new Set<(c: UiChange) => void>();
   private readonly prompts = new Map<
@@ -127,7 +129,7 @@ export class ConversationService {
     this.projection = o.projection;
     this.agent = o.agent;
     this.resolvers = new Map(o.resolvers.map((r) => [r.type, r]));
-    this.user = o.user ?? { kind: "user", id: "local-user" };
+    this.user = o.user;
     this.newId = o.newId;
     this.conversation = conversation;
     this.context = conversation.split("/")[0] as string;

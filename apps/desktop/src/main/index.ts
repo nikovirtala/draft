@@ -19,6 +19,7 @@ import { app, BrowserWindow, ipcMain, shell } from "electron";
 import { type Boot, CHANNELS, type Change, type Placement } from "../shared/ipc.ts";
 import { ClaudeAgentRuntime, packagedClaudeExecutable } from "./agent-sdk.ts";
 import { loadConfig } from "./config.ts";
+import { ensureIdentity, userActor } from "./identity.ts";
 import { SafeStorageSecretStore } from "./secrets.ts";
 import { JsonFileSpanExporter, startTelemetry } from "./telemetry.ts";
 import { ViewStateStore } from "./view-state.ts";
@@ -51,6 +52,7 @@ function openBrowser(url: string): Promise<void> {
 /** Opens the log, verifies it, and builds everything the conversation needs. */
 async function start(): Promise<Boot> {
   const config = loadConfig(app.getPath("userData"));
+  const identity = ensureIdentity(config.dataDir);
   const logPath = join(config.dataDir, "log.jsonl");
   let log: FileLogStore;
   try {
@@ -118,6 +120,7 @@ async function start(): Promise<Boot> {
     projection,
     agent,
     resolvers,
+    user: userActor(identity),
     poller: { baseMs: config.pollBaseMs, maxMs: config.pollMaxMs },
   });
   service.onChange((c: Change) => window?.webContents.send(CHANNELS.change, c));

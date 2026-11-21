@@ -14,7 +14,7 @@ export function testClock(start = Date.UTC(2026, 10, 20, 12, 0, 0)) {
   };
 }
 
-export const USER = { kind: "user", id: "local-user" } as const;
+export const USER = { kind: "user", id: "01kahx0000000000000000user", name: "Test User" } as const;
 export const AGENT = {
   kind: "agent",
   id: "draft-agent",

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { canonicalJson } from "../src/canonical.ts";
 import { eventHash, GENESIS_HASH, parseEvent, sealEvent } from "../src/events.ts";
-import { CONV, messageDraft, TRACE } from "./helpers.ts";
+import { CONV, messageDraft, TRACE, USER } from "./helpers.ts";
 
 const sealed = () =>
   sealEvent(messageDraft("m1", "user", "hello"), {
@@ -33,7 +33,7 @@ describe("the event envelope", () => {
       conversation: CONV,
       type: "message.posted",
       schema: 1,
-      actor: { kind: "user", id: "local-user" },
+      actor: USER,
       traceId: TRACE,
       prevHash: GENESIS_HASH,
       data: { role: "user", text: "hello" },

@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import type { UiPrompt } from "../src/conversation.ts";
 import { knownEvents } from "../src/events.ts";
 import { fakeKiro, openService, RUNNING, WAITING } from "./fixtures.ts";
+import { USER } from "./helpers.ts";
 
 describe("a conversation", () => {
   it("runs a turn: streams the reply, logs tool calls, references the sessions it names", async () => {
@@ -40,7 +41,15 @@ describe("a conversation", () => {
     const traceIds = new Set(turn.map((e) => e.traceId));
     expect(traceIds.size).toBe(1);
     expect([...traceIds][0]).toMatch(/^[0-9a-f]{32}$/);
-    expect(turn[0]?.actor).toEqual({ kind: "user", id: "local-user" });
+    expect(turn[0]?.actor).toEqual(USER);
+    // The agent never acts under the user's identity: only the user's own message carries it.
+    expect(turn.filter((e) => e.actor.kind === "user").map((e) => e.type)).toEqual([
+      "message.posted",
+    ]);
+    expect(turn.filter((e) => e.actor.kind === "agent").map((e) => e.type)).toEqual([
+      "agent.tool_called",
+      "message.posted",
+    ]);
     expect(turn[2]?.actor).toMatchObject({ kind: "agent", model: "claude-opus-5-5" });
     expect(turn[1]?.data).toMatchObject({
       name: "mcp__kiro-remote__kiro_list_sessions",

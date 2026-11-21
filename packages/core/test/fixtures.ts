@@ -5,6 +5,7 @@ import { FileLogStore } from "../src/log.ts";
 import { Projection } from "../src/projection.ts";
 import { KiroSessionResolver } from "../src/resolver.ts";
 import { FakeKiroRemote } from "../src/testing/index.ts";
+import { USER } from "./helpers.ts";
 
 export const RUNNING = "01KAHX7Z1M2N3P4Q5R6S7T8V9W";
 export const WAITING = "01KAHX8A1B2C3D4E5F6G7H8J9K";
@@ -59,6 +60,7 @@ export async function openService(dir: string, kiro: FakeKiroRemote, script: Fak
     projection,
     agent: new FakeAgentRuntime(script, tools, { model: "claude-opus-5-5" }),
     resolvers: [new KiroSessionResolver(tools)],
+    user: USER,
     poller: { baseMs: 0 },
   });
   return {

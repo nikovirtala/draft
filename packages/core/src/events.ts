@@ -21,9 +21,13 @@ const ConversationString = z.string().refine((s) => {
   return a !== null && a.conversation !== null && a.item === null && a.version === null;
 }, "must be <context>/<conversation>");
 
-/** Who wrote an event. The agent never acts under the user's identity. */
+/**
+ * Who wrote an event. The agent never acts under the user's identity. A user is a stable identity
+ * (a ULID created on the device's first run), never an assumed "me", so adding people later needs
+ * no migration; `name` is the display name at the time of the event.
+ */
 export const ActorSchema = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("user"), id: z.string().min(1) }),
+  z.object({ kind: z.literal("user"), id: z.string().min(1), name: z.string().min(1) }),
   z.object({
     kind: z.literal("agent"),
     id: z.string().min(1),
