@@ -1,5 +1,5 @@
 import { context as otelContext, ROOT_CONTEXT, type Span, trace } from "@opentelemetry/api";
-import { conversationKey, itemAddress } from "./address.ts";
+import { conversationKey, itemAddress, parseAddress } from "./address.ts";
 import {
   type AgentDirectory,
   type AgentEvent,
@@ -23,11 +23,32 @@ import {
   targetKey,
 } from "./events.ts";
 import { newItemId } from "./ids.ts";
-import { summarizeResult } from "./kiro.ts";
+import {
+  type AttentionItem,
+  INTERRUPT_KINDS,
+  type InterruptKind,
+  interruptMachine,
+  orderAttention,
+} from "./interrupts.ts";
+import {
+  bareToolName,
+  chooseOption,
+  type KiroPendingPermission,
+  type KiroRemoteTools,
+  summarizeResult,
+  toolPermission,
+} from "./kiro.ts";
 import type { LogStore } from "./log.ts";
 import type { Projection } from "./projection.ts";
 import { type PollerOptions, type Resolver, StubPoller, sameState } from "./resolver.ts";
 import { draftMetrics, failSpan, logEvent, tracer } from "./telemetry.ts";
+import {
+  type Citations,
+  isEnded,
+  type ThreadFold,
+  type ThreadState,
+  threadMachine,
+} from "./thread.ts";
 import { DRAFT_VERSION } from "./version.ts";
 import { type MessageSegment, segmentMessage } from "./view.ts";
 
@@ -82,16 +103,29 @@ export type UiBlock =
       /**
        * Something that needs a person, derived from the log: a step that started but never
        * finished (draft stopped, or lost the result, while it ran, so it may or may not have
-       * happened; it is never run again), or a call that ran without the agent asking first.
+       * happened; it is never run again), a step that failed, a call that ran without the agent
+       * asking first, or something a resolver saw outside: a permission request, a failed check.
+       * It stays in the conversation once settled, with who settled it and how.
        */
       kind: "interrupt";
-      cause: "unfinished-step" | "unasked-call";
+      cause: InterruptKind;
+      /** The interrupt's key: what a settlement names. */
       id: string;
+      state: "open" | "settled" | "cleared";
+      /** The tool of a step or call; empty for what a resolver raised. */
       tool: string;
       input: unknown;
       /** The step's key; a call that ran unasked had no step. */
       idempotencyKey: string | null;
       at: string;
+      /** One line saying what it is, for what a resolver raised. */
+      summary: string;
+      detail: Record<string, unknown>;
+      target: Target | null;
+      /** What a person can settle it as, while it is open. */
+      outcomes: string[];
+      settled: { outcome: string; at: string; by: string; via: string | null } | null;
+      cleared: { reason: string; at: string } | null;
     }
   | {
       /** The log's last line was never completed; its bytes were moved aside when it opened. */
@@ -101,11 +135,29 @@ export type UiBlock =
       sidecar: string;
       bytes: number;
       at: string;
+    }
+  | {
+      /** A note from draft itself, such as how it reaches GitHub. */
+      kind: "note";
+      id: string;
+      what: string;
+      text: string;
+      at: string;
     };
+
+/** A thread's own state and conclusion, for the conversation that shows it. */
+export interface UiThreadState {
+  state: ThreadState;
+  /** The latest proposal while concluding, or the conclusion that wrapped the thread up. */
+  conclusion: ThreadFold["conclusion"];
+  endedReason: string | null;
+}
 
 export interface UiState {
   context: string;
   conversation: string;
+  /** Null for the main conversation. */
+  thread: UiThreadState | null;
   /** The message this conversation branched off, or null for the main conversation. */
   parent: string | null;
   title: string;
@@ -146,7 +198,16 @@ export function usageAttributes(
 export interface SubmitOptions {
   /** Post for people only: the agent never reads it, and no turn starts. */
   aside?: boolean;
+  /** The turn drafts the thread's conclusion. A thread also starts one when asked to "wrap up". */
+  wrapUp?: boolean;
 }
+
+/** "Wrap this up", "wrap it up", "wrap up": a request for the thread's conclusion. */
+export const WRAP_UP_REQUEST = /\bwrap(?:\s+(?:this|it|the\s+thread))?\s+up\b/i;
+
+/** What the agent is told on top of a wrap-up request; the user's message is logged as typed. */
+export const WRAP_UP_INSTRUCTION =
+  "\n\n[draft] Write this thread's conclusion for the main conversation: what was decided, what was made, and what is still open, in a few plain sentences. Reply with the conclusion only; draft shows it to the user to confirm.";
 
 /** `@agent` anywhere in a message, as a word of its own. */
 export const AGENT_MENTION = /(?:^|[^\w@])@agent\b/i;
@@ -163,6 +224,13 @@ export interface ConversationOptions {
   resolvers: readonly Resolver[];
   /** The person at this device. The agent and resolvers have their own actors. */
   user: UserActor;
+  /**
+   * Kiro Remote as the person: what answering a permission request and retrying a step call. It
+   * is draft acting for the person, never the agent's tools. Without it, those can't be settled.
+   */
+  actions?: KiroRemoteTools;
+  /** Told when another conversation of the log changed, so it can show it. */
+  touched?: (conversation: string) => void;
   context?: string;
   title?: string;
   poller?: PollerOptions;
@@ -185,20 +253,6 @@ export class SerialWriter {
   }
 }
 
-/** Something that needs a person in one conversation: one count, in one order, across all of them. */
-export interface AttentionItem {
-  id: string;
-  conversation: string;
-  cause: "permission" | "unfinished-step" | "unasked-call";
-  at: string;
-}
-
-/**
- * A thread's own state. Only `open` exists so far; what closes a thread (a measurable sign of use
- * in production, a conclusion that returns to the main conversation) adds states here.
- */
-export type ThreadState = "open";
-
 const SYSTEM: Actor = { kind: "system", id: "draft", version: DRAFT_VERSION };
 
 /**
@@ -215,6 +269,8 @@ export class ConversationService {
   private readonly resolvers: Map<string, Resolver>;
   private readonly user: UserActor;
   private readonly newId: (() => string) | undefined;
+  private readonly actions: KiroRemoteTools | null;
+  private readonly touched: ((conversation: string) => void) | undefined;
   private readonly listeners = new Set<(c: UiChange) => void>();
   private readonly prompts = new Map<
     string,
@@ -227,6 +283,8 @@ export class ConversationService {
   private error: string | null = null;
   /** Steps this process started and is waiting on, by tool use id. Every other open step is interrupted. */
   private readonly stepsInFlight = new Map<string, { started: string; idempotencyKey: string }>();
+  /** Steps of the person's own (answers, retries) waiting on Kiro Remote. */
+  private readonly userSteps = new Set<string>();
   readonly poller: StubPoller;
 
   private constructor(o: ConversationOptions, conversation: string) {
@@ -237,6 +295,8 @@ export class ConversationService {
     this.resolvers = new Map(o.resolvers.map((r) => [r.type, r]));
     this.user = o.user;
     this.newId = o.newId;
+    this.actions = o.actions ?? null;
+    this.touched = o.touched;
     this.conversation = conversation;
     this.context = conversation.split("/")[0] as string;
     const m = draftMetrics();
@@ -273,8 +333,15 @@ export class ConversationService {
     const interrupted = o.projection
       .conversations()
       .flatMap((c) => o.projection.steps(c.conversation))
-      .filter((s) => s.outcome === null).length;
+      .filter((s) => s.outcome === null && s.resolution === null).length;
     if (interrupted > 0) draftMetrics().interruptedSteps.add(interrupted);
+    // Replaying every thread's events through its machine is the conformance test.
+    const violations = o.projection
+      .conversations()
+      .filter((c) => c.parent !== null)
+      .reduce((n, c) => n + o.projection.thread(c.conversation).rejected, 0);
+    if (violations > 0)
+      draftMetrics().machineViolations.add(violations, { "draft.machine": "thread" });
     let conv = o.projection.conversations()[0]?.conversation;
     if (conv === undefined) {
       const ctx = o.context ?? "local";
@@ -325,21 +392,24 @@ export class ConversationService {
   }
 
   /**
-   * What needs a person here, computed from the log (steps that never finished, calls that ran
-   * without asking) and from the permission requests waiting now. The workspace puts every
-   * conversation's items in one order.
+   * What needs a person here, computed from the log (steps that never finished or failed, calls
+   * that ran without asking, what resolvers raised, a conclusion waiting for a yes) and from the
+   * permission requests waiting now. The workspace puts every conversation's items in one order.
    */
   attention(): AttentionItem[] {
     const items: AttentionItem[] = [];
-    for (const b of this.timeline(this.projection.messages(this.conversation))) {
-      if (b.kind !== "interrupt") continue;
-      items.push({
-        id: b.id,
-        conversation: this.conversation,
-        cause: b.cause === "unasked-call" ? "unasked-call" : "unfinished-step",
-        at: b.at,
-      });
+    for (const { seq, block: b } of this.interruptEntries()) {
+      if (b.state !== "open") continue;
+      items.push({ id: b.id, conversation: this.conversation, cause: b.cause, at: b.at, seq });
     }
+    const thread = this.threadFold();
+    if (thread?.state === "concluding" && thread.conclusion !== null)
+      items.push({
+        id: thread.conclusion.address,
+        conversation: this.conversation,
+        cause: "conclusion",
+        at: thread.conclusion.proposedAt,
+      });
     for (const p of this.prompts.values())
       items.push({
         id: p.prompt.id,
@@ -347,7 +417,130 @@ export class ConversationService {
         cause: "permission",
         at: p.at,
       });
-    return items.sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
+    return orderAttention(items);
+  }
+
+  /** This conversation's own thread state, or null for the main conversation. */
+  private threadFold(): ThreadFold | null {
+    return this.isThread() ? this.projection.thread(this.conversation) : null;
+  }
+
+  private interruptBlocks(): Extract<UiBlock, { kind: "interrupt" }>[] {
+    return this.interruptEntries().map((e) => e.block);
+  }
+
+  /** Every interrupt of this conversation, open or not, in log order, with its place in the log. */
+  private interruptEntries(): { seq: number; block: Extract<UiBlock, { kind: "interrupt" }> }[] {
+    const running = new Set([
+      ...[...this.stepsInFlight.values()].map((s) => s.started),
+      ...this.userSteps,
+    ]);
+    const out: { seq: number; block: Extract<UiBlock, { kind: "interrupt" }> }[] = [];
+    const base = { summary: "", detail: {}, target: null, cleared: null };
+    const settledOf = (key: string, since = -1) => {
+      const x = this.projection.settlementOf(key);
+      return x !== null && x.seq > since
+        ? {
+            outcome: x.outcome,
+            at: x.at,
+            by: x.actor.name ?? x.actor.id,
+            via: x.via,
+          }
+        : null;
+    };
+    for (const s of this.projection.steps(this.conversation)) {
+      // Answering a permission is shown on the permission it answers, not as a step of its own.
+      if (bareToolName(s.name) === "kiro_answer_permission") continue;
+      if (running.has(s.started)) continue;
+      const failed = s.outcome === "failed";
+      if (s.outcome === "completed") continue;
+      const cause: InterruptKind = failed ? "failed-step" : "unfinished-step";
+      const key = failed ? `failed:${s.started}` : s.started;
+      const settled =
+        s.resolution === null
+          ? null
+          : {
+              outcome: s.resolution,
+              at: s.resolvedAt ?? s.startedAt,
+              by: this.settlementActor(key, s.resolution),
+              via: this.projection.settlementOf(key)?.via ?? null,
+            };
+      out.push({
+        seq: s.startedSeq,
+        block: {
+          ...base,
+          kind: "interrupt",
+          cause,
+          id: key,
+          state: settled === null ? "open" : "settled",
+          tool: s.name,
+          input: s.input,
+          detail: failed ? { result: s.resultSummary } : {},
+          idempotencyKey: s.idempotencyKey,
+          at: failed ? (s.finishedAt ?? s.startedAt) : s.startedAt,
+          outcomes: settled === null ? [...INTERRUPT_KINDS[cause].outcomes] : [],
+          settled,
+        },
+      });
+    }
+    for (const a of this.projection.anomalies(this.conversation)) {
+      const settled = settledOf(a.address);
+      out.push({
+        seq: a.seq,
+        block: {
+          ...base,
+          kind: "interrupt",
+          cause: "unasked-call",
+          id: a.address,
+          state: settled === null ? "open" : "settled",
+          tool: a.name,
+          input: a.input,
+          idempotencyKey: null,
+          at: a.at,
+          outcomes: settled === null ? [...INTERRUPT_KINDS["unasked-call"].outcomes] : [],
+          settled,
+        },
+      });
+    }
+    for (const r of this.projection.raised(this.conversation)) {
+      const [type, ...rest] = (r.target ?? "").split(":");
+      out.push({
+        seq: r.seq,
+        block: {
+          kind: "interrupt",
+          cause: r.kind,
+          id: r.key,
+          state: r.state,
+          tool: "",
+          input: null,
+          idempotencyKey: null,
+          at: r.at,
+          summary: r.summary,
+          detail: r.detail,
+          target: r.target === null ? null : { type: type as string, id: rest.join(":") },
+          outcomes: r.state === "open" ? [...INTERRUPT_KINDS[r.kind].outcomes] : [],
+          settled:
+            r.settlement === null
+              ? null
+              : {
+                  outcome: r.settlement.outcome,
+                  at: r.settlement.at,
+                  by: r.settlement.actor.name ?? r.settlement.actor.id,
+                  via: r.settlement.via,
+                },
+          cleared:
+            r.state === "cleared" && r.clearedAt !== null
+              ? { reason: r.clearedReason ?? "", at: r.clearedAt }
+              : null,
+        },
+      });
+    }
+    return out.sort((a, b) => a.seq - b.seq);
+  }
+
+  private settlementActor(key: string, outcome: string): string {
+    const x = this.projection.settlementOf(key);
+    return x !== null && x.outcome === outcome ? (x.actor.name ?? x.actor.id) : "you";
   }
 
   onChange(cb: (c: UiChange) => void): () => void {
@@ -383,9 +576,14 @@ export class ConversationService {
     } catch {
       // The agent chosen for this thread is no longer configured; the turn says so.
     }
+    const fold = this.threadFold();
     return {
       context: this.context,
       conversation: this.conversation,
+      thread:
+        fold === null
+          ? null
+          : { state: fold.state, conclusion: fold.conclusion, endedReason: fold.endedReason },
       parent: conv?.parent ?? null,
       title: conv?.title ?? "Conversation",
       agent: {
@@ -434,36 +632,21 @@ export class ConversationService {
         },
       });
     }
-    const running = new Set([...this.stepsInFlight.values()].map((s) => s.started));
-    for (const s of this.projection.steps(this.conversation)) {
-      if (s.outcome !== null || running.has(s.started)) continue;
-      blocks.push({
-        seq: s.startedSeq,
-        block: {
-          kind: "interrupt",
-          cause: "unfinished-step",
-          id: s.started,
-          tool: s.name,
-          input: s.input,
-          idempotencyKey: s.idempotencyKey,
-          at: s.startedAt,
-        },
-      });
+    // Interrupts keep the place in the log where they arose.
+    const seqOf = new Map<string, number>();
+    for (const st of this.projection.steps(this.conversation)) {
+      seqOf.set(st.started, st.startedSeq);
+      seqOf.set(`failed:${st.started}`, st.startedSeq);
     }
-    for (const a of this.projection.anomalies(this.conversation)) {
-      blocks.push({
-        seq: a.seq,
-        block: {
-          kind: "interrupt",
-          cause: "unasked-call",
-          id: a.address,
-          tool: a.name,
-          input: a.input,
-          idempotencyKey: null,
-          at: a.at,
-        },
-      });
-    }
+    for (const an of this.projection.anomalies(this.conversation)) seqOf.set(an.address, an.seq);
+    for (const r of this.projection.raised(this.conversation)) seqOf.set(r.key, r.seq);
+    for (const b of this.interruptBlocks()) blocks.push({ seq: seqOf.get(b.id) ?? 0, block: b });
+    if (!thread)
+      for (const n of this.projection.notices())
+        blocks.push({
+          seq: n.seq,
+          block: { kind: "note", id: n.eventId, what: n.what, text: n.text, at: n.at },
+        });
     for (const r of thread ? [] : this.projection.recoveries()) {
       blocks.push({
         seq: r.seq,
@@ -498,6 +681,376 @@ export class ConversationService {
       allow ? { allow: true } : { allow: false, message: "The user declined this action." },
     );
     this.emitState();
+  }
+
+  /* ------------------------------------------------------------------------------------------ */
+  /* Interrupts                                                                                  */
+  /* ------------------------------------------------------------------------------------------ */
+
+  /** Shows another conversation's change: this one's own state, or through the workspace. */
+  private touch(conversation: string): void {
+    if (conversation === this.conversation) this.emitState();
+    else this.touched?.(conversation);
+  }
+
+  /**
+   * Raises what a resolver says needs a person, in the conversation it belongs to, and clears what
+   * it no longer says. A key that is open or settled is left alone; a cleared one that applies
+   * again is a new episode.
+   */
+  private async reconcile(
+    target: Target,
+    state: Record<string, unknown>,
+    resolver: Resolver,
+    traceId: string | null,
+  ): Promise<void> {
+    if (resolver.interrupts === undefined) return;
+    const wanted = resolver.interrupts(target, state);
+    const key = targetKey(target);
+    const actor: Actor = { kind: "resolver", id: resolver.type, version: resolver.version };
+    const touched = new Set<string>();
+    await this.writer.run(async () => {
+      const owner = this.projection.ownerOf(target);
+      const drafts: EventDraft[] = [];
+      for (const w of wanted) {
+        const latest = this.projection.latestRaised(w.key);
+        if (latest !== null && latest.state !== "cleared") continue;
+        drafts.push({
+          type: "interrupt.raised",
+          address: itemAddress(owner, newItemId(this.newId)),
+          conversation: owner,
+          actor,
+          traceId,
+          data: { key: w.key, kind: w.kind, target, summary: w.summary, detail: w.detail },
+        });
+        touched.add(owner);
+      }
+      for (const open of this.projection.openRaisedFor(key)) {
+        if (wanted.some((w) => w.key === open.key)) continue;
+        drafts.push({
+          type: "interrupt.cleared",
+          address: itemAddress(open.conversation, newItemId(this.newId)),
+          conversation: open.conversation,
+          actor,
+          traceId,
+          data: { key: open.key, kind: open.kind, reason: "the source no longer reports it" },
+        });
+        touched.add(open.conversation);
+      }
+      if (drafts.length === 0) return;
+      const sealed = await this.log.append(drafts);
+      for (const e of sealed) {
+        this.projection.apply(e);
+        if (e.type === "interrupt.raised" || e.type === "interrupt.cleared")
+          draftMetrics().interrupts.add(1, {
+            "draft.interrupt.kind": e.data.kind,
+            "draft.interrupt.event": e.type === "interrupt.raised" ? "raised" : "cleared",
+          });
+      }
+    });
+    for (const c of touched) this.touch(c);
+  }
+
+  /** Looks at a target once more, as after an answer, instead of waiting for the next poll. */
+  private async refresh(target: Target): Promise<void> {
+    const resolver = this.resolvers.get(target.type);
+    if (resolver === undefined) return;
+    try {
+      const state = await resolver.fetch(target.id);
+      if (state !== null && !sameState(this.projection.stub(targetKey(target))?.state, state))
+        await this.observe(target, state, resolver);
+    } catch {
+      draftMetrics().resolverFailures.add(1, { "draft.resolver": target.type });
+    }
+  }
+
+  private settledDraft(d: {
+    key: string;
+    kind: InterruptKind;
+    outcome: string;
+    started: string | null;
+    via: string | null;
+    detail?: Record<string, unknown>;
+    traceId: string | null;
+  }): EventDraft {
+    return {
+      type: "interrupt.settled",
+      address: itemAddress(this.conversation, newItemId(this.newId)),
+      conversation: this.conversation,
+      actor: this.user,
+      traceId: d.traceId,
+      data: {
+        key: d.key,
+        kind: d.kind,
+        outcome: d.outcome,
+        started: d.started,
+        via: d.via,
+        detail: d.detail ?? {},
+      },
+    };
+  }
+
+  /**
+   * Settles one of this conversation's interrupts, as the person at this device. Only a person
+   * can: the machine of every kind lets nobody else fire a settlement, and the agent's tool policy
+   * refuses `kiro_answer_permission`. An answer to a hosted session's permission request goes to
+   * Kiro Remote as the person, and is logged as a step of theirs and then as the settlement. Retry
+   * starts a new step with a new key, and the old one is never run again.
+   */
+  async settleInterrupt(key: string, outcome: string): Promise<void> {
+    const block = this.interruptBlocks().find((b) => b.id === key);
+    if (block === undefined) throw new Error(`no such interrupt: ${key}`);
+    if (block.state !== "open") throw new Error("this interrupt is already settled");
+    const step = interruptMachine(block.cause).next("open", `settle:${outcome}`, "user");
+    if (!step.ok) throw new Error(step.message);
+    const traceId = this.systemTrace("draft.interrupt.settle");
+    const settle = async (extra: {
+      started: string | null;
+      via: string | null;
+      detail?: Record<string, unknown>;
+    }) => {
+      await this.append(
+        [this.settledDraft({ key, kind: block.cause, outcome, traceId, ...extra })],
+        "interrupt.settled",
+      );
+      draftMetrics().interrupts.add(1, {
+        "draft.interrupt.kind": block.cause,
+        "draft.interrupt.event": "settled",
+        "draft.interrupt.outcome": outcome,
+      });
+    };
+    if (block.cause === "permission") {
+      const d = block.detail as {
+        sessionId: string;
+        requestId: string;
+        title: string;
+        kind: string | null;
+        options: KiroPendingPermission["options"];
+      };
+      const optionId = chooseOption(d, outcome === "allowed");
+      if (optionId === null) throw new Error("the request offers no option for that answer");
+      const r = await this.userStep(
+        `mcp__kiro-remote__kiro_answer_permission`,
+        { sessionId: d.sessionId, requestId: d.requestId, optionId },
+        traceId,
+      );
+      if (!r.ok) throw new Error(`Kiro Remote didn't take the answer: ${r.summary}`);
+      await settle({ started: null, via: r.started, detail: { optionId } });
+      if (block.target !== null) await this.refresh(block.target);
+      return;
+    }
+    if (block.cause === "unfinished-step" || block.cause === "failed-step") {
+      const started = block.cause === "failed-step" ? key.slice("failed:".length) : key;
+      if (outcome !== "retry") return settle({ started, via: null });
+      const orig = this.projection.steps(this.conversation).find((s) => s.started === started);
+      if (orig === undefined) throw new Error("the step is not in this conversation");
+      if (toolPermission(orig.name) !== "ask")
+        throw new Error(`draft won't run ${orig.name} again for you`);
+      // The settlement and the new step's start are written together, so a retry can't be
+      // started twice and the new step's intent is in the log before its effect.
+      await this.userStep(orig.name, orig.input as Record<string, unknown>, traceId, {
+        retryOf: started,
+        before: (via) => [
+          this.settledDraft({ key, kind: block.cause, outcome, started, via, traceId }),
+        ],
+      });
+      draftMetrics().interrupts.add(1, {
+        "draft.interrupt.kind": block.cause,
+        "draft.interrupt.event": "settled",
+        "draft.interrupt.outcome": outcome,
+      });
+      return;
+    }
+    await settle({ started: null, via: null });
+  }
+
+  /**
+   * Runs a Kiro Remote tool as the person: its start is in the log before the call, and its
+   * result after. A call that throws leaves the step open, because it may have happened.
+   */
+  private async userStep(
+    name: string,
+    input: Record<string, unknown>,
+    traceId: string | null,
+    o: { retryOf?: string; before?: (started: string) => EventDraft[] } = {},
+  ): Promise<{ started: string; idempotencyKey: string; ok: boolean; summary: string }> {
+    const tool = bareToolName(name);
+    if (this.actions === null || tool === null)
+      throw new Error("draft has no connection to Kiro Remote to act with");
+    const m = draftMetrics();
+    const started = itemAddress(this.conversation, newItemId(this.newId));
+    const idempotencyKey = newItemId(this.newId);
+    await this.append(
+      [
+        ...(o.before?.(started) ?? []),
+        {
+          type: "step.started",
+          address: started,
+          conversation: this.conversation,
+          actor: this.user,
+          traceId,
+          data: {
+            idempotencyKey,
+            toolUseId: `user-${newItemId(this.newId)}`,
+            name,
+            input,
+            decision: "approved-by-user",
+            ...(o.retryOf === undefined ? {} : { retryOf: o.retryOf }),
+          },
+        },
+      ],
+      "step.started",
+    );
+    m.steps.add(1, { "draft.step.outcome": "started" });
+    this.userSteps.add(started);
+    let result: Awaited<ReturnType<KiroRemoteTools["call"]>>;
+    try {
+      result = await this.actions.call(tool, input);
+    } catch (err) {
+      m.steps.add(1, { "draft.step.outcome": "interrupted" });
+      throw err;
+    } finally {
+      this.userSteps.delete(started);
+    }
+    const ok = !result.isError;
+    const summary = summarizeResult(result);
+    await this.append(
+      [
+        {
+          type: ok ? "step.completed" : "step.failed",
+          address: itemAddress(this.conversation, newItemId(this.newId)),
+          conversation: this.conversation,
+          actor: this.user,
+          traceId,
+          data: { started, idempotencyKey, resultSummary: summary },
+        },
+      ],
+      ok ? "step.completed" : "step.failed",
+    );
+    m.steps.add(1, { "draft.step.outcome": ok ? "completed" : "failed" });
+    return { started, idempotencyKey, ok, summary };
+  }
+
+  /* ------------------------------------------------------------------------------------------ */
+  /* Threads                                                                                     */
+  /* ------------------------------------------------------------------------------------------ */
+
+  /** This thread's state and conclusion; null for the main conversation. */
+  threadState(): ThreadFold | null {
+    return this.threadFold();
+  }
+
+  /** The conversation this thread's branch point is in. */
+  private parentConversation(): string {
+    const parent = this.projection
+      .conversations()
+      .find((c) => c.conversation === this.conversation)?.parent;
+    if (parent === null || parent === undefined) throw new Error("this is not a thread");
+    const a = parseAddress(parent);
+    return conversationKey(a.context, a.conversation as string);
+  }
+
+  /** What the conclusion rests on: this thread, and what it produced. */
+  private citations(): Citations {
+    const conv = this.projection.conversations().find((c) => c.conversation === this.conversation);
+    const seen = new Set<string>();
+    const produced: Citations["produced"] = [];
+    for (const e of this.projection.edges(this.conversation)) {
+      if (seen.has(e.target)) continue;
+      seen.add(e.target);
+      const [type, ...rest] = e.target.split(":");
+      produced.push({ type: type as string, id: rest.join(":") });
+    }
+    return {
+      thread: this.conversation,
+      parent: conv?.parent as string,
+      messages: this.projection.messages(this.conversation).length,
+      produced,
+    };
+  }
+
+  private async fireThread(
+    trigger: string,
+    draft: (fold: ThreadFold) => EventDraft,
+    reason?: string,
+  ): Promise<void> {
+    const fold = this.threadFold();
+    if (fold === null) throw new Error("only a thread can do that");
+    const step = threadMachine().next(fold.state, trigger, "user", reason);
+    if (!step.ok) throw new Error(step.message);
+    await this.append([draft(fold)], `thread.${trigger}`);
+    draftMetrics().threadEvents.add(1, { "draft.thread.event": trigger });
+  }
+
+  /**
+   * Confirms the conclusion the thread's agent drafted: one action, as the person. The thread
+   * wraps up and the conclusion returns to the conversation the thread branched off, at its stub.
+   */
+  async confirmConclusion(): Promise<void> {
+    const returnedTo = this.parentConversation();
+    await this.fireThread("confirm", (fold) => {
+      const c = fold.conclusion as NonNullable<ThreadFold["conclusion"]>;
+      return {
+        type: "thread.wrapped_up",
+        address: itemAddress(this.conversation, newItemId(this.newId)),
+        conversation: this.conversation,
+        actor: this.user,
+        traceId: this.systemTrace("draft.thread.wrap_up"),
+        data: { proposal: c.address, text: c.text, cites: c.cites, returnedTo },
+      };
+    });
+    this.touch(returnedTo);
+  }
+
+  /** Sends the conclusion back: the thread is open again, and the agent can draft another. */
+  async declineConclusion(): Promise<void> {
+    await this.fireThread("decline", (fold) => ({
+      type: "thread.conclusion_declined",
+      address: itemAddress(this.conversation, newItemId(this.newId)),
+      conversation: this.conversation,
+      actor: this.user,
+      traceId: this.systemTrace("draft.thread.decline"),
+      data: { proposal: (fold.conclusion as NonNullable<ThreadFold["conclusion"]>).address },
+    }));
+  }
+
+  /** Ends the thread as superseded or withdrawn. A reason is required. */
+  async endThread(as: "superseded" | "withdrawn", reason: string): Promise<void> {
+    await this.fireThread(
+      as,
+      () => ({
+        type: "thread.ended",
+        address: itemAddress(this.conversation, newItemId(this.newId)),
+        conversation: this.conversation,
+        actor: this.user,
+        traceId: this.systemTrace("draft.thread.end"),
+        data: { state: as, reason: reason.trim() },
+      }),
+      reason,
+    );
+    this.touch(this.parentConversation());
+  }
+
+  /**
+   * A note in the main conversation, such as how draft reaches GitHub. Written when it differs
+   * from the latest note of the same kind, so a restart doesn't repeat it.
+   */
+  async note(what: string, text: string): Promise<void> {
+    const last = [...this.projection.notices()].reverse().find((n) => n.what === what);
+    if (last?.text === text) return;
+    await this.append(
+      [
+        {
+          type: "notice.posted",
+          address: itemAddress(this.conversation, newItemId(this.newId)),
+          conversation: this.conversation,
+          actor: SYSTEM,
+          traceId: null,
+          data: { what, text },
+        },
+      ],
+      "notice",
+    );
   }
 
   reportInvalidView(reason: "not-json" | "schema"): void {
@@ -589,11 +1142,15 @@ export class ConversationService {
    */
   async submit(text: string, options: SubmitOptions = {}): Promise<void> {
     if (text.trim() === "") return;
+    const thread = this.threadFold();
+    if (thread !== null && isEnded(thread.state)) throw new Error("this thread has ended");
     const state = this.agentState();
     const addressed = state === "paused" && AGENT_MENTION.test(text);
     const toAgent = options.aside !== true && (state === "active" || addressed);
     if (!toAgent) return this.postPeopleOnly(text);
     if (this.busy) throw new Error("a turn is already running");
+    // A thread asked to wrap up drafts its conclusion in this turn.
+    const wrapUp = thread !== null && (options.wrapUp === true || WRAP_UP_REQUEST.test(text));
     const agent = this.runtime();
     this.busy = true;
     this.error = null;
@@ -663,7 +1220,12 @@ export class ConversationService {
         });
         const agentCtx = trace.setSpan(ctx, agentSpan);
         const events = agent.runTurn(
-          { conversation: this.conversation, text, context, signal: abort.signal },
+          {
+            conversation: this.conversation,
+            text: wrapUp ? `${text}${WRAP_UP_INSTRUCTION}` : text,
+            context,
+            signal: abort.signal,
+          },
           {
             confirmTool: (call) =>
               otelContext.with(agentCtx, async () => {
@@ -971,6 +1533,23 @@ export class ConversationService {
           "structural",
           traceId,
         );
+        // The reply to a wrap-up request is the thread's conclusion, waiting for a person's yes.
+        if (wrapUp && failure === null && replyText.trim() !== "") {
+          await this.append(
+            [
+              {
+                type: "thread.conclusion_proposed",
+                address: itemAddress(this.conversation, newItemId(this.newId)),
+                conversation: this.conversation,
+                actor: agentActor(),
+                traceId,
+                data: { text: replyText.trim(), cites: this.citations() },
+              },
+            ],
+            "thread.propose",
+          );
+          m.threadEvents.add(1, { "draft.thread.event": "propose" });
+        }
       });
       m.turns.add(1, { "draft.turn.outcome": this.error === null ? "ok" : "error" });
       // Only what the agent reported is recorded: a turn that reported nothing says so.
@@ -1056,6 +1635,7 @@ export class ConversationService {
             drafts.push(this.statusDraft(target, snapshot, resolver, traceId));
           }
           await this.append(drafts, "reference");
+          await this.reconcile(target, snapshot, resolver, traceId);
         }
       }
     }
@@ -1088,12 +1668,11 @@ export class ConversationService {
       ROOT_CONTEXT,
     );
     try {
-      await otelContext.with(trace.setSpan(ROOT_CONTEXT, span), () =>
-        this.append(
-          [this.statusDraft(target, state, resolver, span.spanContext().traceId)],
-          "status",
-        ),
-      );
+      await otelContext.with(trace.setSpan(ROOT_CONTEXT, span), async () => {
+        const traceId = span.spanContext().traceId;
+        await this.append([this.statusDraft(target, state, resolver, traceId)], "status");
+        await this.reconcile(target, state, resolver, traceId);
+      });
     } finally {
       span.end();
     }

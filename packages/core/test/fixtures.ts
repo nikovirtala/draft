@@ -67,6 +67,8 @@ export async function openService(
     agent,
     resolvers: [new KiroSessionResolver(tools)],
     user: USER,
+    // What the person's own answers and retries call: never the agent's tools.
+    actions: kiro.asTools(),
     poller: { baseMs: 0 },
   });
   return {

@@ -136,7 +136,9 @@ describe("steps: calls that change something", () => {
       after,
       script([{ tool: "kiro_list_sessions", input: {} }]),
     );
-    const interrupt = second.service.state().timeline.find((b) => b.kind === "interrupt");
+    const interrupt = second.service
+      .state()
+      .timeline.find((b) => b.kind === "interrupt" && b.cause === "unfinished-step");
     expect(interrupt).toMatchObject({
       kind: "interrupt",
       tool: "mcp__kiro-remote__kiro_launch_session",
@@ -149,7 +151,13 @@ describe("steps: calls that change something", () => {
     expect(mutatingCalls(after)).toEqual([]);
     expect(mutatingCalls(before)).toHaveLength(1);
     // The interrupt stays until the step is resolved some other way: the log holds no completion.
-    expect(second.service.state().timeline.filter((b) => b.kind === "interrupt")).toHaveLength(1);
+    expect(
+      second.service
+        .state()
+        .timeline.filter(
+          (b) => b.kind === "interrupt" && b.state === "open" && b.cause === "unfinished-step",
+        ),
+    ).toHaveLength(1);
     second.close();
   });
 
@@ -216,7 +224,7 @@ describe("steps: calls that change something", () => {
           ).length;
           const interrupts = r.service
             .state()
-            .timeline.filter((b) => b.kind === "interrupt").length;
+            .timeline.filter((b) => b.kind === "interrupt" && b.cause === "unfinished-step").length;
           expect(interrupts).toBe(started - finished);
           r.close();
         }

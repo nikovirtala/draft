@@ -19,6 +19,13 @@ const bridge: DraftBridge = {
     ipcRenderer.invoke(CHANNELS.previewSwitch, conversation, agent),
   switchAgent: (conversation, agent) =>
     ipcRenderer.invoke(CHANNELS.switchAgent, conversation, agent),
+  settleInterrupt: (conversation, key, outcome) =>
+    ipcRenderer.invoke(CHANNELS.settleInterrupt, conversation, key, outcome),
+  wrapUp: (conversation) => ipcRenderer.invoke(CHANNELS.wrapUp, conversation),
+  confirmConclusion: (conversation) => ipcRenderer.invoke(CHANNELS.confirmConclusion, conversation),
+  declineConclusion: (conversation) => ipcRenderer.invoke(CHANNELS.declineConclusion, conversation),
+  endThread: (conversation, as, reason) =>
+    ipcRenderer.invoke(CHANNELS.endThread, conversation, as, reason),
   onChange: (cb) => {
     const listener = (_e: unknown, c: Change) => cb(c);
     ipcRenderer.on(CHANNELS.change, listener);

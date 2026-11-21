@@ -66,6 +66,9 @@ export interface DraftMetrics {
   steps: ReturnType<ReturnType<typeof metrics.getMeter>["createCounter"]>;
   interruptedSteps: ReturnType<ReturnType<typeof metrics.getMeter>["createCounter"]>;
   anomalies: ReturnType<ReturnType<typeof metrics.getMeter>["createCounter"]>;
+  interrupts: ReturnType<ReturnType<typeof metrics.getMeter>["createCounter"]>;
+  threadEvents: ReturnType<ReturnType<typeof metrics.getMeter>["createCounter"]>;
+  machineViolations: ReturnType<ReturnType<typeof metrics.getMeter>["createCounter"]>;
 }
 
 let cached: { meter: unknown; m: DraftMetrics } | null = null;
@@ -101,6 +104,15 @@ export function draftMetrics(): DraftMetrics {
     }),
     anomalies: meter.createCounter("draft.anomalies", {
       description: "Calls that ran without the agent asking first, by kind",
+    }),
+    interrupts: meter.createCounter("draft.interrupts", {
+      description: "Interrupts by kind and event: raised, cleared or settled",
+    }),
+    threadEvents: meter.createCounter("draft.thread.events", {
+      description: "Thread lifecycle events: proposed, wrapped-up, declined, ended",
+    }),
+    machineViolations: meter.createCounter("draft.machine.violations", {
+      description: "Firings a state machine refused while replaying the log, by machine",
     }),
     unknownEvents: meter.createCounter("draft.log.unknown_events", {
       description:

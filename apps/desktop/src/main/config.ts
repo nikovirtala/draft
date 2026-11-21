@@ -24,6 +24,15 @@ const FileConfigSchema = z
     agents: z.record(z.string().min(1), AgentSpecSchema).optional(),
     /** Set by the first slice and ignored now: the agent reports the model it runs. */
     model: z.string().optional(),
+    /**
+     * ark issue logs by the source name that references use (`draft:15cxvdep`), as the
+     * `[[sources]]` of ark's tools name them: the name, then `owner/repo`.
+     */
+    arkSources: z
+      .record(z.string().regex(/^[a-z][a-z0-9-]{0,31}$/), z.string().regex(/^[^/\s]+\/[^/\s]+$/))
+      .optional(),
+    /** Where the local artifact server runs (nikovirtala/artifact); `http://localhost:4400` by default. */
+    artifactUrl: z.url().optional(),
     /** The local identity, written on the first run (see identity.ts). */
     user: z.object({ id: z.string().min(1), name: z.string().min(1) }).optional(),
   })
@@ -47,6 +56,12 @@ export interface Config {
   agentCwd: string;
   pollBaseMs: number;
   pollMaxMs: number;
+  /** ark issue logs by source name, for references like `draft:15cxvdep`. */
+  arkSources: Record<string, string>;
+  /** The artifact server whose page links draft shows as live stubs. */
+  artifactUrl: string;
+  /** GitHub's API; only a test points it elsewhere. */
+  githubApiUrl: string;
 }
 
 export function loadConfig(dataDir: string, env: NodeJS.ProcessEnv = process.env): Config {
@@ -75,6 +90,9 @@ export function loadConfig(dataDir: string, env: NodeJS.ProcessEnv = process.env
     agent: resolveAgent({ agent: id, agents }),
     agentConfig: { agent: id, agents },
     agentCwd: join(dataDir, "agent-workspace"),
+    arkSources: fromFile.arkSources ?? { draft: "nikovirtala/draft", ark: "nikovirtala/ark" },
+    artifactUrl: env.DRAFT_ARTIFACT_URL ?? fromFile.artifactUrl ?? "http://localhost:4400",
+    githubApiUrl: env.DRAFT_GITHUB_API_URL ?? "https://api.github.com",
     pollBaseMs: Number(env.DRAFT_POLL_BASE_MS ?? 2000),
     pollMaxMs: Number(env.DRAFT_POLL_MAX_MS ?? 60_000),
   };

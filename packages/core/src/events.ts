@@ -2,6 +2,7 @@ import { z } from "zod";
 import { tryParseAddress } from "./address.ts";
 import { canonicalJson, sha256Hex } from "./canonical.ts";
 import { isUlid } from "./ids.ts";
+import { INTERRUPT_KINDS, type InterruptKind } from "./interrupts.ts";
 
 /** The previous hash of the first event in a log. */
 export const GENESIS_HASH = "0".repeat(64);
@@ -63,6 +64,18 @@ export type Audience = z.infer<typeof AudienceSchema>;
 
 export const PEOPLE_ONLY: Audience = { people: "all", agent: false };
 export const PEOPLE_AND_AGENT: Audience = { people: "all", agent: true };
+
+export const InterruptKindSchema = z.enum(
+  Object.keys(INTERRUPT_KINDS) as [InterruptKind, ...InterruptKind[]],
+);
+
+/** What a conclusion rests on: the thread, and what it produced. */
+export const CitationsSchema = z.object({
+  thread: ConversationString,
+  parent: AddressString(true),
+  messages: z.number().int().min(0),
+  produced: z.array(TargetSchema),
+});
 
 export const AgentStateSchema = z.enum(["active", "paused"]);
 export type AgentState = z.infer<typeof AgentStateSchema>;
@@ -173,6 +186,11 @@ export const EventData = {
     name: z.string().min(1),
     input: z.unknown(),
     decision: z.literal("approved-by-user"),
+    /**
+     * The step this one retries: a person settled that step as "retry", so this is a new step
+     * with its own key. The old one is never run again.
+     */
+    retryOf: AddressString(true).optional(),
   }),
   /** The step ran and its tool reported success. */
   "step.completed": z.object({
@@ -186,6 +204,58 @@ export const EventData = {
     idempotencyKey: z.string().min(1),
     resultSummary: z.string(),
   }),
+  /**
+   * Something outside the log needs a person: a hosted session's permission request, a failed
+   * check, a merge conflict. Written by the resolver that saw it, in the conversation it belongs
+   * to; its time is when it arose, so its age is derivable from the log. Interrupts that are
+   * computed from other events (an unfinished step, a call that ran unasked) need no such event.
+   */
+  "interrupt.raised": z.object({
+    key: z.string().min(1),
+    kind: InterruptKindSchema,
+    target: TargetSchema.nullable(),
+    summary: z.string(),
+    detail: z.record(z.string(), z.unknown()),
+  }),
+  /** The source stopped needing a person: the check passes, the request was answered elsewhere. */
+  "interrupt.cleared": z.object({
+    key: z.string().min(1),
+    kind: InterruptKindSchema,
+    reason: z.string().min(1),
+  }),
+  /**
+   * A person settled an interrupt, as themselves. For a step it names the started step; `via` is
+   * the step that carried the settlement out (answering a permission, retrying), when there was one.
+   */
+  "interrupt.settled": z.object({
+    key: z.string().min(1),
+    kind: InterruptKindSchema,
+    outcome: z.string().min(1),
+    started: AddressString(true).nullable(),
+    via: AddressString(true).nullable(),
+    detail: z.record(z.string(), z.unknown()),
+  }),
+  /** A thread's agent drafted a conclusion for the main conversation; it waits for a person. */
+  "thread.conclusion_proposed": z.object({
+    text: z.string().min(1),
+    cites: CitationsSchema,
+  }),
+  /** A person confirmed the proposal: the thread wraps up and the conclusion returns to its parent. */
+  "thread.wrapped_up": z.object({
+    proposal: AddressString(true),
+    text: z.string().min(1),
+    cites: CitationsSchema,
+    /** The conversation the conclusion returns to. */
+    returnedTo: ConversationString,
+  }),
+  "thread.conclusion_declined": z.object({ proposal: AddressString(true) }),
+  /** A person ended a thread as superseded or withdrawn, with a reason. */
+  "thread.ended": z.object({
+    state: z.enum(["superseded", "withdrawn"]),
+    reason: z.string().min(1),
+  }),
+  /** A note draft shows in the conversation, such as how it reaches GitHub. */
+  "notice.posted": z.object({ what: z.string().min(1), text: z.string().min(1) }),
   "reference.made": z.object({
     from: AddressString(true),
     target: TargetSchema,
@@ -223,6 +293,14 @@ export const SCHEMA_VERSIONS: Record<EventType, number> = {
   "step.started": 1,
   "step.completed": 1,
   "step.failed": 1,
+  "interrupt.raised": 1,
+  "interrupt.cleared": 1,
+  "interrupt.settled": 1,
+  "thread.conclusion_proposed": 1,
+  "thread.wrapped_up": 1,
+  "thread.conclusion_declined": 1,
+  "thread.ended": 1,
+  "notice.posted": 1,
   "reference.made": 1,
   "status.observed": 1,
   "log.recovered": 1,

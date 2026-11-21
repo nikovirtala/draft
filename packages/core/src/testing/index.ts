@@ -1,4 +1,12 @@
 export {
+  type FakeCheck,
+  FakeGithub,
+  type FakeIssueEvent,
+  type FakePull,
+  type FakeReview,
+  type RecordedRequest,
+} from "./fake-github.ts";
+export {
   FakeKiroRemote,
   type FakeKiroRemoteOptions,
   type FakePermission,

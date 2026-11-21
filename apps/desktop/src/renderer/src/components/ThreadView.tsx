@@ -4,6 +4,7 @@ import type { Entry } from "../../../shared/placement.ts";
 import { useWorkspace } from "../workspace.tsx";
 import { AgentState, agentName } from "./AgentState.tsx";
 import { ConversationView } from "./ConversationView.tsx";
+import { EndThread } from "./EndThread.tsx";
 import { BlockControls } from "./Icons.tsx";
 import { useSelectable } from "./selectable.ts";
 
@@ -101,6 +102,28 @@ export function ThreadView({ entry }: { entry: Entry }) {
             agent={state.agent}
             onChange={(s) => void window.draft.setAgentState(conversation, s)}
           />
+        </div>
+        <div className="thread-actions">
+          <button
+            type="button"
+            className="agent-toggle"
+            data-testid="wrap-up"
+            disabled={
+              state.busy ||
+              state.thread === null ||
+              state.thread.state === "wrapped-up" ||
+              state.thread.state === "superseded" ||
+              state.thread.state === "withdrawn"
+            }
+            title="Ask the agent to draft this thread's conclusion for the main conversation"
+            onClick={() => void window.draft.wrapUp(conversation)}
+          >
+            Wrap up
+          </button>
+          {state.thread !== null &&
+            !["wrapped-up", "superseded", "withdrawn"].includes(state.thread.state) && (
+              <EndThread conversation={conversation} />
+            )}
         </div>
         {error !== null && (
           <p className="error" role="alert">

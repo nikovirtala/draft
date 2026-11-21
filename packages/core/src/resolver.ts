@@ -1,9 +1,12 @@
 import { canonicalJson } from "./canonical.ts";
 import type { Target } from "./events.ts";
+import type { InterruptCandidate } from "./interrupts.ts";
 import {
   findSessionIds,
+  type KiroPendingPermission,
   type KiroRemoteTools,
   type KiroSessionView,
+  pendingPermissions,
   sessionState,
 } from "./kiro.ts";
 
@@ -21,12 +24,38 @@ export interface Resolver {
   detect(text: string): string[];
   /** The target's current state, or `null` when it doesn't exist. Throws when it can't tell. */
   fetch(id: string): Promise<Record<string, unknown> | null>;
+  /**
+   * What needs a person, given the target's state: a pure function of the state, so the same
+   * state always raises the same interrupts. A resolver whose targets never need anyone has none.
+   */
+  interrupts?(target: Target, state: Record<string, unknown>): InterruptCandidate[];
 }
 
 export class KiroSessionResolver implements Resolver {
   readonly type = "kiro-session";
-  readonly version = "1";
+  readonly version = "2";
   constructor(private readonly tools: KiroRemoteTools) {}
+
+  /** Each pending permission request is one interrupt, for as long as the session waits on it. */
+  interrupts(target: Target, state: Record<string, unknown>): InterruptCandidate[] {
+    const pending = Array.isArray(state.permissions)
+      ? (state.permissions as KiroPendingPermission[])
+      : [];
+    const title = typeof state.title === "string" && state.title !== "" ? state.title : "A session";
+    return pending.map((p) => ({
+      key: `kiro-permission:${target.id}:${p.requestId}`,
+      kind: "permission" as const,
+      summary: `${title} asks to: ${p.title}`,
+      detail: {
+        sessionId: target.id,
+        requestId: p.requestId,
+        title: p.title,
+        kind: p.kind,
+        options: p.options,
+        session: title,
+      },
+    }));
+  }
 
   detect(text: string): string[] {
     return findSessionIds(text);
@@ -45,11 +74,7 @@ export class KiroSessionResolver implements Resolver {
       sessionId: id,
       status: "pending",
     });
-    const list = perms.isError
-      ? []
-      : ((perms.structured as { permissions?: { status?: string }[] } | null)?.permissions ?? []);
-    const pending = list.filter((p) => p.status === undefined || p.status === "pending").length;
-    return sessionState(session, pending);
+    return sessionState(session, perms.isError ? [] : pendingPermissions(perms.structured));
   }
 }
 
@@ -157,6 +182,7 @@ export class StubPoller {
     const started = this.now();
     t.inFlight = true;
     let outcome: PollOutcome["outcome"];
+    let retryAfterMs = 0;
     try {
       if (resolver === undefined) throw new Error(`no resolver for ${t.target.type}`);
       const state = await resolver.fetch(t.target.id);
@@ -168,14 +194,21 @@ export class StubPoller {
         await this.observed(t.target, state, resolver);
         outcome = "changed";
       }
-    } catch {
+    } catch (err) {
       outcome = "failed";
+      // A source that says when to come back (GitHub's rate limit) is not asked sooner.
+      const wait = (err as { retryAfterMs?: unknown } | null)?.retryAfterMs;
+      if (typeof wait === "number" && wait > 0) retryAfterMs = wait;
     } finally {
       t.inFlight = false;
     }
     t.intervalMs = outcome === "changed" ? this.baseMs : Math.min(t.intervalMs * 2, this.maxMs);
-    t.dueAt = this.now() + t.intervalMs;
-    const result = { target: t.target, outcome, nextIntervalMs: t.intervalMs };
+    t.dueAt = this.now() + Math.max(t.intervalMs, retryAfterMs);
+    const result = {
+      target: t.target,
+      outcome,
+      nextIntervalMs: Math.max(t.intervalMs, retryAfterMs),
+    };
     this.report({ ...result, durationMs: this.now() - started });
     return result;
   }

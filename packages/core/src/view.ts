@@ -11,9 +11,13 @@ export const TextComponentSchema = z.object({
   text: z.string(),
 });
 
+/** What a live stub can show: each type has a resolver behind it. */
+export const STUB_TYPES = ["kiro-session", "pull-request", "ark-issue", "artifact"] as const;
+export type StubType = (typeof STUB_TYPES)[number];
+
 export const StatusStubComponentSchema = z.object({
   component: z.literal("status-stub"),
-  target: z.object({ type: z.literal("kiro-session"), id: z.string().min(1) }),
+  target: z.object({ type: z.enum(STUB_TYPES), id: z.string().min(1) }),
 });
 
 export const ViewDescriptionSchema = z.discriminatedUnion("component", [

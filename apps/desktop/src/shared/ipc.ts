@@ -57,12 +57,21 @@ export type Block =
     }
   | {
       kind: "interrupt";
-      cause: "unfinished-step" | "unasked-call";
+      cause: InterruptCause;
+      /** The interrupt's key: what settling it names. */
       id: string;
+      state: "open" | "settled" | "cleared";
       tool: string;
       input: unknown;
       idempotencyKey: string | null;
       at: string;
+      summary: string;
+      detail: Record<string, unknown>;
+      target: { type: string; id: string } | null;
+      /** What a person can settle it as, while it is open. */
+      outcomes: string[];
+      settled: { outcome: string; at: string; by: string; via: string | null } | null;
+      cleared: { reason: string; at: string } | null;
     }
   | {
       kind: "notice";
@@ -71,11 +80,46 @@ export type Block =
       sidecar: string;
       bytes: number;
       at: string;
-    };
+    }
+  | { kind: "note"; id: string; what: string; text: string; at: string };
+
+/** Why something needs a person, in the order of the attention order's ranks. */
+export type InterruptCause =
+  | "permission"
+  | "failed-check"
+  | "merge-conflict"
+  | "changes-requested"
+  | "failed-step"
+  | "unasked-call"
+  | "unfinished-step"
+  | "conclusion"
+  | "review-requested";
+
+export type ThreadStateName = "open" | "concluding" | "wrapped-up" | "superseded" | "withdrawn";
+
+/** What a thread concluded, and what it rests on. */
+export interface Conclusion {
+  address: string;
+  text: string;
+  cites: {
+    thread: string;
+    parent: string;
+    messages: number;
+    produced: { type: string; id: string }[];
+  };
+  proposedAt: string;
+  wrappedAt: string | null;
+}
 
 export interface ConversationState {
   context: string;
   conversation: string;
+  /** Null for the main conversation. */
+  thread: {
+    state: ThreadStateName;
+    conclusion: Conclusion | null;
+    endedReason: string | null;
+  } | null;
   /** The message this conversation branched off; null for the main conversation. */
   parent: string | null;
   title: string;
@@ -95,13 +139,15 @@ export interface Thread {
   parent: string;
   parentConversation: string;
   title: string;
-  /** Only `open` exists so far; closing a thread adds states. */
-  state: "open";
+  state: ThreadStateName;
   depth: number;
   agent: string;
   messages: number;
   artifacts: number;
   waiting: number;
+  /** The conclusion drafted for the main conversation, or the one that wrapped the thread up. */
+  conclusion: Conclusion | null;
+  endedReason: string | null;
   busy: boolean;
   last: { role: "user" | "agent"; text: string } | null;
 }
@@ -110,7 +156,7 @@ export interface Thread {
 export interface Attention {
   id: string;
   conversation: string;
-  cause: "permission" | "unfinished-step" | "unasked-call";
+  cause: InterruptCause;
   at: string;
 }
 
@@ -193,6 +239,13 @@ export interface DraftBridge {
   branch(parentMessage: string, agent?: string): Promise<void>;
   previewSwitch(conversation: string, agent: string): Promise<SwitchPreview>;
   switchAgent(conversation: string, agent: string): Promise<void>;
+  /** Settles an interrupt as the person: allowed, done, retry, acknowledged... */
+  settleInterrupt(conversation: string, key: string, outcome: string): Promise<void>;
+  /** Asks a thread's agent to draft its conclusion. */
+  wrapUp(conversation: string): Promise<void>;
+  confirmConclusion(conversation: string): Promise<void>;
+  declineConclusion(conversation: string): Promise<void>;
+  endThread(conversation: string, as: "superseded" | "withdrawn", reason: string): Promise<void>;
   onChange(cb: (c: Change) => void): () => void;
 }
 
@@ -209,5 +262,10 @@ export const CHANNELS = {
   branch: "draft:branch",
   previewSwitch: "draft:preview-switch",
   switchAgent: "draft:switch-agent",
+  settleInterrupt: "draft:settle-interrupt",
+  wrapUp: "draft:wrap-up",
+  confirmConclusion: "draft:confirm-conclusion",
+  declineConclusion: "draft:decline-conclusion",
+  endThread: "draft:end-thread",
   change: "draft:change",
 } as const;

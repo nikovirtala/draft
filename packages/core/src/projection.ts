@@ -7,9 +7,13 @@ import {
   type DraftEvent,
   isUnknown,
   type LogRecord,
+  type Target,
   targetKey,
   type UnknownEvent,
 } from "./events.ts";
+import type { InterruptKind } from "./interrupts.ts";
+import { findSessionIds } from "./kiro.ts";
+import { type Citations, foldThread, type ThreadEventRow, type ThreadFold } from "./thread.ts";
 
 /**
  * Views of the log in SQLite: conversations, messages, tool calls, reference edges and live
@@ -18,7 +22,7 @@ import {
  */
 
 /** Bump when the tables change; a projection with another version is rebuilt. */
-export const PROJECTION_VERSION = 3;
+export const PROJECTION_VERSION = 4;
 
 const SCHEMA = `
 create table if not exists meta (key text primary key, value text not null);
@@ -56,7 +60,23 @@ create table if not exists steps (
   started text primary key, conversation text not null, idempotency_key text not null,
   tool_use_id text not null, name text not null, input_json text not null,
   started_at text not null, started_seq integer not null,
-  outcome text, result_summary text, finished_at text, finished_seq integer);
+  outcome text, result_summary text, finished_at text, finished_seq integer,
+  resolution text, resolved_at text, retry_of text);
+create table if not exists interrupts (
+  event_id text primary key, key text not null, kind text not null, conversation text not null,
+  target text, summary text not null, detail_json text not null, at text not null,
+  seq integer not null, cleared_at text, cleared_seq integer, cleared_reason text);
+create table if not exists settlements (
+  event_id text primary key, key text not null, kind text not null, conversation text not null,
+  outcome text not null, started text, via text, detail_json text not null, actor_json text not null,
+  at text not null, seq integer not null);
+create table if not exists thread_events (
+  address text primary key, conversation text not null, type text not null, at text not null,
+  seq integer not null, actor_json text not null, text text, cites_json text, proposal text,
+  ended_as text, reason text);
+create table if not exists notices (
+  event_id text primary key, what text not null, text text not null, at text not null,
+  seq integer not null);
 create table if not exists unknown_events (
   event_id text primary key, type text not null, schema integer not null, reason text not null,
   conversation text, at text, seq integer not null);
@@ -74,6 +94,10 @@ const TABLES = [
   "edges",
   "stubs",
   "steps",
+  "interrupts",
+  "settlements",
+  "thread_events",
+  "notices",
   "unknown_events",
 ] as const;
 
@@ -164,6 +188,56 @@ export interface StepRow {
   startedSeq: number;
   outcome: "completed" | "failed" | null;
   resultSummary: string | null;
+  /** When the outcome was recorded. */
+  finishedAt: string | null;
+  /**
+   * What a person settled the step as, when they did: "done", "failed" or "retry" for one that was
+   * interrupted, "acknowledged" or "retry" for one that failed. A settled step is never run again.
+   */
+  resolution: string | null;
+  resolvedAt: string | null;
+  /** The step this one retries. */
+  retryOf: string | null;
+}
+
+/** A thing outside the log that needed a person, as one interrupt event raised it. */
+export interface RaisedRow {
+  eventId: string;
+  key: string;
+  kind: InterruptKind;
+  conversation: string;
+  target: string | null;
+  summary: string;
+  detail: Record<string, unknown>;
+  at: string;
+  seq: number;
+  clearedAt: string | null;
+  clearedReason: string | null;
+  /** Open until it is settled or cleared. */
+  state: "open" | "settled" | "cleared";
+  settlement: SettlementRow | null;
+}
+
+export interface SettlementRow {
+  eventId: string;
+  key: string;
+  kind: InterruptKind;
+  conversation: string;
+  outcome: string;
+  started: string | null;
+  via: string | null;
+  detail: Record<string, unknown>;
+  actor: { kind: string; id: string; name?: string };
+  at: string;
+  seq: number;
+}
+
+export interface NoticeRow {
+  eventId: string;
+  what: string;
+  text: string;
+  at: string;
+  seq: number;
 }
 
 /** An event this build doesn't understand, as the conversation shows it. */
@@ -367,13 +441,100 @@ export class Projection {
         return;
       case "step.started":
         this.run(
-          "insert into steps values (?, ?, ?, ?, ?, ?, ?, ?, null, null, null, null)",
+          "insert into steps values (?, ?, ?, ?, ?, ?, ?, ?, null, null, null, null, null, null, ?)",
           e.address,
           e.conversation as string,
           e.data.idempotencyKey,
           e.data.toolUseId,
           e.data.name,
           canonicalJson(e.data.input ?? null),
+          e.at,
+          seq,
+          e.data.retryOf ?? null,
+        );
+        return;
+      case "interrupt.raised":
+        this.run(
+          "insert into interrupts values (?, ?, ?, ?, ?, ?, ?, ?, ?, null, null, null)",
+          e.id,
+          e.data.key,
+          e.data.kind,
+          e.conversation as string,
+          e.data.target === null ? null : targetKey(e.data.target),
+          e.data.summary,
+          canonicalJson(e.data.detail),
+          e.at,
+          seq,
+        );
+        return;
+      case "interrupt.cleared":
+        this.run(
+          `update interrupts set cleared_at = ?, cleared_seq = ?, cleared_reason = ?
+           where key = ? and cleared_seq is null`,
+          e.at,
+          seq,
+          e.data.reason,
+          e.data.key,
+        );
+        return;
+      case "interrupt.settled":
+        this.run(
+          "insert into settlements values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+          e.id,
+          e.data.key,
+          e.data.kind,
+          e.conversation as string,
+          e.data.outcome,
+          e.data.started,
+          e.data.via,
+          canonicalJson(e.data.detail),
+          canonicalJson(e.actor),
+          e.at,
+          seq,
+        );
+        if (e.data.started !== null)
+          this.run(
+            "update steps set resolution = ?, resolved_at = ? where started = ?",
+            e.data.outcome,
+            e.at,
+            e.data.started,
+          );
+        return;
+      case "thread.conclusion_proposed":
+      case "thread.wrapped_up":
+      case "thread.conclusion_declined":
+      case "thread.ended": {
+        const d = e.data as Record<string, unknown>;
+        const type =
+          e.type === "thread.conclusion_proposed"
+            ? "proposed"
+            : e.type === "thread.wrapped_up"
+              ? "wrapped-up"
+              : e.type === "thread.conclusion_declined"
+                ? "declined"
+                : "ended";
+        this.run(
+          "insert into thread_events values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+          e.address,
+          e.conversation as string,
+          type,
+          e.at,
+          seq,
+          canonicalJson(e.actor),
+          (d.text as string | undefined) ?? null,
+          d.cites === undefined ? null : canonicalJson(d.cites),
+          (d.proposal as string | undefined) ?? null,
+          type === "ended" ? (d.state as string) : null,
+          (d.reason as string | undefined) ?? null,
+        );
+        return;
+      }
+      case "notice.posted":
+        this.run(
+          "insert into notices values (?, ?, ?, ?, ?)",
+          e.id,
+          e.data.what,
+          e.data.text,
           e.at,
           seq,
         );
@@ -606,7 +767,150 @@ export class Projection {
       startedSeq: Number(r.started_seq),
       outcome: (r.outcome as "completed" | "failed" | null) ?? null,
       resultSummary: (r.result_summary as string | null) ?? null,
+      finishedAt: (r.finished_at as string | null) ?? null,
+      resolution: (r.resolution as string | null) ?? null,
+      resolvedAt: (r.resolved_at as string | null) ?? null,
+      retryOf: (r.retry_of as string | null) ?? null,
     }));
+  }
+
+  /** Every interrupt a resolver raised for `conversation` (or all), oldest first, with its state. */
+  raised(conversation?: string): RaisedRow[] {
+    const rows = (
+      conversation === undefined
+        ? this.db.prepare("select * from interrupts order by seq").all()
+        : this.db
+            .prepare("select * from interrupts where conversation = ? order by seq")
+            .all(conversation)
+    ) as Record<string, unknown>[];
+    return rows.map((r) => this.toRaised(r));
+  }
+
+  /** The raised interrupts of one target that are still open. */
+  openRaisedFor(target: string): RaisedRow[] {
+    return (
+      this.db
+        .prepare("select * from interrupts where target = ? order by seq")
+        .all(target) as Record<string, unknown>[]
+    )
+      .map((r) => this.toRaised(r))
+      .filter((r) => r.state === "open");
+  }
+
+  /** The newest episode of an interrupt key, whatever its state. */
+  latestRaised(key: string): RaisedRow | null {
+    const r = this.db
+      .prepare("select * from interrupts where key = ? order by seq desc limit 1")
+      .get(key) as Record<string, unknown> | undefined;
+    return r === undefined ? null : this.toRaised(r);
+  }
+
+  private toRaised(r: Record<string, unknown>): RaisedRow {
+    const key = r.key as string;
+    const seq = Number(r.seq);
+    const settled = this.db
+      .prepare("select * from settlements where key = ? and seq > ? order by seq desc limit 1")
+      .get(key, seq) as Record<string, unknown> | undefined;
+    const settlement = settled === undefined ? null : toSettlement(settled);
+    return {
+      eventId: r.event_id as string,
+      key,
+      kind: r.kind as InterruptKind,
+      conversation: r.conversation as string,
+      target: (r.target as string | null) ?? null,
+      summary: r.summary as string,
+      detail: JSON.parse(r.detail_json as string) as Record<string, unknown>,
+      at: r.at as string,
+      seq,
+      clearedAt: (r.cleared_at as string | null) ?? null,
+      clearedReason: (r.cleared_reason as string | null) ?? null,
+      state: settlement !== null ? "settled" : r.cleared_seq !== null ? "cleared" : "open",
+      settlement,
+    };
+  }
+
+  /** A person's settlements for `conversation`, in the order they were made. */
+  settlements(conversation: string): SettlementRow[] {
+    return (
+      this.db
+        .prepare("select * from settlements where conversation = ? order by seq")
+        .all(conversation) as Record<string, unknown>[]
+    ).map(toSettlement);
+  }
+
+  /** The newest settlement of an interrupt key, for the ones computed from other events. */
+  settlementOf(key: string): SettlementRow | null {
+    const r = this.db
+      .prepare("select * from settlements where key = ? order by seq desc limit 1")
+      .get(key) as Record<string, unknown> | undefined;
+    return r === undefined ? null : toSettlement(r);
+  }
+
+  /** The thread events of `conversation`, in order. */
+  threadEvents(conversation: string): ThreadEventRow[] {
+    return (
+      this.db
+        .prepare("select * from thread_events where conversation = ? order by seq")
+        .all(conversation) as Record<string, unknown>[]
+    ).map((r) => ({
+      type: r.type as ThreadEventRow["type"],
+      address: r.address as string,
+      at: r.at as string,
+      actor: JSON.parse(r.actor_json as string) as ThreadEventRow["actor"],
+      text: (r.text as string | null) ?? null,
+      cites: r.cites_json === null ? null : (JSON.parse(r.cites_json as string) as Citations),
+      proposal: (r.proposal as string | null) ?? null,
+      endedAs: (r.ended_as as ThreadEventRow["endedAs"]) ?? null,
+      reason: (r.reason as string | null) ?? null,
+    }));
+  }
+
+  /** A thread's state and conclusion: its events folded through the thread machine. */
+  thread(conversation: string): ThreadFold {
+    return foldThread(this.threadEvents(conversation));
+  }
+
+  notices(): NoticeRow[] {
+    return (
+      this.db.prepare("select * from notices order by seq").all() as Record<string, unknown>[]
+    ).map((r) => ({
+      eventId: r.event_id as string,
+      what: r.what as string,
+      text: r.text as string,
+      at: r.at as string,
+      seq: Number(r.seq),
+    }));
+  }
+
+  /**
+   * The conversation a target's interrupts belong to. A hosted session belongs to the
+   * conversation whose step launched it (the step's result names the session), else to the one
+   * that first referenced it, else to the main conversation. Anything else belongs to the first
+   * conversation that referenced it, else to the main one.
+   */
+  ownerOf(target: Target): string {
+    if (target.type === "kiro-session") {
+      const launches = this.db
+        .prepare(
+          `select conversation, result_summary from steps
+           where outcome = 'completed' and name like '%kiro_launch_session' order by started_seq`,
+        )
+        .all() as { conversation: string; result_summary: string | null }[];
+      const launched = launches.find((s) =>
+        findSessionIds(s.result_summary ?? "").includes(target.id),
+      );
+      if (launched !== undefined && this.hasConversation(launched.conversation))
+        return launched.conversation;
+    }
+    const first = this.db
+      .prepare("select conversation from edges where target = ? order by seq limit 1")
+      .get(targetKey(target)) as { conversation: string } | undefined;
+    if (first !== undefined && this.hasConversation(first.conversation)) return first.conversation;
+    return this.conversations()[0]?.conversation as string;
+  }
+
+  private hasConversation(conversation: string): boolean {
+    return this.conversations().some((c) => c.conversation === conversation);
   }
 
   /** How many events the projection kept without understanding them. */
@@ -662,6 +966,22 @@ export class Projection {
   private run(sql: string, ...params: SQLInputValue[]): void {
     this.db.prepare(sql).run(...params);
   }
+}
+
+function toSettlement(r: Record<string, unknown>): SettlementRow {
+  return {
+    eventId: r.event_id as string,
+    key: r.key as string,
+    kind: r.kind as InterruptKind,
+    conversation: r.conversation as string,
+    outcome: r.outcome as string,
+    started: (r.started as string | null) ?? null,
+    via: (r.via as string | null) ?? null,
+    detail: JSON.parse(r.detail_json as string) as Record<string, unknown>,
+    actor: JSON.parse(r.actor_json as string) as SettlementRow["actor"],
+    at: r.at as string,
+    seq: Number(r.seq),
+  };
 }
 
 function toStub(r: Record<string, unknown>): StubRow {

@@ -33,13 +33,19 @@ export const KIRO_MUTATING_TOOLS = [
   "kiro_launch_session",
   "kiro_adopt_session",
   "kiro_send_prompt",
-  "kiro_answer_permission",
   "kiro_set_config",
   "kiro_link_pull_request",
   "kiro_unlink_pull_request",
   "kiro_cancel_turn",
   "kiro_delete_session",
 ] as const;
+
+/**
+ * Tools only a person may use. Answering a permission request is a human gate, so draft refuses
+ * it when the agent asks, and the person's own answer goes through draft's interrupts, as the
+ * person, never through the agent (docs/model.md, "Acceptance").
+ */
+export const KIRO_PERSON_ONLY_TOOLS = ["kiro_answer_permission"] as const;
 
 export type ToolPermission = "allow" | "ask" | "deny";
 
@@ -57,8 +63,8 @@ export function bareToolName(name: string): string | null {
 
 /**
  * The permission policy: read-only Kiro tools are allowed, Kiro tools that change things ask, and
- * everything else (built-in Claude Code tools, other servers, unknown Kiro tools) is denied in
- * this slice.
+ * everything else is denied: built-in Claude Code tools, other servers, unknown Kiro tools, and
+ * the tools only a person may use (`kiro_answer_permission`).
  */
 export function toolPermission(name: string): ToolPermission {
   const bare = bareToolName(name);
@@ -83,11 +89,30 @@ export function findSessionIds(text: string): string[] {
   return [...seen];
 }
 
+/** One answer a permission request offers, as the agent supplied it (ACP's permission options). */
+export interface KiroPermissionOption {
+  optionId: string;
+  name: string;
+  kind: string;
+}
+
+/** A permission request waiting on a person: enough to show it and to answer it. */
+export interface KiroPendingPermission {
+  requestId: string;
+  /** What the session wants to do, as its tool call titles it. */
+  title: string;
+  /** The tool call's kind (execute, edit, ...), when it names one. */
+  kind: string | null;
+  options: KiroPermissionOption[];
+}
+
 /** What a session stub shows. */
 export interface KiroSessionState {
   title: string | null;
   status: string;
   pendingPermissions: number;
+  /** The requests behind that count, oldest first. */
+  permissions: KiroPendingPermission[];
   repos: string[];
   updatedAt: string | null;
   [key: string]: unknown;
@@ -102,14 +127,55 @@ export interface KiroSessionView {
   updatedAt?: string;
 }
 
-export function sessionState(session: KiroSessionView, pending: number): KiroSessionState {
+export function sessionState(
+  session: KiroSessionView,
+  pending: readonly KiroPendingPermission[],
+): KiroSessionState {
   return {
     title: session.title ?? null,
     status: session.status,
-    pendingPermissions: pending,
+    pendingPermissions: pending.length,
+    permissions: [...pending],
     repos: session.repos ?? [],
     updatedAt: session.updatedAt ?? null,
   };
+}
+
+/** The pending requests of a `kiro_list_permissions` result, as the session stub carries them. */
+export function pendingPermissions(structured: unknown): KiroPendingPermission[] {
+  const list = (structured as { permissions?: unknown } | null)?.permissions;
+  if (!Array.isArray(list)) return [];
+  const out: KiroPendingPermission[] = [];
+  for (const p of list as Record<string, unknown>[]) {
+    if (p.status !== undefined && p.status !== "pending") continue;
+    if (typeof p.requestId !== "string") continue;
+    const call = (p.toolCall ?? {}) as Record<string, unknown>;
+    const options = Array.isArray(p.options) ? (p.options as Record<string, unknown>[]) : [];
+    out.push({
+      requestId: p.requestId,
+      title: typeof call.title === "string" ? call.title : "A tool call",
+      kind: typeof call.kind === "string" ? call.kind : null,
+      options: options
+        .filter((o) => typeof o.optionId === "string")
+        .map((o) => ({
+          optionId: o.optionId as string,
+          name: typeof o.name === "string" ? o.name : String(o.optionId),
+          kind: typeof o.kind === "string" ? o.kind : "",
+        })),
+    });
+  }
+  return out;
+}
+
+/**
+ * The option that answers a permission request: allow picks "allow_once" (else any allowing
+ * option), deny picks "reject_once" (else any rejecting one). Null when the request offers none.
+ */
+export function chooseOption(p: KiroPendingPermission, allow: boolean): string | null {
+  const side = allow ? "allow" : "reject";
+  const once = p.options.find((o) => o.kind === `${side}_once`);
+  const any = p.options.find((o) => o.kind.startsWith(side));
+  return (once ?? any)?.optionId ?? null;
 }
 
 /** The structured result of one MCP tool call. */

@@ -36,6 +36,8 @@ describe("a conversation", () => {
       "message.posted",
       "reference.made",
       "reference.made",
+      // The waiting session's permission request, raised where the session was mentioned.
+      "interrupt.raised",
     ]);
     const turn = events.slice(2);
     const traceIds = new Set(turn.map((e) => e.traceId));
@@ -113,7 +115,7 @@ describe("a conversation", () => {
     await service.tick();
     const statuses = knownEvents(log.events()).filter((e) => e.type === "status.observed");
     expect(statuses).toHaveLength(1);
-    expect(statuses[0]?.actor).toEqual({ kind: "resolver", id: "kiro-session", version: "1" });
+    expect(statuses[0]?.actor).toEqual({ kind: "resolver", id: "kiro-session", version: "2" });
     expect(service.state().stubs[`kiro-session:${RUNNING}`]?.state).toMatchObject({
       status: "awaiting_permission",
       pendingPermissions: 2,

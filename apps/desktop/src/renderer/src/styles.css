@@ -847,3 +847,114 @@ textarea:focus-visible {
   color: var(--text);
   font-weight: 560;
 }
+
+/* What needs a person: settled and cleared interrupts, chips, the conclusion */
+.stub-detail {
+  display: contents;
+}
+
+.pending.bad {
+  color: #8a1c1c;
+  background: #fbe3e0;
+}
+
+.pending.good {
+  color: #00663c;
+  background: #daf3e6;
+}
+
+.chip {
+  display: inline-block;
+  color: var(--waiting);
+  background: var(--card);
+  border: 1px solid var(--waiting);
+  border-radius: 999px;
+  padding: 0 9px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.interrupt-label {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  margin: 0 0 6px;
+}
+
+.interrupt.closed {
+  background: transparent;
+  border-color: var(--border);
+  padding: 6px 12px;
+}
+
+.interrupt.closed p {
+  margin: 0;
+}
+
+.attention-list-wrap {
+  position: relative;
+}
+
+.attention-list-wrap summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.attention-list {
+  position: absolute;
+  right: 0;
+  top: 100%;
+  z-index: 20;
+  min-width: 340px;
+  margin-top: 6px;
+  padding: 10px 14px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  color: var(--text);
+  font-weight: 400;
+}
+
+.attention-list ol {
+  margin: 6px 0 0;
+  padding-left: 20px;
+}
+
+.attention-list li {
+  margin: 4px 0;
+}
+
+.thread-conclusion {
+  margin: 6px 0 0 20px;
+  padding: 8px 12px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-family: var(--serif);
+}
+
+.conclusion-card {
+  margin-top: 8px;
+}
+
+.thread-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 6px;
+}
+
+.end-thread {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.ended-note {
+  margin: 0;
+  padding: 12px 20px;
+  color: var(--secondary);
+  font-family: var(--sans);
+  border-top: 1px solid var(--border);
+}
