@@ -2,8 +2,10 @@ import { type ReactNode, useEffect, useRef } from "react";
 import { useWorkspace } from "../workspace.tsx";
 import { agentLabel } from "./AgentState.tsx";
 import { Composer } from "./Composer.tsx";
+import { ConclusionCard, EndedNote } from "./Conclusion.tsx";
 import { InterruptBlock } from "./InterruptBlock.tsx";
 import { MessageView, StreamingMessage } from "./MessageView.tsx";
+import { NoteBlock } from "./NoteBlock.tsx";
 import { NoticeBlock } from "./NoticeBlock.tsx";
 import { PromptCard } from "./PromptCard.tsx";
 import { UnknownBlock } from "./UnknownBlock.tsx";
@@ -37,7 +39,7 @@ export function ConversationView({ conversation }: { conversation: string }) {
     >
       <main className="conversation">
         <div className="column">
-          {state.timeline.length === 0 && state.streaming === null && (
+          {state.timeline.every((b) => b.kind === "note") && state.streaming === null && (
             <p className="empty" data-testid={isMain ? "empty" : "empty-thread"}>
               {isMain
                 ? "Ask about your Kiro sessions. Every session mentioned here stays live in the conversation."
@@ -47,8 +49,12 @@ export function ConversationView({ conversation }: { conversation: string }) {
           {state.timeline.map((b) => {
             if (b.kind === "unknown") return <UnknownBlock key={b.id} block={b} />;
             if (b.kind === "interrupt")
-              return showFull ? <InterruptBlock key={b.id} block={b} /> : null;
+              // What is settled is history and always shows; what is open shows where you are.
+              return showFull || b.state !== "open" ? (
+                <InterruptBlock key={b.id} block={b} conversation={conversation} />
+              ) : null;
             if (b.kind === "notice") return <NoticeBlock key={b.id} block={b} />;
+            if (b.kind === "note") return <NoteBlock key={b.id} block={b} />;
             const m = state.messages.find((x) => x.address === b.address);
             return m === undefined ? null : (
               <MessageView
@@ -69,6 +75,9 @@ export function ConversationView({ conversation }: { conversation: string }) {
                 onAnswer={(allow) => void window.draft.answerPrompt(conversation, p.id, allow)}
               />
             ))}
+          {state.thread?.state === "concluding" && state.thread.conclusion !== null && (
+            <ConclusionCard conversation={conversation} conclusion={state.thread.conclusion} />
+          )}
           {state.error && (
             <p className="error" role="alert">
               {state.error}
@@ -77,18 +86,26 @@ export function ConversationView({ conversation }: { conversation: string }) {
           <div ref={bottom} />
         </div>
       </main>
-      <Composer
-        busy={state.busy}
-        agentState={state.agent.state}
-        agentLabel={agentLabel(state.agent)}
-        onFocus={() => ws.select({ block: isMain ? null : conversation, conversation })}
-        onSubmit={(t, aside) => {
-          ws.select({ block: isMain ? null : conversation, conversation });
-          void window.draft.submit(conversation, t, aside);
-        }}
-      />
+      {state.thread !== null && ended(state.thread.state) ? (
+        <EndedNote thread={state.thread} />
+      ) : (
+        <Composer
+          busy={state.busy}
+          agentState={state.agent.state}
+          agentLabel={agentLabel(state.agent)}
+          onFocus={() => ws.select({ block: isMain ? null : conversation, conversation })}
+          onSubmit={(t, aside) => {
+            ws.select({ block: isMain ? null : conversation, conversation });
+            void window.draft.submit(conversation, t, aside);
+          }}
+        />
+      )}
     </div>
   );
+}
+
+function ended(state: string): boolean {
+  return state === "wrapped-up" || state === "superseded" || state === "withdrawn";
 }
 
 export function Row({ children }: { children: ReactNode }) {

@@ -22,6 +22,142 @@ function pendingText(n: number): string {
   return n === 1 ? "1 permission waiting" : `${n} permissions waiting`;
 }
 
+/** What a stub says about its target, whatever the target is. */
+interface Chip {
+  text: string;
+  testid: string;
+  tone?: "bad" | "good" | "wait";
+}
+
+interface Summary {
+  state: Record<string, unknown>;
+  /** A stable word for styling and tests. */
+  status: string;
+  statusLabel: string;
+  title: string;
+  chips: Chip[];
+  kind: string;
+  details: [string, string][];
+  url: string | null;
+}
+
+const KINDS: Record<string, string> = {
+  "kiro-session": "Kiro session",
+  "pull-request": "Pull request",
+  "ark-issue": "ark issue",
+  artifact: "Artifact page",
+};
+
+const str = (v: unknown): string | null => (typeof v === "string" && v !== "" ? v : null);
+const num = (v: unknown): number | null => (typeof v === "number" ? v : null);
+
+function pullRequest(state: Record<string, unknown>, id: string): Summary {
+  const sum = (state.checksSummary ?? {}) as Record<string, number>;
+  const review = (state.review ?? {}) as { decision?: string };
+  const chips: Chip[] = [];
+  if ((sum.failed ?? 0) > 0)
+    chips.push({ text: `${sum.failed} failing`, testid: "stub-checks", tone: "bad" });
+  else if ((sum.pending ?? 0) > 0)
+    chips.push({ text: `${sum.pending} running`, testid: "stub-checks", tone: "wait" });
+  else if ((sum.total ?? 0) > 0)
+    chips.push({
+      text: `${sum.passed}/${sum.total} checks passed`,
+      testid: "stub-checks",
+      tone: "good",
+    });
+  if (state.mergeableState === "dirty")
+    chips.push({ text: "Merge conflict", testid: "stub-mergeable", tone: "bad" });
+  if (review.decision === "changes_requested")
+    chips.push({ text: "Changes requested", testid: "stub-review", tone: "bad" });
+  else if (review.decision === "approved")
+    chips.push({ text: "Approved", testid: "stub-review", tone: "good" });
+  if (state.viewerReviewRequested === true)
+    chips.push({ text: "Your review", testid: "stub-review-requested", tone: "wait" });
+  const st = str(state.state) ?? "unknown";
+  const repo = str(state.repo) ?? id;
+  return {
+    state,
+    status: st,
+    statusLabel: `${state.draft === true ? "Draft · " : ""}${st[0]?.toUpperCase() ?? ""}${st.slice(1)}`,
+    title: `${repo}#${num(state.number) ?? ""} ${str(state.title) ?? ""}`.trim(),
+    chips,
+    kind: KINDS["pull-request"] as string,
+    url: str(state.url),
+    details: [
+      ["Pull request", id],
+      ["Head", (str(state.headSha) ?? "").slice(0, 8)],
+      ["Mergeable", str(state.mergeableState) ?? "unknown"],
+      [
+        "Checks",
+        `${sum.passed ?? 0} passed, ${sum.failed ?? 0} failed, ${sum.pending ?? 0} running`,
+      ],
+      ["Review", review.decision ?? "none"],
+    ],
+  };
+}
+
+function arkIssue(state: Record<string, unknown>, id: string): Summary {
+  const st = str(state.status) ?? "unknown";
+  const res = str(state.resolution);
+  return {
+    state,
+    status: st,
+    statusLabel:
+      st === "closed" && res !== null
+        ? `Closed: ${res}`
+        : st === "in-progress"
+          ? "In progress"
+          : st[0]?.toUpperCase() + st.slice(1),
+    title: str(state.title) ?? id,
+    chips: [{ text: `${num(state.eventCount) ?? 0} events`, testid: "stub-events" }],
+    kind: KINDS["ark-issue"] as string,
+    url: str(state.url),
+    details: [
+      ["Issue", id],
+      ["Last event", String((state.events as { type: string }[] | undefined)?.at(-1)?.type ?? "")],
+    ],
+  };
+}
+
+function artifact(state: Record<string, unknown>, id: string): Summary {
+  const v = num(state.currentVersion);
+  return {
+    state,
+    status: "published",
+    statusLabel: v === null ? "Published" : `Version ${v}`,
+    title: str(state.title) ?? id,
+    chips: [],
+    kind: KINDS.artifact as string,
+    url: str(state.url),
+    details: [
+      ["Artifact", id],
+      ["Versions", String(num(state.versions) ?? "")],
+      ["Updated", str(state.updatedAt) ?? ""],
+    ],
+  };
+}
+
+function kiroSession(state: Record<string, unknown>, id: string): Summary {
+  const status = typeof state.status === "string" ? state.status : "unknown";
+  const pending = num(state.pendingPermissions) ?? 0;
+  return {
+    state,
+    status,
+    statusLabel: label(status),
+    title: str(state.title) ?? "Untitled session",
+    chips:
+      pending > 0 ? [{ text: pendingText(pending), testid: "stub-pending", tone: "wait" }] : [],
+    kind: KINDS["kiro-session"] as string,
+    url: null,
+    details: [
+      ["Session", id],
+      ...(Array.isArray(state.repos) && state.repos.length > 0
+        ? ([["Repositories", (state.repos as string[]).join(", ")]] as [string, string][])
+        : []),
+    ],
+  };
+}
+
 /** The address of the status block a message shows for one target. */
 export function statusAddress(message: string, target: { type: string; id: string }): string {
   return `${message}#${target.type}:${target.id}`;
@@ -37,59 +173,76 @@ export interface StatusProps {
   snapshot: Record<string, unknown> | undefined;
 }
 
-function summary(p: StatusProps) {
+function summary(p: StatusProps): Summary {
   const state = p.stub?.state ?? p.snapshot ?? {};
-  const status = typeof state.status === "string" ? state.status : "unknown";
-  const pending = typeof state.pendingPermissions === "number" ? state.pendingPermissions : 0;
-  const title =
-    typeof state.title === "string" && state.title !== "" ? state.title : "Untitled session";
-  return { state, status, pending, title };
+  switch (p.target.type) {
+    case "pull-request":
+      return pullRequest(state, p.target.id);
+    case "ark-issue":
+      return arkIssue(state, p.target.id);
+    case "artifact":
+      return artifact(state, p.target.id);
+    default:
+      return kiroSession(state, p.target.id);
+  }
 }
 
-function Details({ p, state }: { p: StatusProps; state: Record<string, unknown> }) {
-  const thenStatus = p.snapshot?.status;
+function Details({ p, s }: { p: StatusProps; s: Summary }) {
+  const then = p.snapshot === undefined ? null : summary({ ...p, stub: undefined }).statusLabel;
   return (
     <dl className="stub-details" data-testid="stub-details">
-      <dt>Session</dt>
-      <dd>
-        <code>{p.target.id}</code>
-      </dd>
-      {Array.isArray(state.repos) && state.repos.length > 0 && (
-        <>
-          <dt>Repositories</dt>
-          <dd>{(state.repos as string[]).join(", ")}</dd>
-        </>
-      )}
-      {typeof thenStatus === "string" && (
-        <>
+      {s.details.map(([k, v]) => (
+        <div className="stub-detail" key={k}>
+          <dt>{k}</dt>
+          <dd>
+            {k === "Session" || k === "Pull request" || k === "Issue" || k === "Artifact" ? (
+              <code>{v}</code>
+            ) : (
+              v
+            )}
+          </dd>
+        </div>
+      ))}
+      {then !== null && (
+        <div className="stub-detail">
           <dt>When mentioned</dt>
-          <dd>{label(thenStatus)}</dd>
-        </>
+          <dd>{then}</dd>
+        </div>
+      )}
+      {s.url !== null && (
+        <div className="stub-detail">
+          <dt>Link</dt>
+          <dd>
+            <a href={s.url} target="_blank" rel="noreferrer">
+              {s.url}
+            </a>
+          </dd>
+        </div>
       )}
       {p.stub !== undefined && (
-        <>
+        <div className="stub-detail">
           <dt>Last seen</dt>
           <dd>{new Date(p.stub.observedAt).toLocaleTimeString()}</dd>
-        </>
+        </div>
       )}
     </dl>
   );
 }
 
 function Line({ p, children }: { p: StatusProps; children?: React.ReactNode }) {
-  const { status, pending, title } = summary(p);
+  const s = summary(p);
   return (
     <div className="stub-line">
       <span className="dot" aria-hidden="true" />
-      <span className="stub-title">{title}</span>
+      <span className="stub-title">{s.title}</span>
       <span className="stub-status" data-testid="stub-status">
-        {label(status)}
+        {s.statusLabel}
       </span>
-      {pending > 0 && (
-        <span className="pending" data-testid="stub-pending">
-          {pendingText(pending)}
+      {s.chips.map((c) => (
+        <span key={c.testid} className={`pending ${c.tone ?? ""}`} data-testid={c.testid}>
+          {c.text}
         </span>
-      )}
+      ))}
       <span className="spacer" />
       {children}
     </div>
@@ -106,11 +259,11 @@ const WHERE: Record<string, string> = { panel: "In the panel", window: "In a win
 export function StatusStub(p: StatusProps) {
   const ws = useWorkspace();
   const address = statusAddress(p.from, p.target);
-  const { state, status, title } = summary(p);
+  const sum = summary(p);
+  const { status, title } = sum;
   const depth = ws.depthOf(p.conversation);
   const entry = ws.entry(address);
-  const snapshotTitle =
-    typeof p.snapshot?.title === "string" && p.snapshot.title !== "" ? p.snapshot.title : null;
+  const snapshotTitle = p.snapshot === undefined ? null : summary({ ...p, stub: undefined }).title;
   // biome-ignore lint/correctness/useExhaustiveDependencies: a block is registered once, when it is first seen; its title is fixed then
   useEffect(
     () =>
@@ -140,7 +293,7 @@ export function StatusStub(p: StatusProps) {
       data-placement={placement}
       data-stub-target={`${p.target.type}:${p.target.id}`}
       data-status={status}
-      aria-label={`Kiro session ${title}`}
+      aria-label={`${sum.kind} ${title}`}
     >
       <Line p={p}>
         {away ? (
@@ -151,15 +304,15 @@ export function StatusStub(p: StatusProps) {
           entry !== undefined && <BlockControls entry={entry} />
         )}
       </Line>
-      {expanded && <Details p={p} state={state} />}
+      {expanded && <Details p={p} s={sum} />}
     </section>
   );
 }
 
 /** A Kiro session in full, in the panel or its own window. */
 export function StatusBlock({ entry, p }: { entry: Entry; p: StatusProps }) {
-  const { status, title } = summary(p);
-  const state = summary(p).state;
+  const sum = summary(p);
+  const { status, title } = sum;
   const selectable = useSelectable(entry.info.address, p.conversation);
   return (
     <section
@@ -169,12 +322,12 @@ export function StatusBlock({ entry, p }: { entry: Entry; p: StatusProps }) {
       data-block={entry.info.address}
       data-kind="status"
       data-stub-target={`${p.target.type}:${p.target.id}`}
-      aria-label={`Kiro session ${title}`}
+      aria-label={`${sum.kind} ${title}`}
     >
       <header className="block-header">
         <Line p={p}>{availableMoves(entry).length > 0 && <BlockControls entry={entry} />}</Line>
       </header>
-      <Details p={p} state={state} />
+      <Details p={p} s={sum} />
     </section>
   );
 }

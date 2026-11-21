@@ -2,16 +2,16 @@ import { conversationKey, itemAddress, parseAddress } from "./address.ts";
 import { type AgentDirectory, singleAgent } from "./agent.ts";
 import { buildAgentContext, type ContextSize, contextSize } from "./agent-context.ts";
 import {
-  type AttentionItem,
   type ConversationOptions,
   ConversationService,
   SerialWriter,
-  type ThreadState,
   type UiChange,
   type UiState,
 } from "./conversation.ts";
 import type { Actor, EventDraft, Target } from "./events.ts";
 import { newItemId } from "./ids.ts";
+import { type AttentionItem, orderAttention } from "./interrupts.ts";
+import type { ThreadFold, ThreadState } from "./thread.ts";
 
 /**
  * A thread as the conversation it branched off shows it: a stub at the branch point with live
@@ -32,8 +32,12 @@ export interface UiThread {
   messages: number;
   /** References made in it: the things it produced that have a block of their own. */
   artifacts: number;
-  /** Permission requests and interrupts waiting on a person. */
+  /** Permission requests, interrupts and a conclusion waiting on a person. */
   waiting: number;
+  /** The conclusion drafted for the main conversation, or the one that wrapped the thread up. */
+  conclusion: ThreadFold["conclusion"];
+  /** Why a thread was ended as superseded or withdrawn. */
+  endedReason: string | null;
   busy: boolean;
   /** The start of its latest message, for a preview. */
   last: { role: "user" | "agent"; text: string } | null;
@@ -89,9 +93,16 @@ export class Workspace {
 
   static async open(o: WorkspaceOptions): Promise<Workspace> {
     const writer = o.writer ?? new SerialWriter();
-    const shared = { ...o, writer, agents: o.agents ?? singleAgent(o.agent) };
+    let workspace: Workspace | null = null;
+    const shared = {
+      ...o,
+      writer,
+      agents: o.agents ?? singleAgent(o.agent),
+      touched: (c: string) => workspace?.touch(c),
+    };
     const main = await ConversationService.open(shared);
-    return new Workspace(shared, main);
+    workspace = new Workspace(shared, main);
+    return workspace;
   }
 
   get mainConversation(): string {
@@ -172,6 +183,7 @@ export class Workspace {
       .filter((c) => c.parent !== null)
       .map((c) => {
         const svc = this.services.get(c.conversation);
+        const fold = p.thread(c.conversation);
         const messages = p.messages(c.conversation);
         const last = messages[messages.length - 1];
         return {
@@ -179,22 +191,33 @@ export class Workspace {
           parent: c.parent as string,
           parentConversation: this.conversationOfMessage(c.parent as string),
           title: c.title,
-          state: "open" as const,
+          state: fold.state,
           depth: depthOf(c.conversation),
           agent: p.agentOf(c.conversation) ?? this.o.agents.defaultId,
           messages: messages.length,
           artifacts: new Set(p.edges(c.conversation).map((e) => e.target)).size,
           waiting: svc?.attention().length ?? 0,
+          conclusion: fold.conclusion,
+          endedReason: fold.endedReason,
           busy: svc?.state().busy ?? false,
           last: last === undefined ? null : { role: last.role, text: firstLine(last.text, 120) },
         };
       });
   }
 
-  /** What needs a person, in every conversation, in the order it arose. */
+  /**
+   * What needs a person, in every conversation, in one order: blocking permission requests, then
+   * failures, then what is left to resolve, then reviews requested; oldest first within each.
+   */
   attention(): AttentionItem[] {
-    const items = [this.main, ...this.services.values()].flatMap((s) => s.attention());
-    return items.sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
+    return orderAttention([this.main, ...this.services.values()].flatMap((s) => s.attention()));
+  }
+
+  /** Shows a conversation's state again after another conversation's write changed it. */
+  touch(conversation: string): void {
+    const s = conversation === this.main.conversation ? this.main : this.services.get(conversation);
+    if (s !== undefined) this.emit({ type: "state", state: s.state() });
+    this.emitThreads();
   }
 
   private conversationOfMessage(address: string): string {

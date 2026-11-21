@@ -3,6 +3,7 @@ import { decideTool } from "../src/agent.ts";
 import {
   findSessionIds,
   KIRO_MUTATING_TOOLS,
+  KIRO_PERSON_ONLY_TOOLS,
   KIRO_READ_ONLY_TOOLS,
   sdkToolName,
   toolPermission,
@@ -43,13 +44,16 @@ describe("Kiro session id detection", () => {
 describe("the tool permission policy", () => {
   it("covers every Kiro Remote tool exactly once", () => {
     const names = KIRO_REMOTE_TOOLS.map((t) => t.name).sort();
-    expect([...KIRO_READ_ONLY_TOOLS, ...KIRO_MUTATING_TOOLS].sort()).toEqual(names);
+    expect(
+      [...KIRO_READ_ONLY_TOOLS, ...KIRO_MUTATING_TOOLS, ...KIRO_PERSON_ONLY_TOOLS].sort(),
+    ).toEqual(names);
   });
 
   it("allows exactly the tools kiro-remote marks read-only", () => {
     for (const t of KIRO_REMOTE_TOOLS) {
+      const person = (KIRO_PERSON_ONLY_TOOLS as readonly string[]).includes(t.name);
       expect(toolPermission(sdkToolName(t.name))).toBe(
-        t.annotations.readOnlyHint === true ? "allow" : "ask",
+        t.annotations.readOnlyHint === true ? "allow" : person ? "deny" : "ask",
       );
     }
   });
@@ -62,7 +66,8 @@ describe("the tool permission policy", () => {
     ["kiro_list_permissions", "allow"],
     ["kiro_launch_session", "ask"],
     ["kiro_send_prompt", "ask"],
-    ["kiro_answer_permission", "ask"],
+    // Only a person answers a permission request, through draft's interrupts.
+    ["kiro_answer_permission", "deny"],
     ["kiro_cancel_turn", "ask"],
     ["kiro_delete_session", "ask"],
   ])("%s: %s", (tool, expected) => {

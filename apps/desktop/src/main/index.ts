@@ -1,6 +1,10 @@
 import { join } from "node:path";
 import {
+  ArkIssueResolver,
+  ArtifactPageResolver,
   FileLogStore,
+  GithubClient,
+  githubNote,
   KiroOAuth,
   type KiroRemoteTools,
   KiroSessionResolver,
@@ -8,7 +12,9 @@ import {
   LogRefusedError,
   McpKiroRemoteTools,
   Projection,
+  PullRequestResolver,
   type Resolver,
+  resolveGithubAuth,
   Workspace,
 } from "@nikovirtala/draft-core";
 import { app, ipcMain, shell } from "electron";
@@ -134,7 +140,27 @@ async function start(): Promise<Started> {
       }),
   );
 
-  const resolvers: Resolver[] = tools === null ? [] : [new KiroSessionResolver(tools)];
+  // GitHub: a token from the environment, else from `gh`, else public access, and only ever reads.
+  const githubAuth = await resolveGithubAuth(process.env);
+  const github = new GithubClient({ token: githubAuth.token, baseUrl: config.githubApiUrl });
+  let viewer: Promise<string | null> | null = null;
+  // Who "you" are on GitHub, asked once: a review requested from you needs it.
+  const viewerLogin = () =>
+    (viewer ??= github.authenticated
+      ? github.getJson<{ login?: string }>("/user").then(
+          (u) => u?.login ?? null,
+          () => null,
+        )
+      : Promise.resolve(null));
+  const resolvers: Resolver[] = [
+    ...(tools === null ? [] : [new KiroSessionResolver(tools)]),
+    new PullRequestResolver(github, viewerLogin),
+    new ArkIssueResolver(github, { sources: config.arkSources }),
+    new ArtifactPageResolver({
+      baseUrl: config.artifactUrl,
+      token: process.env.ARTIFACT_TOKEN ?? null,
+    }),
+  ];
   const user = userActor(identity);
   const workspace = await Workspace.open({
     log,
@@ -143,8 +169,12 @@ async function start(): Promise<Started> {
     agents: registry,
     resolvers,
     user,
+    // What the person's own answers and retries call: Kiro Remote as them, never the agent's tools.
+    ...(tools === null ? {} : { actions: tools }),
     poller: { baseMs: config.pollBaseMs, maxMs: config.pollMaxMs },
   });
+  const note = githubNote(githubAuth);
+  if (note !== null) await workspace.main.note("github-access", note);
   workspace.onChange((c) => {
     windows?.send(c as Change);
     if (c.type === "threads") layout.markShown(c.threads);
@@ -289,6 +319,36 @@ function registerIpc(): void {
       title: t.title,
     });
   });
+  ipcMain.handle(
+    CHANNELS.settleInterrupt,
+    async (_e, conversation: unknown, key: unknown, outcome: unknown) => {
+      if (!str(conversation) || !str(key, 2000) || !str(outcome, 100))
+        throw new Error("bad request");
+      await requireRunning().workspace.conversation(conversation).settleInterrupt(key, outcome);
+    },
+  );
+  ipcMain.handle(CHANNELS.wrapUp, async (_e, conversation: unknown) => {
+    if (!str(conversation)) throw new Error("bad request");
+    await requireRunning()
+      .workspace.conversation(conversation)
+      .submit("Wrap this up.", { wrapUp: true });
+  });
+  ipcMain.handle(CHANNELS.confirmConclusion, async (_e, conversation: unknown) => {
+    if (!str(conversation)) throw new Error("bad request");
+    await requireRunning().workspace.conversation(conversation).confirmConclusion();
+  });
+  ipcMain.handle(CHANNELS.declineConclusion, async (_e, conversation: unknown) => {
+    if (!str(conversation)) throw new Error("bad request");
+    await requireRunning().workspace.conversation(conversation).declineConclusion();
+  });
+  ipcMain.handle(
+    CHANNELS.endThread,
+    async (_e, conversation: unknown, as: unknown, reason: unknown) => {
+      if (!str(conversation) || (as !== "superseded" && as !== "withdrawn") || !str(reason, 1000))
+        throw new Error("bad request");
+      await requireRunning().workspace.conversation(conversation).endThread(as, reason);
+    },
+  );
   ipcMain.handle(CHANNELS.previewSwitch, (_e, conversation: unknown, agent: unknown) => {
     if (!str(conversation) || !str(agent)) throw new Error("bad request");
     return requireRunning().workspace.previewSwitch(conversation, agent);

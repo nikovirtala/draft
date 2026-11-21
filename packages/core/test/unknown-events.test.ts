@@ -78,13 +78,20 @@ describe("events this build doesn't understand", () => {
     const second = await openService(dir, fakeKiro());
     const state = second.service.state();
     expect(state.messages.map((m) => m.role)).toEqual(["user", "agent"]);
-    expect(state.timeline.map((b) => b.kind)).toEqual(["message", "message", "unknown", "unknown"]);
-    expect(state.timeline[2]).toMatchObject({
+    // The waiting session's permission request is an interrupt, after the messages that name it.
+    expect(state.timeline.map((b) => b.kind)).toEqual([
+      "message",
+      "message",
+      "interrupt",
+      "unknown",
+      "unknown",
+    ]);
+    expect(state.timeline[3]).toMatchObject({
       kind: "unknown",
       type: "thread.summarized",
       reason: "unknown-type",
     });
-    expect(state.timeline[3]).toMatchObject({
+    expect(state.timeline[4]).toMatchObject({
       kind: "unknown",
       type: "message.posted",
       schema: 3,

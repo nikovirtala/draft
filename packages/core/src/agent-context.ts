@@ -1,3 +1,4 @@
+import { conversationKey, parseAddress } from "./address.ts";
 import { canonicalJson, sha256Hex } from "./canonical.ts";
 import type { Projection } from "./projection.ts";
 
@@ -51,8 +52,18 @@ export interface ContextReference {
   state: Record<string, unknown>;
 }
 
+/** What a thread concluded, returned to the conversation it branched off. */
+export interface ContextConclusion {
+  thread: string;
+  title: string;
+  at: string;
+  text: string;
+}
+
 export interface AgentContext {
   conversation: string;
+  /** Conclusions of this conversation's threads that wrapped up, oldest first. */
+  conclusions: ContextConclusion[];
   openItems: ContextOpenItem[];
   decisions: ContextDecision[];
   /** The most recent messages the agent may read, oldest first. */
@@ -114,7 +125,7 @@ export function buildAgentContext(
   const steps = projection.steps(conversation);
   const openItems: ContextOpenItem[] = [
     ...steps
-      .filter((s) => s.outcome === null)
+      .filter((s) => s.outcome === null && s.resolution === null)
       .map((s) => ({
         kind: "interrupted-step" as const,
         tool: s.name,
@@ -162,8 +173,26 @@ export function buildAgentContext(
     references.push({ target: e.target, state });
   }
 
+  // A thread's conclusion returns to the conversation its branch point is in.
+  const conclusions: ContextConclusion[] = [];
+  for (const c of projection.conversations()) {
+    if (c.parent === null) continue;
+    const a = parseAddress(c.parent);
+    if (conversationKey(a.context, a.conversation as string) !== conversation) continue;
+    const fold = projection.thread(c.conversation);
+    if (fold.state !== "wrapped-up" || fold.conclusion === null) continue;
+    conclusions.push({
+      thread: c.conversation,
+      title: c.title,
+      at: fold.conclusion.wrappedAt ?? fold.conclusion.proposedAt,
+      text: clip(fold.conclusion.text, limits.maxMessageChars),
+    });
+  }
+  conclusions.sort((x, y) => (x.at < y.at ? -1 : 1));
+
   return {
     conversation,
+    conclusions,
     openItems,
     decisions,
     messages: recent,
@@ -176,6 +205,7 @@ export function buildAgentContext(
 export function isEmptyContext(c: AgentContext): boolean {
   return (
     c.openItems.length === 0 &&
+    c.conclusions.length === 0 &&
     c.decisions.length === 0 &&
     c.messages.length === 0 &&
     c.references.length === 0
@@ -197,6 +227,10 @@ export function renderAgentContext(c: AgentContext): string {
           : `- UNASKED: ${i.tool} ${clip(canonicalJson(i.input), 600)} ran (${i.status}) without asking the user first, at ${i.at}.`,
       );
     }
+  }
+  if (c.conclusions.length > 0) {
+    out.push("\nThreads that wrapped up, with the conclusion each returned:");
+    for (const k of c.conclusions) out.push(`- "${k.title}" (${k.thread}): ${k.text}`);
   }
   if (c.decisions.length > 0) {
     out.push("\nDecisions and actions so far:");

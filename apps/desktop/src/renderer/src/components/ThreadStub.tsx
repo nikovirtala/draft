@@ -2,10 +2,18 @@ import { useEffect } from "react";
 import type { Thread } from "../../../shared/ipc.ts";
 import { useWorkspace } from "../workspace.tsx";
 import { agentName } from "./AgentState.tsx";
+import { Citation } from "./Conclusion.tsx";
 import { BlockControls } from "./Icons.tsx";
+import { Markdown } from "./Markdown.tsx";
 import { useSelectable } from "./selectable.ts";
 
 const WHERE: Record<string, string> = { panel: "In the panel", window: "In a window" };
+
+const STATES: Record<string, string> = {
+  "wrapped-up": "Wrapped up",
+  superseded: "Superseded",
+  withdrawn: "Withdrawn",
+};
 
 function plural(n: number, one: string, many: string): string {
   return `${n} ${n === 1 ? one : many}`;
@@ -67,7 +75,12 @@ export function ThreadStub({ thread }: { thread: Thread }) {
         )}
         {thread.waiting > 0 && (
           <span className="thread-chip waiting" data-testid="thread-waiting">
-            Waiting on you
+            Waiting on you · {thread.waiting}
+          </span>
+        )}
+        {thread.state !== "open" && thread.state !== "concluding" && (
+          <span className="thread-chip" data-testid="thread-state" data-state={thread.state}>
+            {STATES[thread.state]}
           </span>
         )}
         {thread.artifacts > 0 && (
@@ -84,6 +97,17 @@ export function ThreadStub({ thread }: { thread: Thread }) {
           entry !== undefined && <BlockControls entry={entry} />
         )}
       </div>
+      {thread.state === "wrapped-up" && thread.conclusion !== null && (
+        <div className="thread-conclusion" data-testid="thread-conclusion">
+          <Markdown text={thread.conclusion.text} />
+          <Citation conclusion={thread.conclusion} title={thread.title} />
+        </div>
+      )}
+      {thread.endedReason !== null && (
+        <p className="secondary" data-testid="thread-ended-reason">
+          {thread.endedReason}
+        </p>
+      )}
       {placement === "inline" && (
         <p className="thread-preview" data-testid="thread-preview">
           {last === null
