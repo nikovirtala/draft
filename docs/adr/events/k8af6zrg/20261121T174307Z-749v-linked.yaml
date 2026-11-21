@@ -1,0 +1,16 @@
+envelope: ledger/v1
+kind: decision
+schema: decision/v1
+id: 01M7ZK8TTPBNWC8W5YW717749V
+subject: k8af6zrg
+type: linked
+at: 2026-11-21T17:43:07Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: niko.virtala@hey.com
+data:
+  to: 17gtag9n
+  rel: relates-to
