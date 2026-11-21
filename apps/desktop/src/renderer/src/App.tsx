@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Boot, ConversationState, Placement } from "../../shared/ipc.ts";
+import { AgentState, agentLabel } from "./components/AgentState.tsx";
 import { Composer } from "./components/Composer.tsx";
 import { InterruptBlock } from "./components/InterruptBlock.tsx";
 import { MessageView, StreamingMessage } from "./components/MessageView.tsx";
+import { NoticeBlock } from "./components/NoticeBlock.tsx";
 import { PromptCard } from "./components/PromptCard.tsx";
 import { UnknownBlock } from "./components/UnknownBlock.tsx";
 import { useVisibleStubs } from "./visibility.ts";
@@ -73,6 +75,9 @@ export function App() {
       <header className="titlebar">
         <span className="brand">draft</span>
         <span className="title">{state?.title ?? ""}</span>
+        {state !== null && (
+          <AgentState agent={state.agent} onChange={(s) => void window.draft.setAgentState(s)} />
+        )}
       </header>
       <main className="conversation" ref={column}>
         <div className="column">
@@ -85,6 +90,7 @@ export function App() {
           {state?.timeline.map((b) => {
             if (b.kind === "unknown") return <UnknownBlock key={b.id} block={b} />;
             if (b.kind === "interrupt") return <InterruptBlock key={b.id} block={b} />;
+            if (b.kind === "notice") return <NoticeBlock key={b.id} block={b} />;
             const m = state.messages.find((x) => x.address === b.address);
             return m === undefined ? null : (
               <MessageView
@@ -112,7 +118,12 @@ export function App() {
           <div ref={bottom} />
         </div>
       </main>
-      <Composer busy={state?.busy ?? true} onSubmit={(t) => void window.draft.submit(t)} />
+      <Composer
+        busy={state?.busy ?? true}
+        agentState={state?.agent.state ?? "active"}
+        agentLabel={state === null ? "the agent" : agentLabel(state.agent)}
+        onSubmit={(t, aside) => void window.draft.submit(t, aside)}
+      />
     </div>
   );
 }

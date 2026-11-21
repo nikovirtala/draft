@@ -50,7 +50,24 @@ export function targetKey(t: Target): string {
 export const EdgeKindSchema = z.enum(["structural", "explicit", "suggested"]);
 export type EdgeKind = z.infer<typeof EdgeKindSchema>;
 
-/** The data of each event type at schema version 1. Data is stored as received; these check it. */
+/**
+ * Who a message is for. `people` is everyone in the conversation, or named people once there are
+ * several (an ID list), so "people only" and "people and the agent" grow into named audiences
+ * without a migration. `agent` says whether the agent may read the message.
+ */
+export const AudienceSchema = z.object({
+  people: z.union([z.literal("all"), z.array(z.string().min(1)).min(1)]),
+  agent: z.boolean(),
+});
+export type Audience = z.infer<typeof AudienceSchema>;
+
+export const PEOPLE_ONLY: Audience = { people: "all", agent: false };
+export const PEOPLE_AND_AGENT: Audience = { people: "all", agent: true };
+
+export const AgentStateSchema = z.enum(["active", "paused"]);
+export type AgentState = z.infer<typeof AgentStateSchema>;
+
+/** The data of each event type at the schema version this build writes. Data is stored as received; these check it. */
 export const EventData = {
   "context.created": z.object({ context: z.string().min(1), title: z.string() }),
   "conversation.created": z.object({
@@ -59,9 +76,47 @@ export const EventData = {
     /** The message a thread branches off; `null` for a top-level conversation. */
     parent: AddressString(true).nullable(),
   }),
+  /**
+   * A message and who it is for. Every message carries its audience, so what the agent may read is
+   * decided where its context is built, from the log, never by the UI.
+   */
   "message.posted": z.object({
     role: z.enum(["user", "agent"]),
     text: z.string(),
+    audience: AudienceSchema,
+  }),
+  /** Whether the agent takes part in the conversation, set by a person. */
+  "agent.state_changed": z.object({ state: AgentStateSchema }),
+  /**
+   * A tool call that changes something (or that draft can't tell from one) ran without the agent
+   * asking first, so no step was started before it. It shows as an interrupt.
+   */
+  "agent.anomaly": z.object({
+    kind: z.enum(["call-without-permission"]),
+    toolUseId: z.string().min(1),
+    name: z.string().min(1),
+    input: z.unknown(),
+    /** The call's status when draft saw it run. */
+    status: z.string().min(1),
+  }),
+  /** An agent session began for the conversation, from this context and no memory of the agent's own. */
+  "agent.session_started": z.object({
+    agent: z.string().min(1),
+    agentVersion: z.string().min(1),
+    model: z.string().min(1),
+    /** sha256 of the context the session started from, so "what did it know?" has an answer. */
+    contextHash: Hex64,
+    contextMessages: z.number().int().min(0),
+    contextOpenItems: z.number().int().min(0),
+  }),
+  /**
+   * The log's last line was never completed, so it was never confirmed: its bytes moved to a
+   * sidecar file next to the log, and the log carries on from the line before.
+   */
+  "log.recovered": z.object({
+    sidecar: z.string().min(1),
+    bytes: z.number().int().min(1),
+    hash: Hex64,
   }),
   /**
    * A tool call that changes nothing: a read-only call with its result, or a refused call. Calls
@@ -130,8 +185,52 @@ export type EventType = keyof typeof EventData;
 export const EVENT_TYPES = Object.keys(EventData) as EventType[];
 export type EventDataOf<T extends EventType> = z.infer<(typeof EventData)[T]>;
 
-/** The schema version this build writes for every event type. */
-export const SCHEMA_VERSION = 1;
+/**
+ * The schema version this build writes for each event type. A type's version rises when its data
+ * changes in a way an older build must not read: that build keeps the event as one it doesn't
+ * understand, instead of showing it with something missing.
+ */
+export const SCHEMA_VERSIONS: Record<EventType, number> = {
+  "context.created": 1,
+  "conversation.created": 1,
+  "message.posted": 2,
+  "agent.state_changed": 1,
+  "agent.anomaly": 1,
+  "agent.session_started": 1,
+  "agent.tool_called": 1,
+  "step.started": 1,
+  "step.completed": 1,
+  "step.failed": 1,
+  "reference.made": 1,
+  "status.observed": 1,
+  "log.recovered": 1,
+};
+
+export function schemaVersionOf(type: EventType): number {
+  return SCHEMA_VERSIONS[type];
+}
+
+/** `message.posted` at schema version 1, which had no audience: every message reached the agent. */
+const MessagePostedV1 = z.object({ role: z.enum(["user", "agent"]), text: z.string() });
+export type MessagePostedV1Data = z.infer<typeof MessagePostedV1>;
+
+/** Older versions of a type's data that this build still reads. Old versions are upcast on read; the log is never rewritten. */
+const OLDER_DATA: { [T in EventType]?: Record<number, z.ZodType> } = {
+  "message.posted": { 1: MessagePostedV1 },
+};
+
+/** What `message.posted` of any version read carries; use `audienceOf` for the audience. */
+export type MessagePostedData = EventDataOf<"message.posted"> | MessagePostedV1Data;
+
+/** Messages written before audiences existed went to everyone, the agent included. */
+export function audienceOf(data: MessagePostedData): Audience {
+  return "audience" in data ? data.audience : PEOPLE_AND_AGENT;
+}
+
+function dataSchema(type: EventType, version: number): z.ZodType | null {
+  if (version === SCHEMA_VERSIONS[type]) return EventData[type];
+  return OLDER_DATA[type]?.[version] ?? null;
+}
 
 /**
  * What every record needs so the chain can be checked, whatever its type: a newer draft, or another
@@ -168,7 +267,10 @@ export type Envelope = z.infer<typeof StrictEnvelope>;
 
 /** A typed view of an envelope whose data passed its type's schema. */
 export type DraftEvent<T extends EventType = EventType> = T extends EventType
-  ? Omit<Envelope, "type" | "data"> & { type: T; data: EventDataOf<T> }
+  ? Omit<Envelope, "type" | "data"> & {
+      type: T;
+      data: T extends "message.posted" ? MessagePostedData : EventDataOf<T>;
+    }
   : never;
 
 /** What a writer supplies; the log fills in `id`, `prevHash` and `hash`. */
@@ -183,6 +285,9 @@ export type EventDraft<T extends EventType = EventType> = T extends EventType
       at?: string;
     }
   : never;
+
+/** Events about the whole context or its log, not about a conversation. */
+const NO_CONVERSATION: ReadonlySet<string> = new Set(["context.created", "log.recovered"]);
 
 export type ParseResult = { ok: true; event: DraftEvent } | { ok: false; reason: string };
 
@@ -251,7 +356,8 @@ export function readRecord(raw: unknown): ReadResult {
   if (!chain.success) return { ok: false, reason: `not an event record: ${issues(chain.error)}` };
   const c = chain.data;
   if (!(c.type in EventData)) return { ok: true, record: new UnknownEvent(c, "unknown-type") };
-  if (c.schema > SCHEMA_VERSION) return { ok: true, record: new UnknownEvent(c, "newer-schema") };
+  if (c.schema > SCHEMA_VERSIONS[c.type as EventType])
+    return { ok: true, record: new UnknownEvent(c, "newer-schema") };
   const parsed = parseEvent(raw);
   return parsed.ok ? { ok: true, record: parsed.event } : parsed;
 }
@@ -272,13 +378,18 @@ export function parseEvent(raw: unknown): ParseResult {
   const e = env.data;
   if (!(e.type in EventData))
     return { ok: false, reason: `unknown event type ${JSON.stringify(e.type)}` };
-  if (e.schema > SCHEMA_VERSION) {
-    return { ok: false, reason: `schema version ${e.schema} is newer than ${SCHEMA_VERSION}` };
+  const latest = SCHEMA_VERSIONS[e.type as EventType];
+  if (e.schema > latest) {
+    return { ok: false, reason: `schema version ${e.schema} is newer than ${latest}` };
   }
-  if ((e.conversation === null) !== (e.type === "context.created")) {
-    return { ok: false, reason: "only context.created has no conversation" };
+  if ((e.conversation === null) !== NO_CONVERSATION.has(e.type)) {
+    return { ok: false, reason: "only context.created and log.recovered have no conversation" };
   }
-  const data = EventData[e.type as EventType].safeParse(e.data);
+  const schema = dataSchema(e.type as EventType, e.schema);
+  if (schema === null) {
+    return { ok: false, reason: `no schema for ${e.type} at version ${e.schema}` };
+  }
+  const data = schema.safeParse(e.data);
   if (!data.success) return { ok: false, reason: `data: ${issues(data.error)}` };
   return { ok: true, event: { ...e, data: e.data } as DraftEvent };
 }
@@ -294,7 +405,7 @@ export function sealEvent(
     address: draft.address,
     conversation: draft.conversation,
     type: draft.type,
-    schema: SCHEMA_VERSION,
+    schema: SCHEMA_VERSIONS[draft.type],
     actor: draft.actor,
     traceId: draft.traceId,
     prevHash: o.prevHash,

@@ -1,6 +1,9 @@
 import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 import { canonicalJson } from "./canonical.ts";
 import {
+  type AgentState,
+  type Audience,
+  audienceOf,
   type DraftEvent,
   isUnknown,
   type LogRecord,
@@ -15,7 +18,7 @@ import {
  */
 
 /** Bump when the tables change; a projection with another version is rebuilt. */
-export const PROJECTION_VERSION = 1;
+export const PROJECTION_VERSION = 2;
 
 const SCHEMA = `
 create table if not exists meta (key text primary key, value text not null);
@@ -24,7 +27,17 @@ create table if not exists conversations (
   parent text, created_at text not null, created_seq integer not null);
 create table if not exists messages (
   address text primary key, conversation text not null, role text not null, text text not null,
-  at text not null, trace_id text, seq integer not null, actor_json text not null);
+  at text not null, trace_id text, seq integer not null, actor_json text not null,
+  audience_json text not null);
+create table if not exists agent_state (
+  conversation text primary key, state text not null, at text not null, seq integer not null);
+create table if not exists anomalies (
+  address text primary key, conversation text not null, kind text not null,
+  tool_use_id text not null, name text not null, input_json text not null, status text not null,
+  at text not null, seq integer not null);
+create table if not exists recoveries (
+  event_id text primary key, sidecar text not null, bytes integer not null, hash text not null,
+  at text not null, seq integer not null);
 create table if not exists tool_calls (
   address text primary key, conversation text not null, tool_use_id text not null,
   name text not null, decision text not null, is_error integer not null,
@@ -50,6 +63,9 @@ const TABLES = [
   "meta",
   "conversations",
   "messages",
+  "agent_state",
+  "anomalies",
+  "recoveries",
   "tool_calls",
   "edges",
   "stubs",
@@ -64,6 +80,30 @@ export interface MessageRow {
   text: string;
   at: string;
   traceId: string | null;
+  seq: number;
+  audience: Audience;
+}
+
+/** A call that ran without the agent asking first. */
+export interface AnomalyRow {
+  address: string;
+  conversation: string;
+  kind: string;
+  toolUseId: string;
+  name: string;
+  input: unknown;
+  status: string;
+  at: string;
+  seq: number;
+}
+
+/** A half-written last line that opening the log moved aside. */
+export interface RecoveryRow {
+  eventId: string;
+  sidecar: string;
+  bytes: number;
+  hash: string;
+  at: string;
   seq: number;
 }
 
@@ -235,7 +275,7 @@ export class Projection {
         return;
       case "message.posted":
         this.run(
-          "insert or replace into messages values (?, ?, ?, ?, ?, ?, ?, ?)",
+          "insert or replace into messages values (?, ?, ?, ?, ?, ?, ?, ?, ?)",
           e.address,
           e.conversation as string,
           e.data.role,
@@ -244,6 +284,46 @@ export class Projection {
           e.traceId,
           seq,
           canonicalJson(e.actor),
+          canonicalJson(audienceOf(e.data)),
+        );
+        return;
+      case "agent.state_changed":
+        this.run(
+          `insert into agent_state values (?, ?, ?, ?)
+           on conflict(conversation) do update set state = excluded.state, at = excluded.at,
+             seq = excluded.seq`,
+          e.conversation as string,
+          e.data.state,
+          e.at,
+          seq,
+        );
+        return;
+      case "agent.anomaly":
+        this.run(
+          "insert or replace into anomalies values (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+          e.address,
+          e.conversation as string,
+          e.data.kind,
+          e.data.toolUseId,
+          e.data.name,
+          canonicalJson(e.data.input ?? null),
+          e.data.status,
+          e.at,
+          seq,
+        );
+        return;
+      case "agent.session_started":
+        // Recorded for the audit; nothing on screen is computed from it.
+        return;
+      case "log.recovered":
+        this.run(
+          "insert or replace into recoveries values (?, ?, ?, ?, ?, ?)",
+          e.id,
+          e.data.sidecar,
+          e.data.bytes,
+          e.data.hash,
+          e.at,
+          seq,
         );
         return;
       case "agent.tool_called":
@@ -343,7 +423,7 @@ export class Projection {
     return (
       this.db
         .prepare(
-          "select address, conversation, role, text, at, trace_id, seq from messages where conversation = ? order by seq",
+          "select address, conversation, role, text, at, trace_id, seq, audience_json from messages where conversation = ? order by seq",
         )
         .all(conversation) as Record<string, unknown>[]
     ).map((r) => ({
@@ -353,6 +433,47 @@ export class Projection {
       text: r.text as string,
       at: r.at as string,
       traceId: (r.trace_id as string | null) ?? null,
+      seq: Number(r.seq),
+      audience: JSON.parse(r.audience_json as string) as Audience,
+    }));
+  }
+
+  /** Whether the agent takes part in `conversation`: active until someone pauses it. */
+  agentState(conversation: string): AgentState {
+    const r = this.db
+      .prepare("select state from agent_state where conversation = ?")
+      .get(conversation) as { state: AgentState } | undefined;
+    return r?.state ?? "active";
+  }
+
+  /** Calls that ran without asking, in the order draft saw them. */
+  anomalies(conversation: string): AnomalyRow[] {
+    return (
+      this.db
+        .prepare("select * from anomalies where conversation = ? order by seq")
+        .all(conversation) as Record<string, unknown>[]
+    ).map((r) => ({
+      address: r.address as string,
+      conversation: r.conversation as string,
+      kind: r.kind as string,
+      toolUseId: r.tool_use_id as string,
+      name: r.name as string,
+      input: JSON.parse(r.input_json as string) as unknown,
+      status: r.status as string,
+      at: r.at as string,
+      seq: Number(r.seq),
+    }));
+  }
+
+  recoveries(): RecoveryRow[] {
+    return (
+      this.db.prepare("select * from recoveries order by seq").all() as Record<string, unknown>[]
+    ).map((r) => ({
+      eventId: r.event_id as string,
+      sidecar: r.sidecar as string,
+      bytes: Number(r.bytes),
+      hash: r.hash as string,
+      at: r.at as string,
       seq: Number(r.seq),
     }));
   }

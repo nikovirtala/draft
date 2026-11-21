@@ -25,6 +25,8 @@ export interface Message {
   text: string;
   segments: Segment[];
   references: Reference[];
+  /** Who the message is for; `agent: false` is an aside. */
+  audience: { people: "all" | string[]; agent: boolean };
 }
 
 export interface Stub {
@@ -54,10 +56,19 @@ export type Block =
     }
   | {
       kind: "interrupt";
+      cause: "unfinished-step" | "unasked-call";
       id: string;
       tool: string;
       input: unknown;
-      idempotencyKey: string;
+      idempotencyKey: string | null;
+      at: string;
+    }
+  | {
+      kind: "notice";
+      id: string;
+      what: "log-recovered";
+      sidecar: string;
+      bytes: number;
       at: string;
     };
 
@@ -65,7 +76,7 @@ export interface ConversationState {
   context: string;
   conversation: string;
   title: string;
-  agent: { model: string; version: string };
+  agent: { id: string; model: string; version: string; state: "active" | "paused" };
   messages: Message[];
   timeline: Block[];
   stubs: Record<string, Stub>;
@@ -89,7 +100,9 @@ export type Placement = "inline" | "minimized";
 
 export interface DraftBridge {
   boot(): Promise<Boot>;
-  submit(text: string): Promise<void>;
+  /** `aside` posts for people only: the agent never reads it. */
+  submit(text: string, aside?: boolean): Promise<void>;
+  setAgentState(state: "active" | "paused"): Promise<void>;
   answerPrompt(id: string, allow: boolean): Promise<void>;
   setVisible(targets: { type: string; id: string }[]): void;
   reportInvalidView(reason: "not-json" | "schema"): void;
@@ -101,6 +114,7 @@ export interface DraftBridge {
 export const CHANNELS = {
   boot: "draft:boot",
   submit: "draft:submit",
+  setAgentState: "draft:set-agent-state",
   answerPrompt: "draft:answer-prompt",
   setVisible: "draft:set-visible",
   invalidView: "draft:invalid-view",

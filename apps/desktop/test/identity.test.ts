@@ -20,13 +20,13 @@ describe("the local identity", () => {
 
   it("keeps the other settings in config.json", () => {
     const dir = mkdtempSync(join(tmpdir(), "draft-id-"));
-    writeFileSync(join(dir, "config.json"), JSON.stringify({ model: "claude-opus-5-5" }));
+    writeFileSync(join(dir, "config.json"), JSON.stringify({ agent: "claude" }));
     ensureIdentity(dir, { gitName: () => "Ada" });
     expect(JSON.parse(readFileSync(join(dir, "config.json"), "utf8"))).toMatchObject({
-      model: "claude-opus-5-5",
+      agent: "claude",
       user: { name: "Ada" },
     });
-    expect(loadConfig(dir, {}).model).toBe("claude-opus-5-5");
+    expect(loadConfig(dir, {}).agent.id).toBe("claude");
   });
 
   it("takes its name from git, else the OS user, else a plain label", () => {

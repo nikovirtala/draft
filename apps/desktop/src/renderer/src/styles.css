@@ -316,14 +316,92 @@ textarea:focus-visible {
 }
 
 /* Composer */
+.composer-wrap {
+  max-width: 760px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 12px 24px 14px;
+}
+
 .composer {
   display: flex;
   gap: 10px;
   align-items: flex-end;
-  max-width: 760px;
-  width: 100%;
-  margin: 0 auto;
-  padding: 12px 24px 20px;
+}
+
+.composer-hint {
+  margin: 6px 2px 0;
+  color: var(--secondary);
+  font-size: 12px;
+}
+
+.composer-hint kbd {
+  font-family: var(--sans);
+  font-size: 11px;
+  border: 1px solid var(--border);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  padding: 0 4px;
+  margin-right: 2px;
+  background: var(--card);
+}
+
+/* The agent's name, its state and the pause/play control. */
+.agent-state {
+  -webkit-app-region: no-drag;
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.agent-model {
+  color: var(--secondary);
+}
+
+.agent-badge {
+  font-size: 11.5px;
+  font-weight: 560;
+  border-radius: 999px;
+  padding: 1px 8px;
+}
+
+.agent-badge.active {
+  color: #00663c;
+  background: #d8f3e4;
+}
+
+.agent-badge.paused {
+  color: var(--waiting);
+  background: var(--waiting-bg);
+}
+
+.agent-toggle {
+  font: inherit;
+  font-size: 12px;
+  line-height: 1;
+  padding: 0 9px;
+  height: 22px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--text);
+  cursor: pointer;
+}
+
+/* A message for people only. */
+.message.aside .body {
+  background: transparent;
+  border: 1px dashed var(--border);
+}
+
+.message .audience {
+  margin: 0 0 3px;
+  font-family: var(--sans);
+  font-size: 11.5px;
+  color: var(--secondary);
+  text-align: right;
 }
 
 .composer textarea {

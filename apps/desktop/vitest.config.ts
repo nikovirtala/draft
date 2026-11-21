@@ -11,6 +11,7 @@ export default defineConfig({
     alias: [
       { find: /^@nikovirtala\/draft-core$/, replacement: core("index.ts") },
       { find: /^@nikovirtala\/draft-core\/view$/, replacement: core("view.ts") },
+      { find: /^@nikovirtala\/draft-core\/testing$/, replacement: core("testing/index.ts") },
     ],
   },
   test: { include: ["test/**/*.test.ts"], testTimeout: 20_000 },

@@ -1,4 +1,4 @@
-import type { EventDraft } from "../src/events.ts";
+import { type Audience, type EventDraft, PEOPLE_AND_AGENT } from "../src/events.ts";
 import { createUlidFactory } from "../src/ids.ts";
 
 /** A deterministic clock and id source for tests. */
@@ -47,13 +47,18 @@ export function genesisDrafts(): EventDraft[] {
   ];
 }
 
-export function messageDraft(item: string, role: "user" | "agent", text: string): EventDraft {
+export function messageDraft(
+  item: string,
+  role: "user" | "agent",
+  text: string,
+  audience: Audience = PEOPLE_AND_AGENT,
+): EventDraft {
   return {
     type: "message.posted",
     address: `${CONV}/${item}@1`,
     conversation: CONV,
     actor: role === "user" ? USER : AGENT,
     traceId: TRACE,
-    data: { role, text },
+    data: { role, text, audience },
   };
 }

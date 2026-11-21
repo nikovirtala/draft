@@ -39,12 +39,19 @@ export function MessageView({
   onPlace: (key: string, p: Placement) => void;
 }) {
   const role = message.role;
+  const aside = !message.audience.agent;
   return (
     <article
-      className={`message ${role}`}
+      className={`message ${role}${aside ? " aside" : ""}`}
       data-testid={`message-${role}`}
       data-address={message.address}
+      data-audience={aside ? "people" : "people-and-agent"}
     >
+      {aside && (
+        <p className="audience" data-testid="aside-label">
+          People only · the agent doesn’t read this
+        </p>
+      )}
       <div className="body">
         {message.segments.map((s, i) => {
           // Segments of a posted message never change, so their position is a stable key.

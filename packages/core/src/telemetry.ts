@@ -65,6 +65,7 @@ export interface DraftMetrics {
   unknownEvents: ReturnType<ReturnType<typeof metrics.getMeter>["createCounter"]>;
   steps: ReturnType<ReturnType<typeof metrics.getMeter>["createCounter"]>;
   interruptedSteps: ReturnType<ReturnType<typeof metrics.getMeter>["createCounter"]>;
+  anomalies: ReturnType<ReturnType<typeof metrics.getMeter>["createCounter"]>;
 }
 
 let cached: { meter: unknown; m: DraftMetrics } | null = null;
@@ -81,7 +82,7 @@ export function draftMetrics(): DraftMetrics {
       unit: "ms",
     }),
     turnTokens: meter.createHistogram("draft.turn.tokens", {
-      description: "Model tokens per turn, from the Agent SDK's usage",
+      description: "Model tokens per turn, as the agent reports them over ACP",
       unit: "{token}",
     }),
     resolverPolls: meter.createCounter("draft.resolver.polls", { description: "Resolver polls" }),
@@ -97,6 +98,9 @@ export function draftMetrics(): DraftMetrics {
     }),
     interruptedSteps: meter.createCounter("draft.steps.found_interrupted", {
       description: "Steps an earlier run started and never finished, counted when a log opens",
+    }),
+    anomalies: meter.createCounter("draft.anomalies", {
+      description: "Calls that ran without the agent asking first, by kind",
     }),
     unknownEvents: meter.createCounter("draft.log.unknown_events", {
       description:

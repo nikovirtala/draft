@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { canonicalJson } from "../src/canonical.ts";
-import { eventHash, GENESIS_HASH, parseEvent, sealEvent } from "../src/events.ts";
+import { eventHash, GENESIS_HASH, PEOPLE_AND_AGENT, parseEvent, sealEvent } from "../src/events.ts";
 import { CONV, messageDraft, TRACE, USER } from "./helpers.ts";
 
 const sealed = () =>
@@ -32,11 +32,11 @@ describe("the event envelope", () => {
       address: `${CONV}/m1@1`,
       conversation: CONV,
       type: "message.posted",
-      schema: 1,
+      schema: 2,
       actor: USER,
       traceId: TRACE,
       prevHash: GENESIS_HASH,
-      data: { role: "user", text: "hello" },
+      data: { role: "user", text: "hello", audience: { people: "all", agent: true } },
     });
     expect(e.hash).toBe(eventHash(e));
     expect(parseEvent(e).ok).toBe(true);
@@ -54,7 +54,10 @@ describe("the event envelope", () => {
   });
 
   it("keeps unknown data fields as received", () => {
-    const e = { ...sealed(), data: { role: "user", text: "hi", extra: { kept: true } } };
+    const e = {
+      ...sealed(),
+      data: { role: "user", text: "hi", audience: PEOPLE_AND_AGENT, extra: { kept: true } },
+    };
     const r = parseEvent(e);
     expect(r.ok && (r.event.data as Record<string, unknown>).extra).toEqual({ kept: true });
   });
@@ -99,9 +102,9 @@ describe("the event envelope", () => {
       (e: Record<string, unknown>) => (e.type = "message.edited"),
       "unknown event type",
     ],
-    ["a newer schema version", (e: Record<string, unknown>) => (e.schema = 2), "newer"],
+    ["a newer schema version", (e: Record<string, unknown>) => (e.schema = 3), "newer"],
     [
-      "no conversation outside context.created",
+      "no conversation outside context.created and log.recovered",
       (e: Record<string, unknown>) => (e.conversation = null),
       "conversation",
     ],

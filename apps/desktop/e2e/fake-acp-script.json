@@ -1,4 +1,9 @@
 {
+  "agent": { "name": "fake-acp-agent", "version": "1.0.0", "model": "fake-model-1" },
+  "starts": "kiro",
+  "style": "kiro",
+  "usage": { "inputTokens": 1200, "outputTokens": 85, "totalTokens": 1285 },
+  "credits": 0.031,
   "turns": [
     {
       "match": "sessions",
@@ -18,7 +23,7 @@
         {
           "tool": "kiro_launch_session",
           "input": {
-            "prompt": "Update the README for the first slice",
+            "prompt": "Update the README for the second slice",
             "repos": ["nikovirtala/draft"],
             "title": "Update the README"
           }
@@ -27,6 +32,34 @@
           "text": "The session is launching.\n\n```view\n{\"component\":\"text\",\"text\":\"Launched from draft.\"}\n```\n\n```view\n{\"component\":\"table\",\"rows\":[]}\n```",
           "delayMs": 0
         }
+      ]
+    },
+    {
+      "match": "which one",
+      "steps": [{ "text": "The release notes session is the one waiting for you.", "delayMs": 10 }]
+    },
+    {
+      "match": "clean up",
+      "steps": [
+        {
+          "unasked": "kiro_delete_session",
+          "input": { "sessionId": "01KAHXZZZZZZZZZZZZZZZZZZZZ" }
+        },
+        { "text": "I deleted the old session.", "delayMs": 0 }
+      ]
+    },
+    {
+      "match": "launch",
+      "steps": [
+        {
+          "tool": "kiro_launch_session",
+          "input": {
+            "prompt": "Update the README for the second slice",
+            "repos": ["nikovirtala/draft"],
+            "title": "Update the README"
+          }
+        },
+        { "text": "Launching again.", "delayMs": 0 }
       ]
     }
   ],
