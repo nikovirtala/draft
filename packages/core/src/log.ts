@@ -202,6 +202,18 @@ export class FileLogStore extends BaseLog {
   }
 }
 
+/**
+ * Reads and verifies a log file without opening it: nothing is written or moved, and a last line
+ * without its newline is left out, as opening would. For reading another context's log, and for
+ * checking a log before it is copied.
+ */
+export function readLogRecords(path: string): VerifyResult {
+  const bytes = existsSync(path) ? readFileSync(path) : Buffer.alloc(0);
+  const complete = bytes.length === 0 || bytes[bytes.length - 1] === 0x0a;
+  const cut = complete ? bytes.length : bytes.lastIndexOf(0x0a) + 1;
+  return verifyLines(splitLines(bytes.subarray(0, cut).toString("utf8")));
+}
+
 function contextOf(first: LogRecord): string {
   const address = "address" in first ? first.address : "";
   return address.split("/")[0]?.split("@")[0] ?? "";

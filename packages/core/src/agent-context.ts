@@ -1,5 +1,6 @@
 import { conversationKey, parseAddress } from "./address.ts";
 import { canonicalJson, sha256Hex } from "./canonical.ts";
+import { isContextItemKey } from "./cross-context.ts";
 import type { Projection } from "./projection.ts";
 
 /**
@@ -166,8 +167,13 @@ export function buildAgentContext(
 
   const seen = new Set<string>();
   const references: ContextReference[] = [];
+  // Another context's items are a trust boundary (ADR gw4vxvw4): their snapshots stay out of the
+  // agent's context until a person pulls one into this conversation.
+  const pulled = projection.pulledTargets(conversation);
   for (const e of projection.edges(conversation)) {
     if (!reachesAgent.has(e.from) || seen.has(e.target)) continue;
+    if (isContextItemKey(e.target) && !pulled.has(e.target.slice(e.target.indexOf(":") + 1)))
+      continue;
     seen.add(e.target);
     const state = projection.stub(e.target)?.state ?? e.snapshot;
     references.push({ target: e.target, state });

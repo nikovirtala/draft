@@ -9,6 +9,7 @@ import {
   singleAgent,
 } from "./agent.ts";
 import { buildAgentContext, contextDigest } from "./agent-context.ts";
+import { CONTEXT_ITEM, type ContextItemSnapshot, contextItemKey } from "./cross-context.ts";
 import {
   type Actor,
   type AgentState,
@@ -145,6 +146,36 @@ export type UiBlock =
       at: string;
     };
 
+/**
+ * A sentence that asks to open or make a context, as draft recognized it. The person confirms it
+ * with one action; the agent has no way to open anything (ADR 17gtag9n).
+ */
+export type ContextIntent = { kind: "open"; name: string } | { kind: "new"; folder: string };
+
+/** What a proposal asks a person to confirm. */
+export interface UiProposal {
+  id: string;
+  intent: ContextIntent;
+  /** The message that asked for it. */
+  message: string;
+}
+
+/** Opens contexts for a conversation; the desktop app supplies it. */
+export interface ContextLauncher {
+  /** The intent in a sentence, or null when the sentence is for the agent. */
+  recognise(text: string): ContextIntent | null;
+  /** Opens the context an intent names (making it first for "new"); returns its name. */
+  open(intent: ContextIntent): Promise<{ context: string }>;
+}
+
+/** Reads items of other contexts for references; the desktop app supplies it. */
+export interface CrossContext {
+  /** Addresses in a text that name an item of another context on this device. */
+  detect(text: string): string[];
+  /** The snapshot of such an item, taken from its context's log; null when it isn't there. */
+  snapshot(address: string): Promise<ContextItemSnapshot | null>;
+}
+
 /** A thread's own state and conclusion, for the conversation that shows it. */
 export interface UiThreadState {
   state: ThreadState;
@@ -167,6 +198,8 @@ export interface UiState {
   stubs: Record<string, UiStub>;
   streaming: { address: string; text: string } | null;
   prompts: UiPrompt[];
+  /** Sentences that asked to open a context and wait for a person to confirm. */
+  proposals: UiProposal[];
   busy: boolean;
   error: string | null;
 }
@@ -231,6 +264,10 @@ export interface ConversationOptions {
   actions?: KiroRemoteTools;
   /** Told when another conversation of the log changed, so it can show it. */
   touched?: (conversation: string) => void;
+  /** Opens contexts when a person asks in a sentence and confirms. Without it, nothing opens. */
+  launcher?: ContextLauncher;
+  /** Takes snapshots of other contexts' items for references. Without it, none are made. */
+  crossContext?: CrossContext;
   context?: string;
   title?: string;
   poller?: PollerOptions;
@@ -271,6 +308,9 @@ export class ConversationService {
   private readonly newId: (() => string) | undefined;
   private readonly actions: KiroRemoteTools | null;
   private readonly touched: ((conversation: string) => void) | undefined;
+  private readonly launcher: ContextLauncher | null;
+  private readonly crossContext: CrossContext | null;
+  private readonly proposals = new Map<string, UiProposal>();
   private readonly listeners = new Set<(c: UiChange) => void>();
   private readonly prompts = new Map<
     string,
@@ -297,6 +337,8 @@ export class ConversationService {
     this.newId = o.newId;
     this.actions = o.actions ?? null;
     this.touched = o.touched;
+    this.launcher = o.launcher ?? null;
+    this.crossContext = o.crossContext ?? null;
     this.conversation = conversation;
     this.context = conversation.split("/")[0] as string;
     const m = draftMetrics();
@@ -605,6 +647,7 @@ export class ConversationService {
       stubs,
       streaming: this.streaming,
       prompts: [...this.prompts.values()].map((p) => p.prompt),
+      proposals: [...this.proposals.values()],
       busy: this.busy,
       error: this.error,
     };
@@ -1102,6 +1145,87 @@ export class ConversationService {
     return span.spanContext().traceId;
   }
 
+  /** Posts the sentence for people only and waits for one confirmation. */
+  private async propose(text: string, intent: ContextIntent): Promise<void> {
+    await this.postPeopleOnly(text);
+    const message = this.projection.messages(this.conversation).at(-1)?.address;
+    const id = newItemId(this.newId);
+    this.proposals.set(id, { id, intent, message: message ?? this.conversation });
+    this.error = null;
+    this.emitState();
+  }
+
+  /**
+   * A person answers a proposal. Confirming opens the context and records the crossing as the
+   * person; declining only dismisses it.
+   */
+  async answerProposal(id: string, accept: boolean): Promise<void> {
+    const p = this.proposals.get(id);
+    if (p === undefined || this.launcher === null) return;
+    this.proposals.delete(id);
+    if (!accept) return this.emitState();
+    try {
+      const { context } = await this.launcher.open(p.intent);
+      await this.append(
+        [
+          {
+            type: "context.crossed",
+            address: itemAddress(this.conversation, newItemId(this.newId)),
+            conversation: this.conversation,
+            actor: this.user,
+            traceId: null,
+            data: {
+              purpose: "opened",
+              context,
+              target: null,
+              from: p.message as string,
+              snapshotHash: null,
+              via: "sentence",
+            },
+          },
+        ],
+        "context.opened",
+      );
+    } catch (err) {
+      this.error = err instanceof Error ? err.message : String(err);
+      this.emitState();
+    }
+  }
+
+  /**
+   * A person follows or pulls in a reference to another context's item. Both are crossings and
+   * are recorded as the person; pulling lets the item's snapshot, and only that, reach this
+   * conversation's agent. Only an item this conversation already references can be crossed to.
+   */
+  async cross(purpose: "followed" | "pulled", address: string): Promise<{ context: string }> {
+    const edge = this.projection
+      .edges(this.conversation)
+      .find((e) => e.target === contextItemKey(address));
+    if (edge === undefined) throw new Error(`this conversation has no reference to ${address}`);
+    const snapshot = edge.snapshot as unknown as ContextItemSnapshot;
+    await this.append(
+      [
+        {
+          type: "context.crossed",
+          address: itemAddress(this.conversation, newItemId(this.newId)),
+          conversation: this.conversation,
+          actor: this.user,
+          traceId: null,
+          data: {
+            purpose,
+            context: snapshot.context,
+            target: address,
+            from: edge.from,
+            snapshotHash: snapshot.hash,
+            via: purpose === "followed" ? "reference" : null,
+          },
+        },
+      ],
+      `context.${purpose}`,
+    );
+    return { context: snapshot.context };
+  }
+
   /** Posts a message only people read: the agent isn't started and never sees it. */
   private async postPeopleOnly(text: string): Promise<void> {
     const span = tracer().startSpan(
@@ -1144,6 +1268,10 @@ export class ConversationService {
     if (text.trim() === "") return;
     const thread = this.threadFold();
     if (thread !== null && isEnded(thread.state)) throw new Error("this thread has ended");
+    // A sentence that asks to open a context is for draft, not the agent: it is posted for people
+    // only and becomes one action to confirm.
+    const intent = options.aside === true ? null : (this.launcher?.recognise(text) ?? null);
+    if (intent !== null) return this.propose(text, intent);
     const state = this.agentState();
     const addressed = state === "paused" && AGENT_MENTION.test(text);
     const toAgent = options.aside !== true && (state === "active" || addressed);
@@ -1636,6 +1764,52 @@ export class ConversationService {
           }
           await this.append(drafts, "reference");
           await this.reconcile(target, snapshot, resolver, traceId);
+        }
+      }
+      // What a person writes may name an item of another context. Only a person's own message
+      // does: the agent's words never make draft read another context's log.
+      if (kind === "explicit" && source === "text" && this.crossContext !== null) {
+        for (const address of this.crossContext.detect(text)) {
+          const key = contextItemKey(address);
+          if (seen.has(key)) continue;
+          seen.add(key);
+          const snapshot = await this.crossContext.snapshot(address).catch(() => null);
+          if (snapshot === null) continue;
+          await this.append(
+            [
+              {
+                type: "reference.made",
+                address: itemAddress(this.conversation, newItemId(this.newId)),
+                conversation: this.conversation,
+                actor: this.user,
+                traceId,
+                data: {
+                  from,
+                  target: { type: CONTEXT_ITEM, id: address },
+                  kind,
+                  relation: "mentions",
+                  source,
+                  snapshot: { ...snapshot },
+                },
+              },
+              {
+                type: "context.crossed",
+                address: itemAddress(this.conversation, newItemId(this.newId)),
+                conversation: this.conversation,
+                actor: this.user,
+                traceId,
+                data: {
+                  purpose: "referenced",
+                  context: snapshot.context,
+                  target: address,
+                  from,
+                  snapshotHash: snapshot.hash,
+                  via: null,
+                },
+              },
+            ],
+            "reference",
+          );
         }
       }
     }

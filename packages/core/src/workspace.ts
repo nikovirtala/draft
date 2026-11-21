@@ -11,6 +11,7 @@ import {
 import type { Actor, EventDraft, Target } from "./events.ts";
 import { newItemId } from "./ids.ts";
 import { type AttentionItem, orderAttention } from "./interrupts.ts";
+import type { FolderDecisionRow } from "./projection.ts";
 import type { ThreadFold, ThreadState } from "./thread.ts";
 
 /**
@@ -318,6 +319,36 @@ export class Workspace {
     this.emit({ type: "state", state: svc.state() });
     this.emitThreads();
     return preview;
+  }
+
+  /**
+   * Records a person's answer about a folder in the log of this context: the decision, the
+   * folder's git remote and a hash of its path, never the path (ADR 17gtag9n).
+   */
+  async decideFolder(
+    decision: "trusted" | "declined",
+    folder: { remote: string | null; pathHash: string },
+    user: Extract<Actor, { kind: "user" }>,
+  ): Promise<void> {
+    const context = parseAddress(this.main.conversation).context;
+    await this.o.writer.run(async () => {
+      const sealed = await this.o.log.append([
+        {
+          type: "context.folder_decided",
+          address: `${context}@1`,
+          conversation: null,
+          actor: user,
+          traceId: null,
+          data: { decision, remote: folder.remote, pathHash: folder.pathHash },
+        },
+      ]);
+      for (const e of sealed) this.o.projection.apply(e);
+    });
+  }
+
+  /** The answer about a folder that is in force: the latest one, or null when none was given. */
+  folderDecision(): FolderDecisionRow | null {
+    return this.o.projection.folderDecisions().at(-1) ?? null;
   }
 
   /** The stubs' targets on screen, in any conversation; only these are polled. */
