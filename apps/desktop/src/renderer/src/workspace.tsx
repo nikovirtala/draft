@@ -13,6 +13,7 @@ import type {
   Attention,
   BlockRegistration,
   Boot,
+  ContextView,
   ConversationState,
   Move,
   Stub,
@@ -35,6 +36,8 @@ export interface Selection {
 }
 
 export interface Workspace {
+  /** The context this window shows. */
+  context: ContextView;
   main: string;
   states: Record<string, ConversationState>;
   threads: Thread[];
@@ -149,6 +152,7 @@ export function WorkspaceProvider({ boot, children }: { boot: Ready; children: R
       void window.draft.focus(target);
     };
     return {
+      context: boot.context,
       main: boot.main,
       states,
       threads,

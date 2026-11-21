@@ -42,8 +42,14 @@ export interface KiroMcp {
 
 export interface AcpRuntimeOptions {
   spec: AgentSpec;
-  /** The agent's working directory: a dedicated one under draft's data, never a user repository. */
-  cwd: string;
+  /**
+   * The agent's working directory: the folder a person trusted for the context, or the
+   * context's own workspace under draft's data (ADR 1vey5j12). A function is read each time a
+   * process or a session starts, so a change applies to new sessions.
+   */
+  cwd: string | (() => string);
+  /** What the agent is told about where it works, after the briefing; null for nothing. */
+  placeNote?: () => string | null;
   /** draft's own environment, filtered before it reaches the agent. */
   env: NodeJS.ProcessEnv;
   kiro: KiroMcp | null;
@@ -197,10 +203,15 @@ export class AcpRuntime implements AgentRuntime {
   /** What a new session is told before the first message: the briefing, then the log's projection. */
   private preamble(input: AgentTurnInput): { type: "text"; text: string } {
     const context = renderAgentContext(input.context);
+    const place = this.o.placeNote?.() ?? null;
     return {
       type: "text",
-      text: `${AGENT_BRIEFING}${context === "" ? "" : `\n\n${context}`}\n\nThe user's message follows.`,
+      text: `${AGENT_BRIEFING}${place === null ? "" : `\n${place}`}${context === "" ? "" : `\n\n${context}`}\n\nThe user's message follows.`,
     };
+  }
+
+  private cwd(): string {
+    return typeof this.o.cwd === "function" ? this.o.cwd() : this.o.cwd;
   }
 
   private async connect(): Promise<Connection> {
@@ -213,7 +224,8 @@ export class AcpRuntime implements AgentRuntime {
   }
 
   private async start(): Promise<Connection> {
-    const { spec, cwd } = this.o;
+    const { spec } = this.o;
+    const cwd = this.cwd();
     mkdirSync(cwd, { recursive: true });
     const env = agentEnvironment(spec, this.o.env);
     const child = spawn(spec.command, spec.args, { cwd, env, stdio: ["pipe", "pipe", "pipe"] });
@@ -369,7 +381,7 @@ export class AcpRuntime implements AgentRuntime {
 
     const { spec } = this.o;
     const request: acp.NewSessionRequest = {
-      cwd: this.o.cwd,
+      cwd: this.cwd(),
       mcpServers: this.mcpServers(conn.init, token),
       ...(spec.kind === "claude"
         ? {

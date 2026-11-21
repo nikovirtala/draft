@@ -61,6 +61,8 @@ export interface UiReference {
   source: string;
   /** The target's state when it was referenced. */
   snapshot: Record<string, unknown>;
+  /** For an item of another context: a person pulled it into this conversation's agent context. */
+  pulled: boolean;
 }
 
 export interface UiMessage {
@@ -269,6 +271,8 @@ export interface ConversationOptions {
   /** Takes snapshots of other contexts' items for references. Without it, none are made. */
   crossContext?: CrossContext;
   context?: string;
+  /** The context's title, written once with `context.created`; "Local" by default. */
+  contextTitle?: string;
   title?: string;
   poller?: PollerOptions;
   newId?: () => string;
@@ -396,7 +400,7 @@ export class ConversationService {
           conversation: null,
           actor: SYSTEM,
           traceId: null,
-          data: { context: ctx, title: "Local" },
+          data: { context: ctx, title: o.contextTitle ?? "Local" },
         });
       }
       drafts.push({
@@ -592,6 +596,7 @@ export class ConversationService {
 
   state(): UiState {
     const edges = this.projection.edges(this.conversation);
+    const pulled = this.projection.pulledTargets(this.conversation);
     const refsByMessage = new Map<string, UiReference[]>();
     for (const e of edges) {
       const [type, ...rest] = e.target.split(":");
@@ -604,6 +609,7 @@ export class ConversationService {
           kind: e.kind,
           source: e.source,
           snapshot: e.snapshot,
+          pulled: type === CONTEXT_ITEM && pulled.has(rest.join(":")),
         });
       }
       refsByMessage.set(e.from, list);

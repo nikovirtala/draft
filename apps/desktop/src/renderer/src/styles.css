@@ -958,3 +958,162 @@ textarea:focus-visible {
   font-family: var(--sans);
   border-top: 1px solid var(--border);
 }
+
+/* Contexts: the bar in the title, the trust step, a proposal, a reference into another context */
+.context-bar {
+  -webkit-app-region: no-drag;
+  position: relative;
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.context-name {
+  font-weight: 600;
+  color: var(--accent-text);
+}
+
+.context-folder {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--secondary);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0 8px;
+}
+
+.context-folder.missing {
+  color: var(--waiting);
+  border-color: var(--waiting);
+}
+
+.contexts-button {
+  font: inherit;
+  font-size: 12px;
+  color: var(--text);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  padding: 0 4px;
+}
+
+.contexts-list {
+  position: absolute;
+  left: 0;
+  top: 100%;
+  z-index: 30;
+  min-width: 380px;
+  margin-top: 6px;
+  padding: 8px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+.contexts-list ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.context-item-button {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: var(--text);
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.context-item-button:hover,
+.context-item-button[data-current="true"] {
+  background: var(--accent-tint);
+}
+
+.context-recent-name {
+  font-weight: 600;
+}
+
+.context-recent-meta {
+  font-size: 12px;
+}
+
+.contexts-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.trust {
+  max-width: 640px;
+  margin: 10vh auto 0;
+  padding: 0 24px;
+}
+
+.trust h1 {
+  font-family: var(--serif);
+  font-weight: 600;
+  font-size: 26px;
+}
+
+.trust-facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 6px 14px;
+  margin: 14px 0;
+  padding: 12px 14px;
+  background: var(--card);
+  border: 1px solid var(--accent-border);
+  border-radius: 10px;
+}
+
+.trust-facts dt {
+  color: var(--secondary);
+}
+
+.trust-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.context-item {
+  border-color: var(--accent-border);
+}
+
+.context-badge {
+  font-weight: 600;
+  color: var(--accent-text);
+  background: var(--accent-tint);
+  border-radius: 999px;
+  padding: 0 9px;
+  font-size: 12px;
+}
+
+.snapshot-note {
+  margin: 2px 0 0;
+  font-size: 12px;
+}
+
+.secondary-button.small {
+  padding: 2px 10px;
+  font-size: 12px;
+}
+
+.copy-reference {
+  font: inherit;
+  font-size: 12px;
+  color: var(--secondary);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}

@@ -6,9 +6,12 @@ import type { ViewStateStore } from "./view-state.ts";
 
 const WINDOW_SIZE = { width: 720, height: 600 };
 
+/** Where the main window's bounds are kept among a context's window bounds. */
+const MAIN_KEY = "@main";
+
 /**
- * The device's real windows: the main one, and one Electron window for every block placed in a
- * window. The layout says which blocks have a window; this keeps the windows in line with it.
+ * One context's real windows: its main one, and one Electron window for every block placed in a
+ * window (ADR 4e115peq). The layout says which blocks have a window; this keeps the windows in line with it.
  * A person closing a window is a move (the block returns to where it came from); closing one
  * because the layout changed, or because draft quits, is not.
  */
@@ -19,6 +22,7 @@ export class WindowManager {
   /** Windows closed by draft itself: their closing is not a person's move. */
   private readonly closing = new WeakSet<BrowserWindow>();
   private quitting = false;
+  private mainId: number | null = null;
 
   constructor(
     private readonly o: {
@@ -26,8 +30,14 @@ export class WindowManager {
       store: () => ViewStateStore | null;
       /** Titles a block's window: what it is and where it came from. */
       titleOf: (block: string) => string;
+      /** The main window's title: draft and the context it shows. */
+      mainTitle: string;
+      /** How far to offset a main window that has no saved place, so contexts don't stack. */
+      cascade: number;
       /** A person closed a block's window. */
       onClosedByPerson: (block: string) => void;
+      /** A person closed the main window: the context ends. */
+      onMainClosed: () => void;
     },
   ) {}
 
@@ -68,25 +78,82 @@ export class WindowManager {
   }
 
   openMain(): BrowserWindow {
+    const saved = this.o.store()?.bounds(MAIN_KEY) ?? null;
+    const bounds = saved !== null && onScreen(saved) ? saved : null;
     const win = new BrowserWindow({
       ...this.baseOptions(),
       width: 1120,
       height: 840,
       minWidth: 560,
       minHeight: 480,
-      title: "draft",
+      title: this.o.mainTitle,
       titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
+      ...(bounds ?? {}),
     });
+    if (bounds === null && this.o.cascade > 0) {
+      const b = win.getBounds();
+      win.setPosition(b.x + this.o.cascade, b.y + this.o.cascade);
+    } else if (bounds !== null) win.setBounds(bounds);
     this.main = win;
+    this.mainId = win.webContents.id;
+    win.on("page-title-updated", (e) => e.preventDefault());
     win.once("ready-to-show", () => win.show());
     this.harden(win);
-    // Closing the main window ends draft on every platform but macOS: its windows follow.
-    if (process.platform !== "darwin") win.on("close", () => this.beginQuit());
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const remember = () => {
+      if (timer !== null) clearTimeout(timer);
+      timer = setTimeout(() => {
+        if (!win.isDestroyed()) this.o.store()?.setBounds(MAIN_KEY, win.getBounds());
+      }, 200);
+    };
+    win.on("resize", remember);
+    win.on("move", remember);
+    win.on("close", () => {
+      if (timer !== null) clearTimeout(timer);
+      if (!win.isDestroyed()) this.o.store()?.setBounds(MAIN_KEY, win.getBounds());
+    });
     win.on("closed", () => {
       if (this.main === win) this.main = null;
+      if (this.quitting) return;
+      // Closing a context's main window ends that context; its block windows follow.
+      this.shutdown();
+      this.o.onMainClosed();
     });
     this.load(win, null);
     return win;
+  }
+
+  /** Brings the main window forward, for a context that is open already. */
+  focus(): void {
+    const win = this.main;
+    if (win === null || win.isDestroyed()) return;
+    if (win.isMinimized()) win.restore();
+    win.show();
+    win.focus();
+  }
+
+  /** Whether a window of this context has this web contents. */
+  owns(webContentsId: number): boolean {
+    return this.mainId === webContentsId || this.blockOf.has(webContentsId);
+  }
+
+  /** Closes every block window without treating it as a person's move. */
+  shutdown(): void {
+    this.quitting = true;
+    for (const [block, win] of this.popped) {
+      this.closing.add(win);
+      this.popped.delete(block);
+      this.blockOf.delete(win.webContents.id);
+      if (!win.isDestroyed()) win.close();
+    }
+  }
+
+  /** Closes the main window too, when draft ends the context itself. */
+  close(): void {
+    this.shutdown();
+    const win = this.main;
+    this.main = null;
+    if (win !== null && !win.isDestroyed()) win.destroy();
   }
 
   hasMain(): boolean {

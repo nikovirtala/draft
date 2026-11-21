@@ -17,6 +17,8 @@ export interface Reference {
   kind: string;
   source: string;
   snapshot: Record<string, unknown>;
+  /** For an item of another context: pulled into this conversation's agent context. */
+  pulled: boolean;
 }
 
 export interface Message {
@@ -111,6 +113,14 @@ export interface Conclusion {
   wrappedAt: string | null;
 }
 
+/** A sentence that asked to open a context, waiting for one confirmation. */
+export interface Proposal {
+  id: string;
+  intent: { kind: "open"; name: string } | { kind: "new"; folder: string };
+  /** The message that asked for it. */
+  message: string;
+}
+
 export interface ConversationState {
   context: string;
   conversation: string;
@@ -129,6 +139,7 @@ export interface ConversationState {
   stubs: Record<string, Stub>;
   streaming: { address: string; text: string } | null;
   prompts: Prompt[];
+  proposals: Proposal[];
   busy: boolean;
   error: string | null;
 }
@@ -181,10 +192,45 @@ export type Change =
   | { type: "threads"; threads: Thread[]; attention: Attention[] }
   | { type: "view"; view: View };
 
+/** The context a window shows, as far as the window needs to say so. */
+export interface ContextView {
+  name: string;
+  title: string;
+  /** The folder its agent works in; null while none is trusted. Device-local, never in a log. */
+  folder: { name: string; path: string } | null;
+  /** A folder was trusted once and isn't there now. */
+  folderMissing: boolean;
+}
+
+/** What a person is asked before a folder becomes where a context's agent works. */
+export interface TrustQuestion {
+  context: string;
+  folder: { path: string; name: string; remote: string | null };
+  /** The folder came from importing an older data directory's `agent-workspace` link. */
+  imported: boolean;
+}
+
+/** One context in the recent list: what it is called, where it works and when it was last used. */
+export interface ContextListItem {
+  name: string;
+  title: string;
+  folder: string | null;
+  lastActivity: string | null;
+  /** Open in a window of its own now. */
+  open: boolean;
+  /** The context of the window that asked. */
+  current: boolean;
+}
+
 /** What the window shows: the conversation and its threads, or why the log was refused. */
 export type Boot =
   | {
+      kind: "trust";
+      question: TrustQuestion;
+    }
+  | {
       kind: "ready";
+      context: ContextView;
       main: string;
       states: Record<string, ConversationState>;
       threads: Thread[];
@@ -246,6 +292,22 @@ export interface DraftBridge {
   confirmConclusion(conversation: string): Promise<void>;
   declineConclusion(conversation: string): Promise<void>;
   endThread(conversation: string, as: "superseded" | "withdrawn", reason: string): Promise<void>;
+  /** Answers the question a window asks before its context starts: trust the folder or not. */
+  trust(answer: "trusted" | "declined"): Promise<void>;
+  /** The recent contexts, the one used last first. */
+  contexts(): Promise<ContextListItem[]>;
+  /** Opens a context in a window of its own, or brings its window forward. */
+  openContext(name: string): Promise<void>;
+  /** Asks for a folder with the system's chooser and opens it as a context. */
+  chooseFolder(): Promise<void>;
+  /** Asks for a data directory with the system's chooser and imports it as a context. */
+  chooseImport(): Promise<void>;
+  /** A person's answer to a sentence that asked to open a context. */
+  answerProposal(conversation: string, id: string, accept: boolean): Promise<void>;
+  /** Opens the other context that a reference points into, and records the crossing. */
+  followReference(conversation: string, address: string): Promise<void>;
+  /** Lets the agent of this conversation read a reference's snapshot, and records the crossing. */
+  pullReference(conversation: string, address: string): Promise<void>;
   onChange(cb: (c: Change) => void): () => void;
 }
 
@@ -267,5 +329,13 @@ export const CHANNELS = {
   confirmConclusion: "draft:confirm-conclusion",
   declineConclusion: "draft:decline-conclusion",
   endThread: "draft:end-thread",
+  trust: "draft:trust",
+  contexts: "draft:contexts",
+  openContext: "draft:open-context",
+  chooseFolder: "draft:choose-folder",
+  chooseImport: "draft:choose-import",
+  answerProposal: "draft:answer-proposal",
+  followReference: "draft:follow-reference",
+  pullReference: "draft:pull-reference",
   change: "draft:change",
 } as const;

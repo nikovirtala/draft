@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { Message, Stub, Thread } from "../../../shared/ipc.ts";
 import { useWorkspace } from "../workspace.tsx";
 import { agentName } from "./AgentState.tsx";
+import { ContextItemStub } from "./ContextItemStub.tsx";
 import { BranchIcon } from "./Icons.tsx";
 import { Markdown } from "./Markdown.tsx";
 import { ThreadStub } from "./ThreadStub.tsx";
@@ -51,6 +52,33 @@ function BranchControl({ message }: { message: Message }) {
   );
 }
 
+/**
+ * Copies the address that names this message from another context: its context is the name this
+ * device knows it by, which only differs from the log's own for an imported log.
+ */
+function CopyReference({ message }: { message: Message }) {
+  const ws = useWorkspace();
+  const logContext = message.address.split("/")[0] ?? "";
+  const address = `${ws.context.name}${message.address.slice(logContext.length)}`;
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      type="button"
+      className="icon copy-reference"
+      data-testid="copy-reference"
+      data-reference={address}
+      aria-label="Copy reference"
+      title={`Copy ${address}, to refer to this from another context`}
+      onClick={() => {
+        void navigator.clipboard.writeText(address).then(() => setCopied(true));
+        setTimeout(() => setCopied(false), 1500);
+      }}
+    >
+      {copied ? "Copied" : "Copy ref"}
+    </button>
+  );
+}
+
 export function MessageView({
   message,
   conversation,
@@ -90,13 +118,17 @@ export function MessageView({
       </div>
       {message.references.length > 0 && (
         <div className="stubs">
-          {message.references.map((r) => (
-            <ViewBlock
-              key={r.target}
-              description={{ component: "status-stub", target: { type: r.type, id: r.id } }}
-              context={{ ...context, snapshot: r.snapshot }}
-            />
-          ))}
+          {message.references.map((r) =>
+            r.type === "context-item" ? (
+              <ContextItemStub key={r.target} reference={r} conversation={conversation} />
+            ) : (
+              <ViewBlock
+                key={r.target}
+                description={{ component: "status-stub", target: { type: r.type, id: r.id } }}
+                context={{ ...context, snapshot: r.snapshot }}
+              />
+            ),
+          )}
         </div>
       )}
       {threads.length > 0 && (
@@ -108,6 +140,7 @@ export function MessageView({
       )}
       <div className="message-actions">
         <BranchControl message={message} />
+        <CopyReference message={message} />
       </div>
     </article>
   );
