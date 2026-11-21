@@ -1,0 +1,16 @@
+envelope: ledger/v1
+kind: decision
+schema: decision/v1
+id: 01M7ZF7D7D8MMCCB3D72F3X5B1
+subject: 1vey5j12
+type: linked
+at: 2026-11-21T16:32:26Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: 244629292+kiro-agent@users.noreply.github.com
+data:
+  to: 06wp7907
+  rel: refines
