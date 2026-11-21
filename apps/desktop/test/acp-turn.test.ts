@@ -39,6 +39,56 @@ const request = (
   ...o,
 });
 
+describe("a person's acts are refused whichever MCP server the agent has", () => {
+  it.each([
+    ["adr", "adr_accept"],
+    ["adr", "adr_reject"],
+    ["github", "merge_pull_request"],
+    ["github", "approve_pull_request"],
+    ["kiro-remote", "kiro_answer_permission"],
+  ])("%s %s: refused with one-time reject, never asked, no step", async (server, tool) => {
+    const t = mapper(true);
+    const answer = await t.m.onPermissionRequest({
+      sessionId: "s",
+      toolCall: {
+        toolCallId: "p1",
+        title: `@${server}/${tool}`,
+        rawInput: { id: "9p8jj6p5" },
+        _meta: kiroMeta(tool, server),
+      },
+      options: OPTIONS,
+    });
+    expect(answer).toEqual({ outcome: { outcome: "selected", optionId: "reject" } });
+    expect(t.asked).toEqual([]);
+    expect(t.steps).toEqual([]);
+    expect(t.events).toEqual([
+      expect.objectContaining({ type: "tool-call", decision: "denied-by-policy" }),
+      expect.objectContaining({
+        type: "tool-result",
+        isError: true,
+        text: expect.stringMatching(/person's act/),
+      }),
+    ]);
+  });
+
+  it("a server's other tools are still just not available", async () => {
+    const t = mapper(true);
+    await t.m.onPermissionRequest({
+      sessionId: "s",
+      toolCall: {
+        toolCallId: "p2",
+        title: "@adr/adr_propose",
+        rawInput: {},
+        _meta: kiroMeta("adr_propose", "adr"),
+      },
+      options: OPTIONS,
+    });
+    expect(t.events.at(-1)).toMatchObject({
+      text: expect.stringMatching(/not available in draft/),
+    });
+  });
+});
+
 describe("permission requests to steps", () => {
   it("a call that changes something asks the person, begins its step, then answers allow_once", async () => {
     const t = mapper(true);

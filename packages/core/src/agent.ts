@@ -1,6 +1,12 @@
 import { z } from "zod";
 import type { AgentContext } from "./agent-context.ts";
-import { type KiroRemoteTools, sdkToolName, toolPermission } from "./kiro.ts";
+import {
+  isPersonOnlyTool,
+  type KiroRemoteTools,
+  personOnlyMessage,
+  sdkToolName,
+  toolPermission,
+} from "./kiro.ts";
 
 /**
  * The agent behind a conversation. One runtime serves many conversations and keeps one agent
@@ -145,6 +151,12 @@ export async function decideTool(
   answer: PermissionAnswer;
   decision: Extract<AgentEvent, { type: "tool-call" }>["decision"];
 }> {
+  // A person's act is refused first, whatever server it comes from: nothing is asked or started.
+  if (isPersonOnlyTool(name))
+    return {
+      answer: { allow: false, message: personOnlyMessage(name) },
+      decision: "denied-by-policy",
+    };
   switch (toolPermission(name)) {
     case "allow":
       return { answer: { allow: true }, decision: "allowed-read-only" };

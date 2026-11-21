@@ -10,7 +10,9 @@ import {
   type AgentTurnHooks,
   type AgentUsage,
   decideTool,
+  isPersonOnlyTool,
   type PermissionAnswer,
+  personOnlyMessage,
 } from "@nikovirtala/draft-core";
 import { isKnownReadOnly, kiroUtilityCall, type ToolIdentity, toolIdentity } from "./tools.ts";
 
@@ -199,8 +201,14 @@ export class TurnMapper {
       decision = "approved-by-user";
     } else if (identity.source !== "kiro-remote") {
       // Only Kiro Remote's tools are available in draft: a built-in tool, or a tool of a server
-      // draft didn't give the agent, is refused without asking the person.
-      answer = { allow: false, message: `${name} is not available in draft` };
+      // draft didn't give the agent, is refused without asking the person. One that accepts,
+      // rejects or merges something is a person's act, and the agent is told so.
+      answer = {
+        allow: false,
+        message: isPersonOnlyTool(name)
+          ? personOnlyMessage(name)
+          : `${name} is not available in draft`,
+      };
       decision = "denied-by-policy";
     } else if (allowOnce === null) {
       // Without a one-time allow, the only way to say yes would be to let the agent save a rule.

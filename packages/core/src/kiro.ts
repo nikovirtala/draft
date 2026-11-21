@@ -49,6 +49,41 @@ export const KIRO_PERSON_ONLY_TOOLS = ["kiro_answer_permission"] as const;
 
 export type ToolPermission = "allow" | "ask" | "deny";
 
+/**
+ * Whether a tool, from any MCP server, accepts, rejects, approves or merges something: ark's
+ * `adr_accept` and `adr_reject`, a GitHub server's `merge_pull_request`, `kiro_answer_permission`.
+ * Those are a person's act (docs/model.md, "Acceptance"), so draft refuses them whoever offers
+ * them and never asks the person about one: the person does it by answering an acceptance
+ * request, and draft carries it out. Judged from the tool's own name, in any spelling
+ * (`mcp__server__tool`, `server/tool`, camelCase or snake_case), never from a title or a hint.
+ */
+export function isPersonOnlyTool(name: string): boolean {
+  const bare = bareToolName(name);
+  if (bare !== null && (KIRO_PERSON_ONLY_TOOLS as readonly string[]).includes(bare)) return true;
+  const tool = name.split(/__|[/:]/).pop() ?? name;
+  const words = tool
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/);
+  return words.some((w) => PERSON_ONLY_WORDS.has(w));
+}
+
+const PERSON_ONLY_WORDS: ReadonlySet<string> = new Set([
+  "accept",
+  "accepts",
+  "reject",
+  "rejects",
+  "merge",
+  "merges",
+  "approve",
+  "approves",
+]);
+
+/** What the agent is told when it asks for a tool that is a person's act. */
+export function personOnlyMessage(name: string): string {
+  return `${name} is a person's act and is not available to you. Propose it instead: draft asks the person, and does it as them once they accept.`;
+}
+
 /** The tool name the Agent SDK uses for a Kiro Remote tool. */
 export function sdkToolName(tool: string): string {
   return `mcp__${KIRO_SERVER}__${tool}`;
