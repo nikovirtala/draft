@@ -176,6 +176,16 @@ export const EventData = {
     isError: z.boolean(),
   }),
   /**
+   * The agent asked the person for permission to run a tool, and a prompt is waiting. Its time is
+   * the prompt's age, so a local permission request is derivable from the log like every other
+   * interrupt. The answer is the step that follows, or the refused call.
+   */
+  "agent.permission_asked": z.object({
+    toolUseId: z.string().min(1),
+    name: z.string().min(1),
+    input: z.unknown(),
+  }),
+  /**
    * A call that changes something, recorded after it is allowed and before it runs: its intent and
    * its grounds. A step without a completion never runs again; it shows as an interrupt.
    */
@@ -320,6 +330,7 @@ export const SCHEMA_VERSIONS: Record<EventType, number> = {
   "agent.session_started": 1,
   "agent.selected": 1,
   "agent.tool_called": 1,
+  "agent.permission_asked": 1,
   "step.started": 1,
   "step.completed": 1,
   "step.failed": 1,
