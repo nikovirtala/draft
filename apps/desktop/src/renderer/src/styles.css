@@ -56,13 +56,15 @@ a {
   align-items: baseline;
   gap: 12px;
   padding: 10px 20px;
-  /* Room for the macOS traffic lights with the hidden inset title bar. */
-  padding-left: max(20px, env(titlebar-area-x, 0px));
   background: var(--titlebar);
   border-bottom: 1px solid var(--border);
   user-select: none;
 }
 
+/* Room for the macOS traffic lights with the hidden inset title bar. */
+.mac .titlebar {
+  padding-left: 88px;
+}
 .brand {
   font-weight: 650;
   letter-spacing: -0.01em;
