@@ -190,7 +190,7 @@ const agentApp = acp
   })
   .onRequest(acp.methods.agent.session.new, async ({ params }) => {
     const s: SessionState = {
-      id: `fake-session-${++sessionCount}`,
+      id: `fake-session-${process.pid}-${++sessionCount}`,
       cwd: params.cwd,
       mcp: params.mcpServers[0],
       mcpClient: null,

@@ -1208,6 +1208,8 @@ export class ConversationService {
       .edges(this.conversation)
       .find((e) => e.target === contextItemKey(address));
     if (edge === undefined) throw new Error(`this conversation has no reference to ${address}`);
+    if (purpose === "pulled" && this.busy)
+      throw new Error("wait for the agent to finish its turn before pulling something in");
     const snapshot = edge.snapshot as unknown as ContextItemSnapshot;
     await this.append(
       [
@@ -1229,6 +1231,14 @@ export class ConversationService {
       ],
       `context.${purpose}`,
     );
+    // The running session was started without it: the next turn starts a new one from the log.
+    if (purpose === "pulled") {
+      try {
+        this.runtime().closeConversation(this.conversation);
+      } catch {
+        // Its agent is no longer configured: there is no session to end.
+      }
+    }
     return { context: snapshot.context };
   }
 

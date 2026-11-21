@@ -27,12 +27,16 @@ class RecordingAgent implements AgentRuntime {
   readonly model = "recording-model";
   readonly version = "1";
   readonly told: string[] = [];
+  /** How many times a conversation's session was ended, so the next turn starts from the log. */
+  closed = 0;
   async *runTurn(input: AgentTurnInput): AsyncIterable<AgentEvent> {
     this.told.push(`${AGENT_BRIEFING}\n${renderAgentContext(input.context)}\n${input.text}`);
     yield { type: "text-delta", text: "Noted." };
     yield { type: "done", text: "Noted.", usage: null, model: this.model };
   }
-  closeConversation(): void {}
+  closeConversation(): void {
+    this.closed++;
+  }
   async close(): Promise<void> {}
 }
 
@@ -249,7 +253,10 @@ describe("a reference across contexts", () => {
   it("reaches the agent only after a person pulls it in, and that is a crossing too", async () => {
     const { a, b, target } = await pair();
     await a.workspace.main.submit(`See ${target}`);
+    expect(a.agent.closed).toBe(0);
     await a.workspace.main.cross("pulled", target);
+    // The session that was running didn't have it: it ends, and the next one starts from the log.
+    expect(a.agent.closed).toBe(1);
     await a.workspace.main.submit("Use it.");
     const last = a.agent.told.at(-1) ?? "";
     expect(last).toContain(contextItemKey(target));
