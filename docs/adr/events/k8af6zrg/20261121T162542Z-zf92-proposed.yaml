@@ -1,0 +1,17 @@
+envelope: ledger/v1
+kind: decision
+schema: decision/v1
+id: 01M7ZEV25CTV4S6VCE2KS8ZF92
+subject: k8af6zrg
+type: proposed
+at: 2026-11-21T16:25:42Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: niko.virtala@hey.com
+data:
+  title: Do acceptance git work in draft's own clones, and merge by rebase
+  template: nygard
+  template_version: 1
