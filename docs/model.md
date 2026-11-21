@@ -49,7 +49,18 @@ draft is where one way of delivering software takes shape. Its pieces are spread
 
 The stages are the familiar ones. What changes is that they all happen around one conversation, and every step cites the one before it. Nothing is handed off between tools; it is referenced.
 
-<!-- diagram: the process · seven steps, one loop. Draw it as a Mermaid diagram from the text around it. -->
+```mermaid
+flowchart LR
+    talk["1 Talk<br/>people and agents in one conversation"]
+    notice["2 Notice<br/>kinds pick out candidates"]
+    record["3 Record<br/>ADR, issue or design in git, through ark"]
+    build["4 Build<br/>local agent, or the factory through Kiro Remote"]
+    accept["5 Accept<br/>a person, on green evidence"]
+    ship["6 Ship<br/>merge, release, deploy"]
+    hear["7 Hear back<br/>production signals as interrupts"]
+    talk --> notice --> record --> build --> accept --> ship --> hear
+    hear -- "cites the ADR, issue and PR; usage closes the thread" --> talk
+```
 
 The loop runs clockwise. The step back to the conversation is the one that makes it a loop rather than a pipeline.
 
@@ -238,7 +249,15 @@ Every human gate is the same act: something waits for your yes, with evidence at
 
 Raw data lasts forever, your decisions are facts, machine interpretation can always be redone, and views are throwaway. This one rule lets old, imported and native contexts all benefit from things introduced later.
 
-<!-- diagram: knowledge pipeline · raw, kinds, interpretation, views. Draw it as a Mermaid diagram from the text around it. -->
+```mermaid
+flowchart LR
+    raw[("Raw<br/>append-only, original bytes:<br/>conversations, imports, your decisions")]
+    kinds["Kinds<br/>versioned schema, extractor, renderer"]
+    interp[("Interpretation<br/>things and edges, with provenance;<br/>generations, diffed before promotion")]
+    views["Views<br/>computed, throwaway"]
+    raw -- "replay" --> kinds --> interp --> views
+    views -- "your decisions are written back as raw events" --> raw
+```
 
 A new kind replays the raw log. Your decisions, made in the views, are written back as raw events.
 

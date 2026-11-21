@@ -4,13 +4,15 @@ How draft is built right now. The model it implements, which stays true however 
 
 ## Agents over ACP
 
-draft is an ACP client. It speaks the Agent Client Protocol (1.0 since June 2026) to whatever agent runs a thread, so the agent is configuration, not code.
+draft is an ACP client. It speaks the Agent Client Protocol (protocol version 1, through `@agentclientprotocol/sdk` 2.x) to whatever agent runs a conversation, so the agent is configuration, not code. Built in slice 2: `AcpRuntime` in `apps/desktop/src/main/acp/`.
 
 - **Local Kiro is the default.** draft starts `kiro-cli acp --agent-engine=v3 --auth-method=cli`, and Kiro keeps its own sign-in, models and MCP servers, so draft never handles a credential ([Kiro: migrate an ACP client to CLI V3](https://kiro.dev/docs/cli/v3/acp-migration/)).
-- **Claude runs through `claude-agent-acp`,** the ACP adapter for the Claude Agent SDK, with a Claude Console API key ([claude-agent-acp](https://github.com/agentclientprotocol/claude-agent-acp)).
-- **Any other ACP agent works** without changes to draft.
-- **Each thread is its own ACP session,** so threads can even use different agents.
-- **ACP permission requests become interrupts,** and ACP updates stream into the conversation. The log's actor names the agent and the model.
+- **Claude runs through `claude-agent-acp`,** the ACP adapter for the Claude Agent SDK, with a Claude Console API key that the adapter reads from `ANTHROPIC_API_KEY` in the environment draft starts from ([claude-agent-acp](https://github.com/agentclientprotocol/claude-agent-acp)). draft stores no agent credential.
+- **Any other ACP agent works** without changes to draft: `agent` and `agents` in `config.json`.
+- **Sessions are keyed by conversation address,** so each thread can be its own ACP session, even on different agents. Every session starts from one projection of the log, never the agent's own memory (ADR h89hcrk6).
+- **Every agent is made to ask.** draft switches Kiro's autopilot off and Claude's mode to `default`, without Claude's user settings or built-in tools, and won't start a session the agent won't take that on. Permission requests go through `decideTool`, so an approved call that changes something is a durable step before the agent proceeds. A call that runs without asking is logged as `agent.anomaly` and shown as an interrupt (ADR 06wp7907).
+- **The agent runs in its own directory** under draft's data, with no `fs` or `terminal` capability: its only tools are Kiro Remote's, handed over in `session/new` over HTTP with a bearer header (or the `kiro-remote` stdio client when the agent has no HTTP MCP).
+- **ACP updates stream into the conversation.** The log's actor names the agent and the model it reports. Usage is what the agent reports (token counts, Kiro's credits, context fill); a turn that reports nothing says so in its span.
 - **draft builds on standard ACP.** Agent-specific extensions, such as Kiro's `_kiro/...` methods, are used only when the agent advertises them, so draft never turns into a single-agent client.
 
 Two connections, kept apart:
@@ -24,12 +26,33 @@ Two connections, kept apart:
 
 Everything goes through one append-only log per context, and everything on screen is computed from it. It has two outward connections, kept apart: ACP to its own agent, and Kiro Remote to the hosted coding agents it supervises.
 
-<!-- diagram: architecture sketch, six components around one log. Draw it as a Mermaid diagram from the list below it. -->
+```mermaid
+flowchart TB
+    ui["UI shell<br/>blocks from view state; placement per device"]
+    subgraph main["Electron main process"]
+        acp["ACP client (AcpRuntime)<br/>one session per conversation address,<br/>started from one projection of the log;<br/>permission requests → decideTool → steps"]
+        conv["Conversation service<br/>turns, audience, pause/play, interrupts"]
+        log[("Context log<br/>append-only, hash-chained;<br/>actor and trace ID on every event")]
+        proj["Kinds and projections<br/>SQLite views, agent context"]
+        res["Resolvers<br/>live stubs, snapshots"]
+    end
+    agent["Local agent process (ACP over stdio)<br/>kiro-cli acp by default, claude-agent-acp,<br/>or any ACP agent; cwd under draft's data"]
+    kr["Kiro Remote<br/>hosted Kiro sessions"]
+    artifact["artifact<br/>raw HTML views over SSE"]
+    ui <--> conv
+    conv --> log --> proj --> conv
+    conv <--> acp
+    acp <-- "JSON-RPC on stdio" --> agent
+    agent -- "MCP (HTTP with bearer, or kiro-remote stdio)" --> kr
+    res -- "MCP, no model" --> kr
+    res --> log
+    ui -.-> artifact
+```
 
 - **UI shell** renders blocks from view state. Placement and focus are stored per device, apart from the log.
-- **ACP client per thread** opens one ACP session per thread, streams the agent's updates into the conversation, turns its permission requests into interrupts, and writes everything to the log.
+- **ACP client** keeps one ACP session per conversation address (per thread, once threads exist), starts each from the log's projection, streams the agent's updates into the conversation, turns its permission requests into prompts and steps, and writes everything to the log.
 - **Local agent** is a separate process speaking ACP over stdio: `kiro-cli acp` by default, `claude-agent-acp` or any other ACP agent by configuration. It reaches its tools over MCP, Kiro Remote included.
-- **Context log** is the raw layer: append-only and hash-chained, with an actor and a trace ID on every event. Slice 1 built draft's own log; the ark ledger was measured fast enough and stays an option.
+- **Context log** is the raw layer: append-only and hash-chained, with an actor and a trace ID on every event. Slice 1 built draft's own log; the ark ledger was measured fast enough and stays an option. A torn last line is moved to a sidecar and recorded (ADR 4gwyn86q).
 - **Kinds and projections** extract things and edges, build the graph and view state, and run reprocessing generations.
 - **Resolvers** turn references to outside things (hosted Kiro sessions, PRs, ark issues) into live stubs, talking to Kiro Remote directly with no model involved, and take a snapshot whenever one is referenced.
 - **artifact** is the escape hatch for raw HTML views, with reload over SSE. In the prototype its synced tabs stand in for real windows.
@@ -91,7 +114,18 @@ The invariants are in [model.md](model.md). This is how they run.
 
 The tool improves itself the same way ark does: friction gets reported where it happens, and a papercut is fixed before the next session runs into it. Its own development is a context inside the tool, so the loop runs on the tool's own grammar.
 
-<!-- diagram: feedback loop, friction to release and back. Draw it as a Mermaid diagram from the text around it. -->
+```mermaid
+flowchart LR
+    friction["Friction<br/>you, the agent, implicit signals"]
+    kind["Friction kind<br/>picks it up, replays history"]
+    report["Redacted report<br/>references where it came from"]
+    triage["Triage and promotion gate<br/>untrusted input; big changes come to you"]
+    issue["ark issue<br/>(adr for decisions)"]
+    factory["Software factory<br/>fix, bake time, rollback"]
+    release["Release"]
+    friction --> kind --> report --> triage --> issue --> factory --> release
+    release -- "posted where the papercut was reported" --> friction
+```
 
 When a release fixes a papercut, the message is posted in the conversation where it was reported, as a reference to that spot.
 
@@ -178,8 +212,8 @@ The first live prototype is a local, single-user desktop app in TypeScript, buil
 | Build | electron-vite with Vite | 6 with 8.3 | What slice 1 found current on 20 Nov 2026. |
 | UI | [React](https://react.dev/blog/2026/09/09/react-19-3) | 19.3 | Renders the fixed component set from view descriptions. |
 | Schemas | Zod | 4 | View descriptions, events and tool inputs. |
-| Agent protocol | [ACP TypeScript SDK](https://agentclientprotocol.com/libraries/typescript) (`@agentclientprotocol/sdk`), client side | 1.x | One protocol for every agent, one session per thread. |
-| Agents | Kiro CLI (`kiro-cli acp`), and Claude through [`claude-agent-acp`](https://github.com/agentclientprotocol/claude-agent-acp) | Kiro CLI 3.1 | Local Kiro by default, with its own sign-in; Claude by configuration, with a Console API key. |
+| Agent protocol | [ACP TypeScript SDK](https://agentclientprotocol.com/libraries/typescript) (`@agentclientprotocol/sdk`), client side | 2.8 (ACP protocol version 1) | One protocol for every agent, one session per conversation address. Slice 2. |
+| Agents | Kiro CLI (`kiro-cli acp --agent-engine=v3 --auth-method=cli`), and Claude through [`claude-agent-acp`](https://github.com/agentclientprotocol/claude-agent-acp) | Kiro CLI 3.5, claude-agent-acp 0.109 | Local Kiro by default, with its own sign-in; Claude by configuration, with a Console API key from the environment. |
 | Hosted coding agents | Kiro Remote | current | Live stubs and interrupts from draft's resolver, and an MCP server for the local agent. |
 | The tool's own MCP server | MCP TypeScript SDK | 1.32 | Exposes contexts to other agents and to Claude. |
 | Raw log | draft's own append-only, hash-chained log | slice 1 | The ark ledger measured about 5 ms per message and stays an option; slice 1's PR records why draft started with its own. |
@@ -195,7 +229,7 @@ Native Swift stays the candidate for version 2, once the grammar has settled. Ta
 
 Claude is one of draft's agents. It runs through claude-agent-acp, the ACP adapter for the Claude Agent SDK, with a Claude Console API key. Anthropic's docs say apps built on the Agent SDK must not offer claude.ai sign-in unless Anthropic has approved it, so the API key is the way ([Agent SDK overview](https://code.claude.com/docs/en/agent-sdk/overview)).
 
-What carries over by itself: running on the Agent SDK, Claude loads skills, memory files and plugins from `~/.claude` and from the project's `.claude` folder, the same way Claude Code does. The skills in `nikovirtala/skills` work in the tool as they are.
+What could carry over by itself: on the Agent SDK, Claude loads skills, memory files and plugins from `~/.claude` and from the project's `.claude` folder, the same way Claude Code does. Slice 2 launches the adapter with `settingSources: []`, because those settings can also allow tools without asking (ADR 06wp7907), so none of it loads yet. Loading skills and memory without the permission settings is a follow-up; once it lands, the skills in `nikovirtala/skills` work in the tool as they are.
 
 What doesn't carry over: claude.ai memory, past chats, artifacts and claude.ai connectors. They live in claude.ai and can't be reached through the API. Three bridges cover the gap:
 
@@ -210,8 +244,8 @@ Going forward, the context graph replaces memory inside the tool, with better gu
 The first job to test: supervising the software factory's Kiro sessions from one conversation, without opening Kiro, GitHub or anything else. It has real stakes, clear interrupts and daily use, so it shows quickly whether the mental load actually drops.
 
 1. **Diary week.** Use Claude with the Kiro Remote MCP and artifacts as a rough version of the tool. Write down every moment you have to leave, or lose track. That list becomes the spec, and the first run of the feedback loop.
-2. **Slice 1: log and live Kiro session stubs.** Built in draft PR #1, proven against fakes: the hash-chained log with an actor and trace ID on every event, projections, the Kiro session resolver, the conversation UI and telemetry. Its agent runs in-process on the Agent SDK, which the next slice replaces.
-3. **Agents over ACP.** One ACP client runtime: local `kiro-cli acp` by default, `claude-agent-acp` as the alternative, one ACP session per thread, ACP permission requests as interrupts. The in-process Agent SDK runtime and the API key handling go. The audience field and pause/play come in the same slice.
+2. **Slice 1: log and live Kiro session stubs.** Built in draft PR #1, proven against fakes: the hash-chained log with an actor and trace ID on every event, projections, the Kiro session resolver, the conversation UI and telemetry. Its agent ran in-process on the Agent SDK.
+3. **Slice 2: agents over ACP. Done.** One ACP client runtime: local `kiro-cli acp` by default, `claude-agent-acp` as the alternative, sessions keyed by conversation address and started from one projection of the log, permission requests as steps, unasked calls as interrupts. The Agent SDK runtime is gone. Every message carries its audience, and the agent can be paused and played. A half-written last line of the log is moved aside instead of refusing the log. Proven against a scripted ACP agent over stdio, and in one real turn with kiro-cli.
 4. **Blocks, placements and focus.** Inline, minimized, panel and window, threads in the panel, and focus mode. A browser tab synced over SSE stands in for real windows.
 5. **Interrupts, attention and acceptance.** Kiro Remote permission requests and PR events routed into the right threads, in one attention order with the local agent's own requests. The acceptance pattern for ADRs, PRs and issues, with resolvers for ADRs and ark issues.
 6. **Graph, linear view, import.** The identity spike comes right before the first kinds: decision, task and design candidates from conversations, promoted into ark records, with a replay over the existing history.
@@ -225,5 +259,5 @@ Each step is usable on its own, and the diary week may reorder the rest.
 - [ ] Can the ark ledger hold both the conversation log and the interpretation events?
 - [ ] How do extracted items get stable IDs: derived from the source, or a matching step after extraction?
 - [ ] What's the cost budget for reprocessing, and does it run only when a context is opened?
-- [ ] What does draft show for cost when an agent doesn't report token usage over ACP?
+- [ ] What does draft show for cost when an agent doesn't report token usage over ACP? Slice 2 records only what is reported (Kiro reports credits and context fill, not tokens) and shows nothing yet.
 - [ ] Where does the shared log live for multiplayer?
