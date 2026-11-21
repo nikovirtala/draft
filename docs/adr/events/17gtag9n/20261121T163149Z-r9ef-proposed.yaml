@@ -1,0 +1,17 @@
+envelope: ledger/v1
+kind: decision
+schema: decision/v1
+id: 01M7ZF68SNK3AWS5QMQJDZR9EF
+subject: 17gtag9n
+type: proposed
+at: 2026-11-21T16:31:49Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: 244629292+kiro-agent@users.noreply.github.com
+data:
+  title: Give every context its own log and view state, listed in a device-local registry
+  template: nygard
+  template_version: 1
