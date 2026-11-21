@@ -1,0 +1,16 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M7ZGR86W2GKWA9CXXMW3DPQV
+subject: h00n8rab
+type: closed
+at: 2026-11-21T16:59:07Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: niko.virtala@hey.com
+reason: An acceptance request is raised only while its kind's evidence is green and withdrawn when it goes red (core acceptance tests, e2e). Accepting an ADR is a commit as the person's git identity, signed, with the person as actor of the step and the settlement; the pull request merges as a second acceptance (integration test and e2e with a test identity and key).
+data:
+  resolution: done
