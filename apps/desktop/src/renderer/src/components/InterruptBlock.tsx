@@ -6,6 +6,7 @@ import {
   SETTLED_LABELS,
 } from "../../../shared/attention.ts";
 import type { Block } from "../../../shared/ipc.ts";
+import { AcceptanceActions, AcceptanceBody } from "./AcceptanceRequest.tsx";
 import { ACTIONS } from "./PromptCard.tsx";
 
 type Interrupt = Extract<Block, { kind: "interrupt" }>;
@@ -75,6 +76,8 @@ function Body({ block }: { block: Interrupt }) {
         </>
       );
     }
+    case "acceptance":
+      return <AcceptanceBody block={block} />;
     default: {
       const url = typeof block.detail.url === "string" ? block.detail.url : null;
       return (
@@ -136,6 +139,10 @@ export function InterruptBlock({
       data-cause={block.cause}
       data-state="open"
       aria-label={label}
+      // An open request keeps its target fresh while it is on screen, as a stub does.
+      {...(block.target === null
+        ? {}
+        : { "data-stub-target": `${block.target.type}:${block.target.id}` })}
     >
       <p className="interrupt-label">
         <span className="chip">{label}</span>
@@ -144,27 +151,31 @@ export function InterruptBlock({
         </span>
       </p>
       <Body block={block} />
-      <div className="prompt-actions">
-        {block.outcomes.map((o) => (
-          <button
-            key={o}
-            type="button"
-            className={o === "allowed" || o === "retry" ? "primary-button" : "secondary-button"}
-            data-testid={`settle-${o}`}
-            disabled={busy !== null}
-            onClick={() => {
-              setBusy(o);
-              setError(null);
-              window.draft
-                .settleInterrupt(conversation, block.id, o)
-                .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
-                .finally(() => setBusy(null));
-            }}
-          >
-            {OUTCOME_LABELS[o] ?? o}
-          </button>
-        ))}
-      </div>
+      {block.cause === "acceptance" ? (
+        <AcceptanceActions block={block} conversation={conversation} />
+      ) : (
+        <div className="prompt-actions">
+          {block.outcomes.map((o) => (
+            <button
+              key={o}
+              type="button"
+              className={o === "allowed" || o === "retry" ? "primary-button" : "secondary-button"}
+              data-testid={`settle-${o}`}
+              disabled={busy !== null}
+              onClick={() => {
+                setBusy(o);
+                setError(null);
+                window.draft
+                  .settleInterrupt(conversation, block.id, o)
+                  .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
+                  .finally(() => setBusy(null));
+              }}
+            >
+              {OUTCOME_LABELS[o] ?? o}
+            </button>
+          ))}
+        </div>
+      )}
       {error !== null && (
         <p className="error" role="alert">
           {error}

@@ -22,6 +22,9 @@ export const OUTCOME_LABELS: Record<string, string> = {
   failed: "It didn’t happen",
   retry: "Run it again as a new step",
   acknowledged: "I’ve seen it",
+  accepted: "Accept",
+  "changes-requested": "Request changes",
+  rejected: "Reject",
 };
 
 /** What a settled interrupt says it was settled as. */
@@ -32,6 +35,9 @@ export const SETTLED_LABELS: Record<string, string> = {
   failed: "Marked as failed",
   retry: "Run again as a new step",
   acknowledged: "Seen",
+  accepted: "Accepted",
+  "changes-requested": "Changes requested",
+  rejected: "Rejected",
 };
 
 /** How long something has waited, from the time it arose: "just now", "3 min", "2 h", "1 d". */

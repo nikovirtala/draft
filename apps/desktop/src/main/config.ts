@@ -31,6 +31,8 @@ const FileConfigSchema = z
     arkSources: z
       .record(z.string().regex(/^[a-z][a-z0-9-]{0,31}$/), z.string().regex(/^[^/\s]+\/[^/\s]+$/))
       .optional(),
+    /** A repository's git remote, when it isn't `https://github.com/<owner>/<repo>.git`. */
+    gitRemotes: z.record(z.string().regex(/^[^/\s]+\/[^/\s]+$/), z.string().min(1)).optional(),
     /** Where the local artifact server runs (nikovirtala/artifact); `http://localhost:4400` by default. */
     artifactUrl: z.url().optional(),
     /** The local identity, written on the first run (see identity.ts). */
@@ -62,7 +64,14 @@ export interface Config {
   artifactUrl: string;
   /** GitHub's API; only a test points it elsewhere. */
   githubApiUrl: string;
+  /**
+   * The person's own tools for carrying out an acceptance: `gh` and `adr` as commands (null: found
+   * on the PATH) and the git remotes of repositories. Tests point them at fakes.
+   */
+  person: { gh: string[] | null; adr: string[] | null; gitRemotes: Record<string, string> };
 }
+
+const Argv = z.array(z.string()).min(1);
 
 export function loadConfig(dataDir: string, env: NodeJS.ProcessEnv = process.env): Config {
   const file = join(dataDir, "config.json");
@@ -93,6 +102,17 @@ export function loadConfig(dataDir: string, env: NodeJS.ProcessEnv = process.env
     arkSources: fromFile.arkSources ?? { draft: "nikovirtala/draft", ark: "nikovirtala/ark" },
     artifactUrl: env.DRAFT_ARTIFACT_URL ?? fromFile.artifactUrl ?? "http://localhost:4400",
     githubApiUrl: env.DRAFT_GITHUB_API_URL ?? "https://api.github.com",
+    person: {
+      gh: env.DRAFT_GH_COMMAND === undefined ? null : Argv.parse(JSON.parse(env.DRAFT_GH_COMMAND)),
+      adr:
+        env.DRAFT_ADR_COMMAND === undefined ? null : Argv.parse(JSON.parse(env.DRAFT_ADR_COMMAND)),
+      gitRemotes: {
+        ...(fromFile.gitRemotes ?? {}),
+        ...(env.DRAFT_GIT_REMOTES === undefined
+          ? {}
+          : z.record(z.string(), z.string()).parse(JSON.parse(env.DRAFT_GIT_REMOTES))),
+      },
+    },
     pollBaseMs: Number(env.DRAFT_POLL_BASE_MS ?? 2000),
     pollMaxMs: Number(env.DRAFT_POLL_MAX_MS ?? 60_000),
   };

@@ -71,6 +71,7 @@ function run(): void {
           user: s.user,
           resolvers: s.resolvers,
           actions: s.actions,
+          acceptance: s.acceptance,
           makeAgent: s.makeAgent,
           githubNote: s.githubNote,
         },
@@ -211,10 +212,20 @@ function run(): void {
     });
     ipcMain.handle(
       CHANNELS.settleInterrupt,
-      async (e, conversation: unknown, key: unknown, outcome: unknown) => {
+      async (e, conversation: unknown, key: unknown, outcome: unknown, input: unknown) => {
         if (!str(conversation) || !str(key, 2000) || !str(outcome, 100))
           throw new Error("bad request");
-        await requireRuntime(e).workspace.conversation(conversation).settleInterrupt(key, outcome);
+        // What a person says with an answer to an acceptance request: a note, or a reason.
+        const words = z
+          .object({
+            note: z.string().max(5000).optional(),
+            reason: z.string().max(5000).optional(),
+          })
+          .strict()
+          .parse(input ?? {});
+        await requireRuntime(e)
+          .workspace.conversation(conversation)
+          .settleInterrupt(key, outcome, words);
       },
     );
     ipcMain.handle(CHANNELS.wrapUp, async (e, conversation: unknown) => {

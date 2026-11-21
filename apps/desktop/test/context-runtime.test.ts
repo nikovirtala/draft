@@ -46,6 +46,7 @@ function depsFor(dataDir: string, registry: ContextRegistry, name: string) {
   });
   const deps: RuntimeDeps = {
     dataDir,
+    acceptance: {},
     registry,
     config,
     user: USER,

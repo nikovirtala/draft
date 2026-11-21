@@ -45,6 +45,7 @@ const KINDS: Record<string, string> = {
   "kiro-session": "Kiro session",
   "pull-request": "Pull request",
   "ark-issue": "ark issue",
+  adr: "ADR",
   artifact: "Artifact page",
 };
 
@@ -119,6 +120,41 @@ function arkIssue(state: Record<string, unknown>, id: string): Summary {
   };
 }
 
+function adr(state: Record<string, unknown>, id: string): Summary {
+  const st = str(state.status) ?? "unknown";
+  const by = (state.proposedBy ?? null) as {
+    number?: number;
+    headRef?: string;
+    state?: string;
+  } | null;
+  const verify = (state.verify ?? null) as { status?: string } | null;
+  const chips: Chip[] = [];
+  if (by !== null && by.number !== undefined)
+    chips.push({ text: `#${by.number} proposes it`, testid: "stub-proposed-by" });
+  if (st === "proposed" && verify !== null)
+    chips.push({
+      text: verify.status === "clean" ? "adr verify clean" : "adr verify has findings",
+      testid: "stub-verify",
+      tone: verify.status === "clean" ? "good" : "bad",
+    });
+  return {
+    state,
+    status: st,
+    statusLabel: st[0]?.toUpperCase() + st.slice(1),
+    title: str(state.title) ?? id,
+    chips,
+    kind: KINDS.adr as string,
+    url: str(state.url),
+    details: [
+      ["ADR", id],
+      ["Last event", String((state.events as { type: string }[] | undefined)?.at(-1)?.type ?? "")],
+      ...(by !== null && by.headRef !== undefined
+        ? ([["Branch", by.headRef]] as [string, string][])
+        : []),
+    ],
+  };
+}
+
 function artifact(state: Record<string, unknown>, id: string): Summary {
   const v = num(state.currentVersion);
   return {
@@ -180,6 +216,8 @@ function summary(p: StatusProps): Summary {
       return pullRequest(state, p.target.id);
     case "ark-issue":
       return arkIssue(state, p.target.id);
+    case "adr":
+      return adr(state, p.target.id);
     case "artifact":
       return artifact(state, p.target.id);
     default:
@@ -195,7 +233,11 @@ function Details({ p, s }: { p: StatusProps; s: Summary }) {
         <div className="stub-detail" key={k}>
           <dt>{k}</dt>
           <dd>
-            {k === "Session" || k === "Pull request" || k === "Issue" || k === "Artifact" ? (
+            {k === "Session" ||
+            k === "Pull request" ||
+            k === "Issue" ||
+            k === "ADR" ||
+            k === "Artifact" ? (
               <code>{v}</code>
             ) : (
               v
