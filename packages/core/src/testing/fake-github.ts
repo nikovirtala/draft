@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { createServer, type Server } from "node:http";
 
@@ -6,6 +7,11 @@ import { createServer, type Server } from "node:http";
  * statuses and reviews, the authenticated user, and repository contents for ark issue event
  * files. It answers If-None-Match with 304 like the real one, can run out of rate limit, and
  * records every request, so tests can check that draft only reads.
+ *
+ * A repository can be backed by a real (bare) git repository: contents are then read from it at the
+ * ref asked for, a pull request's head is its branch's tip, and the files of a pull request are
+ * what its branch changes. With `writes` on it also takes what a person's `gh` sends: merging
+ * (by rebase, which for a branch on top of its base is a fast-forward), closing and commenting.
  */
 
 export interface FakeCheck {
@@ -27,9 +33,17 @@ export interface FakePull {
   draft: boolean;
   author: string;
   headSha: string;
+  headRef: string;
   baseRef: string;
   mergeable: boolean | null;
   mergeableState: string;
+  /** For a repository without git: the files it changes. */
+  files?: string[];
+  /**
+   * The commit `checks` and `statuses` are for. Where the head moves (a git-backed branch), a head
+   * that isn't this commit has no checks yet, as on GitHub until CI runs.
+   */
+  checksFor?: string;
   requestedReviewers: string[];
   checks: FakeCheck[];
   statuses: { context: string; state: string }[];
@@ -48,6 +62,9 @@ export interface RecordedRequest {
   method: string;
   path: string;
   authorization: string | null;
+  body: string | null;
+  /** Who the sender says it is acting for (the fake `gh`); null for anything else. */
+  user: string | null;
 }
 
 type Send = (
@@ -62,6 +79,14 @@ export class FakeGithub {
   readonly pulls = new Map<string, FakePull>();
   /** `owner/repo:id` to its event files, oldest first. */
   readonly issues = new Map<string, FakeIssueEvent[]>();
+  /** `owner/repo` to the bare git repository behind it. */
+  readonly gitRepos = new Map<string, string>();
+  /** Take writes (merge, close, comment) from a person's tools. Off, anything but GET is refused. */
+  writes = false;
+  /** The merge methods the repository allows. */
+  mergeMethods: string[] = ["rebase"];
+  readonly merges: { repo: string; number: number; method: string; sha: string }[] = [];
+  readonly comments: { repo: string; number: number; body: string }[] = [];
   /** The login a token belongs to; requests without a token get 401 from `/user`. */
   viewer = "niko";
   /** Answer the next n requests as rate limited. */
@@ -70,12 +95,17 @@ export class FakeGithub {
   private server: Server | null = null;
 
   async start(): Promise<this> {
-    this.server = createServer((req, res) => {
+    this.server = createServer(async (req, res) => {
       const url = new URL(req.url ?? "/", "http://fake");
+      const chunks: Buffer[] = [];
+      for await (const c of req) chunks.push(c as Buffer);
+      const body = chunks.length === 0 ? null : Buffer.concat(chunks).toString("utf8");
       this.requests.push({
         method: req.method ?? "GET",
         path: `${url.pathname}${url.search}`,
         authorization: req.headers.authorization ?? null,
+        body,
+        user: (req.headers["x-fake-gh-user"] as string | undefined) ?? null,
       });
       const send = (
         status: number,
@@ -98,7 +128,10 @@ export class FakeGithub {
         res.end(text);
         return true;
       };
-      if (req.method !== "GET") return send(405, { message: "read only" });
+      if (req.method !== "GET")
+        return this.writes
+          ? this.write(req.method ?? "", url.pathname, body, send)
+          : send(405, { message: "read only" });
       if (this.rateLimited > 0) {
         this.rateLimited--;
         return send(403, { message: "API rate limit exceeded" }, false, {
@@ -106,7 +139,7 @@ export class FakeGithub {
           "retry-after": "1",
         });
       }
-      return this.route(url.pathname, send);
+      return this.route(url.pathname, url.searchParams, send);
     });
     await new Promise<void>((resolve) => this.server?.listen(0, "127.0.0.1", resolve));
     const a = this.server.address();
@@ -131,6 +164,7 @@ export class FakeGithub {
       draft: false,
       author: "niko",
       headSha: `a${String(n).padStart(39, "0")}`,
+      headRef: `branch-${n}`,
       baseRef: "main",
       mergeable: true,
       mergeableState: "clean",
@@ -161,7 +195,92 @@ export class FakeGithub {
     return `${e.stamp}-${String(i).padStart(4, "0")}-${e.type}.yaml`;
   }
 
-  private route(path: string, send: Send): boolean {
+  /** Makes a git repository the source of a repository's contents and pull request heads. */
+  addGitRepo(repo: string, bare: string): void {
+    this.gitRepos.set(repo, bare);
+  }
+
+  private git(repo: string, args: string[]): string | null {
+    const bare = this.gitRepos.get(repo);
+    if (bare === undefined) return null;
+    try {
+      return execFileSync("git", ["-C", bare, ...args], {
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "ignore"],
+      });
+    } catch {
+      return null;
+    }
+  }
+
+  /** The commit a pull request's head is at: its branch's tip in git, else what it was given. */
+  private head(repo: string, p: FakePull): string {
+    return this.git(repo, ["rev-parse", `refs/heads/${p.headRef}`])?.trim() || p.headSha;
+  }
+
+  private checksOf<T>(repo: string, p: FakePull, sha: string, checks: T[]): T[] {
+    if (!this.gitRepos.has(repo)) return checks;
+    return (p.checksFor ?? p.headSha) === sha ? checks : [];
+  }
+
+  private pullOf(repo: string, n: number | string): FakePull | undefined {
+    return this.pulls.get(`${repo}#${n}`);
+  }
+
+  /** What a person's own tools send: merge, close, comment. */
+  private write(method: string, path: string, body: string | null, send: Send): boolean {
+    const input = body === null ? {} : (JSON.parse(body) as Record<string, string>);
+    const merge = /^\/repos\/([^/]+\/[^/]+)\/pulls\/(\d+)\/merge$/.exec(path);
+    if (merge !== null && method === "PUT") {
+      const repo = merge[1] as string;
+      const n = Number(merge[2]);
+      const p = this.pullOf(repo, n);
+      if (p === undefined) return send(404, { message: "Not Found" });
+      const head = this.head(repo, p);
+      const m = input.merge_method ?? "merge";
+      if (!this.mergeMethods.includes(m))
+        return send(405, { message: `${m} merges are not allowed on this repository.` });
+      if (p.state !== "open" || p.merged) return send(405, { message: "Pull Request is not open" });
+      if (input.sha !== undefined && input.sha !== head)
+        return send(409, { message: "Head branch was modified. Review and try the merge again." });
+      if (p.mergeableState !== "clean")
+        return send(405, { message: "Pull Request is not mergeable" });
+      // A rebase of a branch that sits on its base is a fast-forward of the base.
+      if (this.gitRepos.has(repo)) {
+        const ancestor = this.git(repo, [
+          "merge-base",
+          "--is-ancestor",
+          `refs/heads/${p.baseRef}`,
+          head,
+        ]);
+        if (ancestor === null) return send(405, { message: "Pull Request is not mergeable" });
+        this.git(repo, ["update-ref", `refs/heads/${p.baseRef}`, head]);
+      }
+      p.merged = true;
+      p.state = "closed";
+      this.merges.push({ repo, number: n, method: m, sha: head });
+      return send(200, { sha: head, merged: true, message: "Pull Request successfully merged" });
+    }
+    const comment = /^\/repos\/([^/]+\/[^/]+)\/issues\/(\d+)\/comments$/.exec(path);
+    if (comment !== null && method === "POST") {
+      this.comments.push({
+        repo: comment[1] as string,
+        number: Number(comment[2]),
+        body: input.body ?? "",
+      });
+      return send(201, { id: this.comments.length, body: input.body ?? "" });
+    }
+    const patch = /^\/repos\/([^/]+\/[^/]+)\/pulls\/(\d+)$/.exec(path);
+    if (patch !== null && method === "PATCH") {
+      const p = this.pullOf(patch[1] as string, patch[2] as string);
+      if (p === undefined) return send(404, { message: "Not Found" });
+      if (input.state === "closed") p.state = "closed";
+      return send(200, { state: p.state });
+    }
+    return send(404, { message: "Not Found" });
+  }
+
+  private route(path: string, query: URLSearchParams, send: Send): boolean {
     if (path === "/user") {
       const last = this.requests.at(-1);
       return last?.authorization == null
@@ -184,36 +303,99 @@ export class FakeGithub {
         merged: p.merged,
         draft: p.draft,
         user: { login: p.author },
-        head: { sha: p.headSha },
+        head: { sha: this.head(pr[1] as string, p), ref: p.headRef, repo: { full_name: pr[1] } },
         base: { ref: p.baseRef },
         mergeable: p.mergeable,
-        mergeable_state: p.mergeableState,
+        // A new head that CI has not run on is blocked, as GitHub says until the checks report.
+        mergeable_state:
+          this.gitRepos.has(pr[1] as string) &&
+          this.head(pr[1] as string, p) !== (p.checksFor ?? p.headSha)
+            ? "blocked"
+            : p.mergeableState,
         requested_reviewers: p.requestedReviewers.map((login) => ({ login })),
         updated_at: p.updatedAt,
       });
+    }
+    const list = /^\/repos\/([^/]+\/[^/]+)\/pulls$/.exec(path);
+    if (list !== null) {
+      const open = [...this.pulls.entries()]
+        .filter(([k, v]) => k.startsWith(`${list[1]}#`) && v.state === "open")
+        .map(([k, v]) => ({
+          number: Number(k.split("#")[1]),
+          state: v.state,
+          updated_at: v.updatedAt,
+        }));
+      return send(200, query.get("state") === "open" || query.get("state") === null ? open : []);
+    }
+    const files = /^\/repos\/([^/]+\/[^/]+)\/pulls\/(\d+)\/files$/.exec(path);
+    if (files !== null) {
+      const p = this.pullOf(files[1] as string, files[2] as string);
+      if (p === undefined) return send(404, { message: "Not Found" });
+      const changed =
+        this.git(files[1] as string, [
+          "diff",
+          "--name-only",
+          `refs/heads/${p.baseRef}...${this.head(files[1] as string, p)}`,
+        ])
+          ?.split("\n")
+          .filter((f) => f !== "") ??
+        p.files ??
+        [];
+      return send(
+        200,
+        changed.map((filename) => ({ filename })),
+      );
     }
     const commit = /^\/repos\/([^/]+\/[^/]+)\/commits\/([0-9a-f]+)\/(check-runs|status)$/.exec(
       path,
     );
     if (commit !== null) {
-      const p = [...this.pulls.entries()].find(
-        ([k, v]) => k.startsWith(`${commit[1]}#`) && v.headSha === commit[2],
+      const repo = commit[1] as string;
+      const found = [...this.pulls.entries()].find(
+        ([k, v]) => k.startsWith(`${repo}#`) && this.head(repo, v) === commit[2],
       )?.[1];
-      if (p === undefined) return send(404, { message: "Not Found" });
+      if (found === undefined) return send(404, { message: "Not Found" });
+      const checks = this.checksOf(repo, found, commit[2] as string, found.checks);
+      const statuses = this.checksOf(repo, found, commit[2] as string, found.statuses);
       if (commit[3] === "check-runs")
         return send(200, {
-          total_count: p.checks.length,
-          check_runs: p.checks.map((c) => ({
+          total_count: checks.length,
+          check_runs: checks.map((c) => ({
             name: c.name,
             status: c.status ?? (c.conclusion === undefined ? "in_progress" : "completed"),
             conclusion: c.conclusion ?? null,
-            html_url: `https://github.com/${commit[1]}/runs/${encodeURIComponent(c.name)}`,
+            html_url: `https://github.com/${repo}/runs/${encodeURIComponent(c.name)}`,
           })),
         });
       return send(200, {
         state: "success",
-        statuses: p.statuses.map((s) => ({ context: s.context, state: s.state })),
+        statuses: statuses.map((s) => ({ context: s.context, state: s.state })),
       });
+    }
+    const repoContents = /^\/repos\/([^/]+\/[^/]+)\/contents\/(.+)$/.exec(path);
+    if (repoContents !== null && this.gitRepos.has(repoContents[1] as string)) {
+      const repo = repoContents[1] as string;
+      const ref = query.get("ref") ?? "HEAD";
+      const at = decodeURIComponent(repoContents[2] as string);
+      const type = this.git(repo, ["cat-file", "-t", `${ref}:${at}`])?.trim();
+      if (type === "tree") {
+        const names = this.git(repo, ["ls-tree", "--name-only", `${ref}:${at}`]) ?? "";
+        return send(
+          200,
+          names
+            .split("\n")
+            .filter((n) => n !== "")
+            .map((name) => ({
+              name,
+              type:
+                this.git(repo, ["cat-file", "-t", `${ref}:${at}/${name}`])?.trim() === "tree"
+                  ? "dir"
+                  : "file",
+            })),
+        );
+      }
+      if (type === "blob") return send(200, this.git(repo, ["show", `${ref}:${at}`]) ?? "", true);
+      return send(404, { message: "Not Found" });
     }
     const dir = /^\/repos\/([^/]+\/[^/]+)\/contents\/docs\/issues\/events\/([^/]+)$/.exec(path);
     if (dir !== null) {
