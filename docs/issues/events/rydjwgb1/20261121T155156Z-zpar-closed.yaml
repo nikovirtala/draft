@@ -1,0 +1,16 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M7ZCX7NC8FFPA36P9WQSZPAR
+subject: rydjwgb1
+type: closed
+at: 2026-11-21T15:51:56Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: niko.virtala@hey.com
+reason: An interrupted step is settled as done, failed or retry from the conversation with one interrupt.settled event naming the started step, and it no longer shows as an interrupt after a restart (interrupt-flow.test.ts, e2e attention.spec.ts). Retry starts a new step with a new key and never runs the old one.
+data:
+  resolution: done
