@@ -1,0 +1,16 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M7ZGR9W02641VKCYSB1PCBTV
+subject: 34atgwz6
+type: closed
+at: 2026-11-21T16:59:09Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: niko.virtala@hey.com
+reason: agent.permission_asked is written before a local prompt shows and the prompt's age is that event's time (prompt-age test).
+data:
+  resolution: done
