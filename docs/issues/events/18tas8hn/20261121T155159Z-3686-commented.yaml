@@ -1,0 +1,15 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M7ZCXAV15ZFGNJMT8VC53686
+subject: 18tas8hn
+type: commented
+at: 2026-11-21T15:51:59Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: niko.virtala@hey.com
+data:
+  text: "Left open: kiro-remote's main (881b06d) has no idempotencyKey on its MCP tools yet. draft still records a key per step and a retry uses a new one."
