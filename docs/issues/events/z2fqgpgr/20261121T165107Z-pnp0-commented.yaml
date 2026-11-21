@@ -1,0 +1,15 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M7ZG9KWN5GPRE8BEDN4KPNP0
+subject: z2fqgpgr
+type: commented
+at: 2026-11-21T16:51:07Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: 244629292+kiro-agent@users.noreply.github.com
+data:
+  text: "Decisions in the PR description. Not done, opened as issues: the agent's own file and shell tools in a trusted folder (aefrmdf4), rebinding (2prvcz9n), universe view (4hndt20b), sharing (dq48pc2j), agent-suggested contexts (eqh5gxqh), Kiro ACP trust check (4qgk0vfj), refreshing snapshots (g6qk6ctc)."
