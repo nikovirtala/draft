@@ -1,0 +1,16 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M7ZCX98JYVQK16ES9N4EZEH9
+subject: 0act2kg7
+type: closed
+at: 2026-11-21T15:51:57Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: niko.virtala@hey.com
+reason: A thread wraps up with a conclusion its agent drafts and you confirm; it appears in the main conversation at the thread's stub, cites the thread and what it produced, and goes into that conversation's agent context (interrupt-flow.test.ts, e2e attention.spec.ts).
+data:
+  resolution: done
