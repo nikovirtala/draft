@@ -29,9 +29,11 @@ Everything goes through one append-only log per context, and everything on scree
 ```mermaid
 flowchart TB
     ui["UI shell<br/>blocks from view state; placement per device"]
+    win["Electron windows<br/>one per block placed in a window, plus the panel"]
     subgraph main["Electron main process"]
-        acp["ACP client (AcpRuntime)<br/>one session per conversation address,<br/>started from one projection of the log;<br/>permission requests → decideTool → steps"]
-        conv["Conversation service<br/>turns, audience, pause/play, interrupts"]
+        acp["ACP client (AcpRuntime per agent)<br/>one session per conversation address,<br/>started from one projection of the log;<br/>permission requests → decideTool → steps"]
+        conv["Workspace<br/>main conversation and threads: turns, audience,<br/>pause/play, interrupts, attention per conversation"]
+        dev[("Device view state<br/>layout, focus, window bounds, move record;<br/>never in the log")]
         log[("Context log<br/>append-only, hash-chained;<br/>actor and trace ID on every event")]
         proj["Kinds and projections<br/>SQLite views, agent context"]
         res["Resolvers<br/>live stubs, snapshots"]
@@ -40,6 +42,8 @@ flowchart TB
     kr["Kiro Remote<br/>hosted Kiro sessions"]
     artifact["artifact<br/>raw HTML views over SSE"]
     ui <--> conv
+    ui <--> dev
+    dev --> win
     conv --> log --> proj --> conv
     conv <--> acp
     acp <-- "JSON-RPC on stdio" --> agent
@@ -49,13 +53,16 @@ flowchart TB
     ui -.-> artifact
 ```
 
-- **UI shell** renders blocks from view state. Placement and focus are stored per device, apart from the log.
-- **ACP client** keeps one ACP session per conversation address (per thread, once threads exist), starts each from the log's projection, streams the agent's updates into the conversation, turns its permission requests into prompts and steps, and writes everything to the log.
+- **UI shell** renders blocks from view state. Placement and focus are stored per device, apart from the log, in the device's view-state store: the layout, focus, window bounds and a record of every placement change (block, kind, from, to, when, why). The rules are a pure state machine (`apps/desktop/src/shared/placement.ts`). Only a person's gesture changes the layout: the agent can't.
+- **Windows** are real Electron windows. Each block placed in a window gets one, titled with what it is and where it came from, with its bounds kept per device. Closing one returns the block to the place it came from. The panel is a column of the main window.
+- **Threads** are conversations with a parent message. The `Workspace` runs the main conversation and every thread over one log, each with its own turns, interrupts and agent session. The agent is chosen when a thread starts (the default, or another configured agent) and can be switched later; the switch is logged as `agent.selected` and the new session starts from the projection (ADR h89hcrk6).
+- **Focus** is a layout state on the device. It minimizes every open block except the focused one and its thread, filters the attention count by conversation ("N in focus, M elsewhere") and restores the layout exactly when it ends. It is entered by a gesture (Ctrl or Cmd + period on the selected block) and left with Esc or the same gesture.
+- **ACP client** keeps one ACP session per conversation address (so one per thread), starts each from the log's projection, streams the agent's updates into the conversation, turns its permission requests into prompts and steps, and writes everything to the log.
 - **Local agent** is a separate process speaking ACP over stdio: `kiro-cli acp` by default, `claude-agent-acp` or any other ACP agent by configuration. It reaches its tools over MCP, Kiro Remote included.
 - **Context log** is the raw layer: append-only and hash-chained, with an actor and a trace ID on every event. Slice 1 built draft's own log; the ark ledger was measured fast enough and stays an option. A torn last line is moved to a sidecar and recorded (ADR 4gwyn86q).
 - **Kinds and projections** extract things and edges, build the graph and view state, and run reprocessing generations.
 - **Resolvers** turn references to outside things (hosted Kiro sessions, PRs, ark issues) into live stubs, talking to Kiro Remote directly with no model involved, and take a snapshot whenever one is referenced.
-- **artifact** is the escape hatch for raw HTML views, with reload over SSE. In the prototype its synced tabs stand in for real windows.
+- **artifact** is the escape hatch for raw HTML views, with reload over SSE. Windows are real Electron windows now, not synced tabs.
 
 The agent describes a view using a fixed set of components (a JSON description), not raw HTML. That keeps the grammar stable, makes views safe to render, and lets them update live from references. Raw HTML through artifact is only for what the components can't express.
 
@@ -246,7 +253,7 @@ The first job to test: supervising the software factory's Kiro sessions from one
 1. **Diary week.** Use Claude with the Kiro Remote MCP and artifacts as a rough version of the tool. Write down every moment you have to leave, or lose track. That list becomes the spec, and the first run of the feedback loop.
 2. **Slice 1: log and live Kiro session stubs.** Built in draft PR #1, proven against fakes: the hash-chained log with an actor and trace ID on every event, projections, the Kiro session resolver, the conversation UI and telemetry. Its agent ran in-process on the Agent SDK.
 3. **Slice 2: agents over ACP. Done.** One ACP client runtime: local `kiro-cli acp` by default, `claude-agent-acp` as the alternative, sessions keyed by conversation address and started from one projection of the log, permission requests as steps, unasked calls as interrupts. The Agent SDK runtime is gone. Every message carries its audience, and the agent can be paused and played. A half-written last line of the log is moved aside instead of refusing the log. Proven against a scripted ACP agent over stdio, and in one real turn with kiro-cli.
-4. **Blocks, placements and focus.** Inline, minimized, panel and window, threads in the panel, and focus mode. A browser tab synced over SSE stands in for real windows.
+4. **Slice 3: blocks, placements and focus. Done.** Inline, minimized, panel and a real Electron window, threads branched off any message with their own agent session and a live stub at the branch point, and focus. Placement and focus are per-device view state and survive a restart. Proven on two scripted ACP agents in Electron.
 5. **Interrupts, attention and acceptance.** Kiro Remote permission requests and PR events routed into the right threads, in one attention order with the local agent's own requests. The acceptance pattern for ADRs, PRs and issues, with resolvers for ADRs and ark issues.
 6. **Graph, linear view, import.** The identity spike comes right before the first kinds: decision, task and design candidates from conversations, promoted into ark records, with a replay over the existing history.
 7. **Multiplayer.** A shared, hosted log, identities and sign-in, the driver role and personal notes.
