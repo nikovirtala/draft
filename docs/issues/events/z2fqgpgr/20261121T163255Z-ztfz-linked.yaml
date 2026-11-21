@@ -1,0 +1,16 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M7ZF88QW03BSCC3FGRHJZTFZ
+subject: z2fqgpgr
+type: linked
+at: 2026-11-21T16:32:55Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: 244629292+kiro-agent@users.noreply.github.com
+data:
+  to: adr:gw4vxvw4
+  rel: implements
