@@ -41,12 +41,25 @@ export interface Prompt {
   input: Record<string, unknown>;
 }
 
+/** One block of the conversation, in log order. */
+export type Block =
+  | { kind: "message"; address: string }
+  | {
+      kind: "unknown";
+      id: string;
+      type: string;
+      schema: number;
+      reason: "unknown-type" | "newer-schema";
+      at: string | null;
+    };
+
 export interface ConversationState {
   context: string;
   conversation: string;
   title: string;
   agent: { model: string; version: string };
   messages: Message[];
+  timeline: Block[];
   stubs: Record<string, Stub>;
   streaming: { address: string; text: string } | null;
   prompts: Prompt[];

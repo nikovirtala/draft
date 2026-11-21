@@ -388,3 +388,22 @@ textarea:focus-visible {
   color: var(--secondary);
   font-size: 13px;
 }
+
+/* An event this build keeps without understanding it. */
+.generic {
+  font-family: var(--sans);
+  background: var(--card);
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  padding: 8px 12px;
+}
+
+.generic-title {
+  margin: 0 0 2px;
+  font-weight: 560;
+  color: var(--secondary);
+}
+
+.generic .secondary {
+  margin: 0;
+}

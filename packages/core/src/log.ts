@@ -8,7 +8,13 @@ import {
   writeSync,
 } from "node:fs";
 import { dirname } from "node:path";
-import { type DraftEvent, type EventDraft, GENESIS_HASH, sealEvent } from "./events.ts";
+import {
+  type DraftEvent,
+  type EventDraft,
+  GENESIS_HASH,
+  type LogRecord,
+  sealEvent,
+} from "./events.ts";
 import { ulid } from "./ids.ts";
 import { type VerifyResult, verifyLines } from "./verify.ts";
 
@@ -19,8 +25,11 @@ import { type VerifyResult, verifyLines } from "./verify.ts";
 export interface LogStore {
   /** Seals and appends drafts in order, as one batch; returns the sealed events. */
   append(drafts: readonly EventDraft[]): Promise<DraftEvent[]>;
-  /** Every event in log order. Only valid after `open` succeeded. */
-  events(): readonly DraftEvent[];
+  /**
+   * Every record in log order, including events this build doesn't understand. Only valid after
+   * `open` succeeded.
+   */
+  events(): readonly LogRecord[];
   /** The hash of the last event, or the genesis hash for an empty log. */
   head(): string;
   close(): void;
@@ -43,7 +52,7 @@ interface Clock {
 }
 
 abstract class BaseLog implements LogStore {
-  protected readonly list: DraftEvent[] = [];
+  protected readonly list: LogRecord[] = [];
   private readonly now: () => number;
   private readonly newId: () => string;
   private queue: Promise<unknown> = Promise.resolve();
@@ -53,7 +62,7 @@ abstract class BaseLog implements LogStore {
     this.newId = o.newId ?? ulid;
   }
 
-  events(): readonly DraftEvent[] {
+  events(): readonly LogRecord[] {
     return this.list;
   }
 
@@ -107,7 +116,7 @@ export class FileLogStore extends BaseLog {
   private fd: number | null;
   readonly path: string;
 
-  private constructor(path: string, events: DraftEvent[], o: Clock) {
+  private constructor(path: string, events: LogRecord[], o: Clock) {
     super(o);
     this.path = path;
     this.list.push(...events);

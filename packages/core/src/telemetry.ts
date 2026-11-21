@@ -29,6 +29,7 @@ export interface DraftMetrics {
   resolverPolls: ReturnType<ReturnType<typeof metrics.getMeter>["createCounter"]>;
   resolverFailures: ReturnType<ReturnType<typeof metrics.getMeter>["createCounter"]>;
   invalidViews: ReturnType<ReturnType<typeof metrics.getMeter>["createCounter"]>;
+  unknownEvents: ReturnType<ReturnType<typeof metrics.getMeter>["createCounter"]>;
 }
 
 let cached: { meter: unknown; m: DraftMetrics } | null = null;
@@ -54,6 +55,10 @@ export function draftMetrics(): DraftMetrics {
     }),
     invalidViews: meter.createCounter("draft.view.invalid", {
       description: "View descriptions that failed validation and fell back to plain text",
+    }),
+    unknownEvents: meter.createCounter("draft.log.unknown_events", {
+      description:
+        "Events kept in the log that this build doesn't understand, counted when a log opens",
     }),
   };
   cached = { meter, m };

@@ -97,8 +97,23 @@ export type EventDataOf<T extends EventType> = z.infer<(typeof EventData)[T]>;
 /** The schema version this build writes for every event type. */
 export const SCHEMA_VERSION = 1;
 
-/** The one envelope every event shares. `data` is kept exactly as received. */
-export const EnvelopeSchema = z.object({
+/**
+ * What every record needs so the chain can be checked, whatever its type: a newer draft, or another
+ * context, may write event types and schema versions this build has never heard of.
+ */
+export const ChainFieldsSchema = z.looseObject({
+  id: z.string().min(1),
+  type: z.string().min(1),
+  schema: z.number().int().min(1),
+  prevHash: Hex64,
+  hash: Hex64,
+});
+
+/**
+ * The one envelope every event of a known type shares. `data` is kept exactly as received, and so
+ * are envelope fields this build doesn't know.
+ */
+const envelopeShape = {
   id: z.string().refine(isUlid, "must be a ULID"),
   at: z.iso.datetime({ precision: 3 }),
   address: AddressString(true),
@@ -110,8 +125,10 @@ export const EnvelopeSchema = z.object({
   prevHash: Hex64,
   hash: Hex64,
   data: z.unknown(),
-});
-export type Envelope = z.infer<typeof EnvelopeSchema>;
+};
+export const EnvelopeSchema = z.looseObject(envelopeShape);
+const StrictEnvelope = z.object(envelopeShape);
+export type Envelope = z.infer<typeof StrictEnvelope>;
 
 /** A typed view of an envelope whose data passed its type's schema. */
 export type DraftEvent<T extends EventType = EventType> = T extends EventType
@@ -133,10 +150,74 @@ export type EventDraft<T extends EventType = EventType> = T extends EventType
 
 export type ParseResult = { ok: true; event: DraftEvent } | { ok: false; reason: string };
 
-/** The hash of an envelope: sha256(prevHash + canonical JSON of the envelope without `hash`). */
-export function eventHash(e: Omit<Envelope, "hash"> | Envelope): string {
-  const { hash: _ignored, ...rest } = e as Envelope;
+/**
+ * A record this build can't interpret: an unknown event type, or a known type at a newer schema
+ * version. It is kept exactly as received, chained like any other event, skipped by projections,
+ * counted, and shown as a generic block.
+ */
+export class UnknownEvent {
+  readonly id: string;
+  readonly type: string;
+  readonly schema: number;
+  readonly prevHash: string;
+  readonly hash: string;
+  /** Best effort: the record's time and conversation, when they read as such. */
+  readonly at: string | null;
+  readonly conversation: string | null;
+  readonly reason: "unknown-type" | "newer-schema";
+  /** The record as received. */
+  readonly raw: Readonly<Record<string, unknown>>;
+
+  constructor(raw: z.infer<typeof ChainFieldsSchema>, reason: UnknownEvent["reason"]) {
+    this.id = raw.id;
+    this.type = raw.type;
+    this.schema = raw.schema;
+    this.prevHash = raw.prevHash;
+    this.hash = raw.hash;
+    this.at = typeof raw.at === "string" ? raw.at : null;
+    this.conversation = typeof raw.conversation === "string" ? raw.conversation : null;
+    this.reason = reason;
+    this.raw = raw;
+  }
+}
+
+/** One record of the log: an event this build understands, or one it keeps without understanding. */
+export type LogRecord = DraftEvent | UnknownEvent;
+
+export function isUnknown(r: LogRecord): r is UnknownEvent {
+  return r instanceof UnknownEvent;
+}
+
+/** The events of a log this build understands. */
+export function knownEvents(records: readonly LogRecord[]): DraftEvent[] {
+  return records.filter((r): r is DraftEvent => !isUnknown(r));
+}
+
+/**
+ * The hash of a record: sha256(prevHash + canonical JSON of the record without `hash`). Computed
+ * over the record as received, so fields this build doesn't know are covered too.
+ */
+export function eventHash(
+  e: { readonly prevHash: string } & Readonly<Record<string, unknown>>,
+): string {
+  const { hash: _ignored, ...rest } = e;
   return sha256Hex(e.prevHash + canonicalJson(rest));
+}
+
+export type ReadResult = { ok: true; record: LogRecord } | { ok: false; reason: string };
+
+/**
+ * Reads one record of a log. A record without the chain fields, or a known type at a known schema
+ * version that fails its schema, is invalid. An unknown type or a newer schema version is kept.
+ */
+export function readRecord(raw: unknown): ReadResult {
+  const chain = ChainFieldsSchema.safeParse(raw);
+  if (!chain.success) return { ok: false, reason: `not an event record: ${issues(chain.error)}` };
+  const c = chain.data;
+  if (!(c.type in EventData)) return { ok: true, record: new UnknownEvent(c, "unknown-type") };
+  if (c.schema > SCHEMA_VERSION) return { ok: true, record: new UnknownEvent(c, "newer-schema") };
+  const parsed = parseEvent(raw);
+  return parsed.ok ? { ok: true, record: parsed.event } : parsed;
 }
 
 function issues(err: z.ZodError): string {
@@ -146,8 +227,8 @@ function issues(err: z.ZodError): string {
 }
 
 /**
- * Checks an envelope and its data. Unknown event types and newer schema versions are reported,
- * not guessed at: a later build may know them, and the raw event stays in the log either way.
+ * Checks the envelope and data of an event of a known type. Unknown event types and newer schema
+ * versions are reported here, not guessed at; `readRecord` keeps them instead.
  */
 export function parseEvent(raw: unknown): ParseResult {
   const env = EnvelopeSchema.safeParse(raw);

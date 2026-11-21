@@ -3,6 +3,7 @@ import type { Boot, ConversationState, Placement } from "../../shared/ipc.ts";
 import { Composer } from "./components/Composer.tsx";
 import { MessageView, StreamingMessage } from "./components/MessageView.tsx";
 import { PromptCard } from "./components/PromptCard.tsx";
+import { UnknownBlock } from "./components/UnknownBlock.tsx";
 import { useVisibleStubs } from "./visibility.ts";
 
 export function App() {
@@ -30,7 +31,7 @@ export function App() {
     return off;
   }, []);
 
-  const messageCount = state?.messages.length ?? 0;
+  const messageCount = state?.timeline.length ?? 0;
   const streamingLength = state?.streaming?.text.length ?? 0;
   const promptCount = state?.prompts.length ?? 0;
   // biome-ignore lint/correctness/useExhaustiveDependencies: scroll when the conversation grows
@@ -74,21 +75,25 @@ export function App() {
       </header>
       <main className="conversation" ref={column}>
         <div className="column">
-          {state !== null && state.messages.length === 0 && state.streaming === null && (
+          {state !== null && state.timeline.length === 0 && state.streaming === null && (
             <p className="empty" data-testid="empty">
               Ask about your Kiro sessions. Every session mentioned here stays live in the
               conversation.
             </p>
           )}
-          {state?.messages.map((m) => (
-            <MessageView
-              key={m.address}
-              message={m}
-              stubs={state.stubs}
-              placements={placements}
-              onPlace={place}
-            />
-          ))}
+          {state?.timeline.map((b) => {
+            if (b.kind === "unknown") return <UnknownBlock key={b.id} block={b} />;
+            const m = state.messages.find((x) => x.address === b.address);
+            return m === undefined ? null : (
+              <MessageView
+                key={m.address}
+                message={m}
+                stubs={state.stubs}
+                placements={placements}
+                onPlace={place}
+              />
+            );
+          })}
           {state?.streaming && <StreamingMessage text={state.streaming.text} />}
           {state?.prompts.map((p) => (
             <PromptCard

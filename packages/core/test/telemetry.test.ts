@@ -21,6 +21,7 @@ import {
 } from "@opentelemetry/sdk-trace";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { canonicalJson } from "../src/canonical.ts";
+import { knownEvents } from "../src/events.ts";
 import { fakeKiro, openService, RUNNING, SCRIPT } from "./fixtures.ts";
 
 const spans = new InMemorySpanExporter();
@@ -79,9 +80,9 @@ describe("telemetry", () => {
       expect(names).toContain(n);
     }
     // The trace ID is stamped on the turn's events.
-    const turnEvents = log
-      .events()
-      .filter((e) => e.type !== "context.created" && e.type !== "conversation.created");
+    const turnEvents = knownEvents(log.events()).filter(
+      (e) => e.type !== "context.created" && e.type !== "conversation.created",
+    );
     expect(turnEvents.every((e) => e.traceId === traceId)).toBe(true);
 
     // No message text, tool input or result anywhere in spans, span events, logs or metrics.

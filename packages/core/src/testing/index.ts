@@ -8,3 +8,4 @@ export {
   type ReceivedCall,
   type ToolListEntry,
 } from "./fake-kiro-remote.ts";
+export { appendRawLines, sealRawRecord } from "./raw.ts";
