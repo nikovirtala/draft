@@ -1,0 +1,17 @@
+envelope: ledger/v1
+kind: decision
+schema: decision/v1
+id: 01M7Z932ET9T8TT7S49HPAF8ET
+subject: jhjvk5cg
+type: proposed
+at: 2026-11-21T14:45:13Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: 244629292+kiro-agent@users.noreply.github.com
+data:
+  title: Run each thread as its own conversation with its own agent session, switched by a logged event
+  template: nygard
+  template_version: 1
