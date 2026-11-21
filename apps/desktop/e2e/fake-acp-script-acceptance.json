@@ -1,0 +1,30 @@
+{
+  "agent": { "name": "fake-acp-agent", "version": "1.0.0", "model": "fake-model-1" },
+  "starts": "kiro",
+  "style": "kiro",
+  "usage": { "inputTokens": 400, "outputTokens": 40, "totalTokens": 440 },
+  "credits": 0.01,
+  "turns": [
+    {
+      "match": "Look at",
+      "steps": [
+        {
+          "text": "I proposed the decision and opened the pull request that carries it. Both are yours to accept once their checks are green.",
+          "chunk": 5,
+          "delayMs": 5
+        }
+      ]
+    },
+    {
+      "match": "Changes requested on",
+      "steps": [
+        {
+          "text": "Understood. I will name the alternatives we rejected, push that to the branch, and tell you when the checks have run.",
+          "chunk": 5,
+          "delayMs": 5
+        }
+      ]
+    }
+  ],
+  "fallback": "I have nothing scripted for that."
+}
