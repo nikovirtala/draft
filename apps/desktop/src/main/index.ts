@@ -22,6 +22,7 @@ import { ensureIdentity, userActor } from "./identity.ts";
 import { LayoutService } from "./layout.ts";
 import { provenance } from "./provenance.ts";
 import { SafeStorageSecretStore } from "./secrets.ts";
+import { handleFontScheme, registerFontScheme } from "./system-fonts.ts";
 import { JsonFileSpanExporter, startTelemetry } from "./telemetry.ts";
 import { ViewStateStore } from "./view-state.ts";
 import { WindowManager } from "./windows.ts";
@@ -31,6 +32,7 @@ if (process.env.DRAFT_DATA_DIR !== undefined) app.setPath("userData", process.en
 
 // Two instances writing one log would fork its chain.
 if (!app.requestSingleInstanceLock()) app.quit();
+registerFontScheme();
 
 const telemetry = startTelemetry({
   provenance: provenance(process.env, app.isPackaged),
@@ -307,6 +309,7 @@ function titleOf(block: string): string {
 }
 
 app.whenReady().then(() => {
+  handleFontScheme();
   windows = new WindowManager({
     preload: join(import.meta.dirname, "../preload/index.cjs"),
     store: () => viewState,

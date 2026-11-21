@@ -15,8 +15,10 @@
   --waiting: #8a5200;
   --waiting-bg: #fdefd3;
   --running: #00b368;
-  --sans: "Inter Variable", "Inter", system-ui, sans-serif;
-  --serif: "Source Serif 4 Variable", "Source Serif 4", Georgia, serif;
+  /* Apple's system faces: SF Pro through system-ui, New York and SF Mono from fonts.ts. */
+  --sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --serif: "New York", ui-serif, Georgia, serif;
+  --mono: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
   color-scheme: light;
 }
 
@@ -35,7 +37,7 @@ body {
   background: var(--background);
   color: var(--text);
   font-family: var(--sans);
-  font-size: 15px;
+  font-size: 13px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
 }
@@ -119,7 +121,7 @@ a {
 .message.agent {
   align-self: stretch;
   font-family: var(--serif);
-  font-size: 17px;
+  font-size: 14px;
   line-height: 1.55;
 }
 
@@ -129,16 +131,112 @@ a {
   flex-direction: column;
   gap: 6px;
   font-family: var(--sans);
-  font-size: 14px;
+  font-size: 13px;
 }
 
 code.id,
 code {
-  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-family: var(--mono);
   font-size: 0.82em;
   color: var(--accent-text);
 }
 
+/* Markdown in messages. Blocks share one rhythm; the first and last sit flush with the body. */
+.markdown > :first-child {
+  margin-top: 0;
+}
+.markdown > :last-child {
+  margin-bottom: 0;
+}
+.markdown :is(ul, ol, blockquote, pre, table, figure, hr) {
+  margin: 0 0 0.6em;
+}
+.markdown :is(h1, h2, h3, h4, h5, h6) {
+  margin: 1em 0 0.4em;
+  font-weight: 650;
+  line-height: 1.25;
+}
+.markdown h1 {
+  font-size: 1.4em;
+}
+.markdown h2 {
+  font-size: 1.25em;
+}
+.markdown h3 {
+  font-size: 1.1em;
+}
+.markdown :is(h4, h5, h6) {
+  font-size: 1em;
+}
+.markdown :is(ul, ol) {
+  padding-left: 1.4em;
+}
+.markdown li > :is(p, ul, ol) {
+  margin-bottom: 0.2em;
+}
+.markdown li::marker {
+  color: var(--secondary);
+}
+.markdown blockquote {
+  padding-left: 0.9em;
+  border-left: 3px solid var(--border);
+  color: var(--secondary);
+}
+.markdown hr {
+  border: 0;
+  border-top: 1px solid var(--border);
+}
+.markdown pre.code {
+  padding: 10px 12px;
+  overflow-x: auto;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  line-height: 1.45;
+}
+.markdown pre.code code {
+  font-size: 12px;
+  color: var(--text);
+  white-space: pre;
+}
+.markdown table {
+  display: block;
+  overflow-x: auto;
+  border-collapse: collapse;
+  font-family: var(--sans);
+  font-size: 13px;
+}
+.markdown :is(th, td) {
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  text-align: left;
+}
+.markdown th {
+  background: var(--card);
+  font-weight: 600;
+}
+.markdown li.task-list-item {
+  list-style: none;
+}
+.markdown input[type="checkbox"] {
+  margin: 0 0.4em 0 0;
+}
+.markdown figure.mermaid {
+  margin-left: 0;
+  margin-right: 0;
+  overflow-x: auto;
+}
+.markdown figure.mermaid > svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 0 auto;
+}
+.markdown figure.mermaid figcaption {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--secondary);
+}
 .caret {
   display: inline-block;
   width: 0.5em;
@@ -425,7 +523,7 @@ textarea:focus-visible {
 }
 
 .fallback {
-  font-family: ui-monospace, Menlo, monospace;
+  font-family: var(--mono);
   font-size: 12.5px;
   white-space: pre-wrap;
   color: var(--secondary);
@@ -629,7 +727,7 @@ textarea:focus-visible {
   flex-direction: column;
   gap: 6px;
   font-family: var(--sans);
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .thread-stub {
