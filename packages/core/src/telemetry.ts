@@ -19,6 +19,39 @@ import {
 export const INSTRUMENTATION = "@nikovirtala/draft-core";
 
 export const tracer = () => trace.getTracer(INSTRUMENTATION);
+
+/** Where a build of draft runs: a developer's machine, the end-to-end tests, or a released app. */
+export type DeploymentEnvironment = "development" | "e2e" | "release";
+export const DEPLOYMENT_ENVIRONMENTS: readonly DeploymentEnvironment[] = [
+  "development",
+  "e2e",
+  "release",
+];
+
+/** Which build of draft produced some telemetry. */
+export interface Provenance {
+  /** The package version. */
+  version: string;
+  /** The commit the build was made from, or "unknown" when it was built without git. */
+  revision: string;
+  /** The repository's canonical URL. */
+  repository: string;
+  environment: DeploymentEnvironment;
+}
+
+/**
+ * draft's own deploy provenance as OpenTelemetry resource attributes (semantic conventions:
+ * service.version, vcs.ref.head.revision, vcs.repository.url.full, deployment.environment.name),
+ * so every span, metric and log record says which build and environment it came from.
+ */
+export function provenanceAttributes(p: Provenance): Record<string, string> {
+  return {
+    "service.version": p.version,
+    "vcs.ref.head.revision": p.revision,
+    "vcs.repository.url.full": p.repository,
+    "deployment.environment.name": p.environment,
+  };
+}
 export const logger = () => logs.getLogger(INSTRUMENTATION);
 
 export interface DraftMetrics {

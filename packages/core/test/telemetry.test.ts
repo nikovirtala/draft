@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { context, logs, metrics, trace } from "@opentelemetry/api";
 import { AsyncLocalStorageContextManager } from "@opentelemetry/context-async-hooks";
+import { resourceFromAttributes } from "@opentelemetry/resources";
 import {
   InMemoryLogRecordExporter,
   LoggerProvider,
@@ -22,6 +23,7 @@ import {
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { canonicalJson } from "../src/canonical.ts";
 import { knownEvents } from "../src/events.ts";
+import { provenanceAttributes } from "../src/telemetry.ts";
 import { fakeKiro, openService, RUNNING, SCRIPT } from "./fixtures.ts";
 
 const spans = new InMemorySpanExporter();
@@ -32,15 +34,33 @@ const reader = new PeriodicExportingMetricReader({
   exportIntervalMillis: 60_000,
 });
 
+const PROVENANCE = {
+  version: "0.0.0",
+  revision: "0123456789abcdef0123456789abcdef01234567",
+  repository: "https://github.com/nikovirtala/draft",
+  environment: "e2e",
+} as const;
+
 beforeAll(() => {
+  // The resource as the desktop app builds it: service.name plus draft's deploy provenance.
+  const resource = resourceFromAttributes({
+    "service.name": "draft-desktop",
+    ...provenanceAttributes(PROVENANCE),
+  });
   context.setGlobalContextManager(new AsyncLocalStorageContextManager().enable());
   trace.setGlobalTracerProvider(
-    new TracerProvider({ spanProcessors: [new SimpleSpanProcessor({ exporter: spans })] }),
+    new TracerProvider({
+      resource,
+      spanProcessors: [new SimpleSpanProcessor({ exporter: spans })],
+    }),
   );
   logs.setGlobalLoggerProvider(
-    new LoggerProvider({ processors: [new SimpleLogRecordProcessor({ exporter: logRecords })] }),
+    new LoggerProvider({
+      resource,
+      processors: [new SimpleLogRecordProcessor({ exporter: logRecords })],
+    }),
   );
-  metrics.setGlobalMeterProvider(new MeterProvider({ readers: [reader] }));
+  metrics.setGlobalMeterProvider(new MeterProvider({ resource, readers: [reader] }));
 });
 
 afterAll(() => {
@@ -58,7 +78,14 @@ describe("telemetry", () => {
     const script = structuredClone(SCRIPT);
     (script.turns[0]?.steps[2] as { text: string }).text += ` Also: ${SECRET_WORDS}-reply.`;
     const { service, log, close } = await openService(dir, fakeKiro(), script);
+    service.onChange((c) => {
+      if (c.type !== "state") return;
+      for (const p of c.state.prompts) queueMicrotask(() => service.answerPrompt(p.id, true));
+    });
     await service.submit(`Which sessions are open? ${SECRET_WORDS}`);
+    const firstTurn = knownEvents(log.events()).slice(2);
+    // A step too: its input and result must stay in the log.
+    await service.submit("Please launch one");
     service.reportInvalidView("schema");
     await reader.forceFlush();
 
@@ -80,10 +107,17 @@ describe("telemetry", () => {
       expect(names).toContain(n);
     }
     // The trace ID is stamped on the turn's events.
-    const turnEvents = knownEvents(log.events()).filter(
-      (e) => e.type !== "context.created" && e.type !== "conversation.created",
-    );
-    expect(turnEvents.every((e) => e.traceId === traceId)).toBe(true);
+    expect(firstTurn.length).toBeGreaterThan(0);
+    expect(firstTurn.every((e) => e.traceId === traceId)).toBe(true);
+    // The step's events carry the second turn's trace, and the step spans are in it.
+    const stepEvents = knownEvents(log.events()).filter((e) => e.type.startsWith("step."));
+    expect(stepEvents.map((e) => e.type)).toEqual(["step.started", "step.completed"]);
+    const stepTrace = stepEvents[0]?.traceId;
+    expect(
+      finished
+        .filter((s) => s.spanContext().traceId === stepTrace)
+        .map((s) => s.attributes["draft.log.step"]),
+    ).toEqual(expect.arrayContaining(["step.started", "step.completed"]));
 
     // No message text, tool input or result anywhere in spans, span events, logs or metrics.
     const forbidden = [
@@ -93,17 +127,34 @@ describe("telemetry", () => {
       "Fix the build",
       "Write the docs",
       "limit",
+      // The step's input: the prompt and repository of the launched session.
+      "Fix the flaky test",
+      `["nikovirtala/draft"]`,
     ];
     const texts: string[] = [];
+    // Every signal carries the build's provenance, and the resource carries no content either.
+    const expected = {
+      "service.name": "draft-desktop",
+      "service.version": "0.0.0",
+      "vcs.ref.head.revision": PROVENANCE.revision,
+      "vcs.repository.url.full": PROVENANCE.repository,
+      "deployment.environment.name": "e2e",
+    };
+    for (const s of finished) expect(s.resource.attributes).toMatchObject(expected);
+    for (const s of finished) texts.push(canonicalJson(s.resource.attributes));
     for (const s of finished) {
       texts.push(s.name, canonicalJson(s.attributes));
       for (const ev of s.events) texts.push(ev.name, canonicalJson(ev.attributes ?? {}));
     }
     const records = logRecords.getFinishedLogRecords();
     expect(records.some((r) => r.eventName === "draft.turn.completed")).toBe(true);
-    for (const r of records) texts.push(String(r.body), canonicalJson(r.attributes));
+    for (const r of records) {
+      expect(r.resource.attributes).toMatchObject(expected);
+      texts.push(String(r.body), canonicalJson(r.attributes));
+    }
     const exported = metricExporter.getMetrics();
     const names2: string[] = [];
+    for (const rm of exported) expect(rm.resource.attributes).toMatchObject(expected);
     for (const rm of exported)
       for (const sm of rm.scopeMetrics)
         for (const m of sm.metrics) {

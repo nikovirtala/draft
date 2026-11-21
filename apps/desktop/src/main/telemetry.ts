@@ -1,5 +1,5 @@
 import { appendFileSync } from "node:fs";
-import { DRAFT_VERSION } from "@nikovirtala/draft-core";
+import { type Provenance, provenanceAttributes } from "@nikovirtala/draft-core";
 import { context, logs, metrics, trace } from "@opentelemetry/api";
 import { AsyncLocalStorageContextManager } from "@opentelemetry/context-async-hooks";
 import { OTLPLogExporter } from "@opentelemetry/exporter-logs-otlp-http";
@@ -41,6 +41,7 @@ export class JsonFileSpanExporter implements SpanExporter {
         spanId: s.spanContext().spanId,
         parentSpanId: s.parentSpanContext?.spanId ?? null,
         durationMs: Math.round((s.duration[0] * 1e9 + s.duration[1]) / 1e5) / 10,
+        resource: s.resource.attributes,
         attributes: s.attributes,
       }),
     );
@@ -52,6 +53,8 @@ export class JsonFileSpanExporter implements SpanExporter {
 
 export interface TelemetryOptions {
   env?: NodeJS.ProcessEnv;
+  /** Which build this is: stamped on every span, metric and log record as resource attributes. */
+  provenance: Provenance;
   /** Extra exporters, e.g. a file exporter for the end-to-end evidence. */
   spanExporters?: SpanExporter[];
 }
@@ -60,7 +63,7 @@ export interface TelemetryOptions {
  * OpenTelemetry in the main process: OTLP over HTTP when OTEL_EXPORTER_OTLP_ENDPOINT is set
  * (the exporters read the standard OTEL_* variables), the console otherwise.
  */
-export function startTelemetry(o: TelemetryOptions = {}): {
+export function startTelemetry(o: TelemetryOptions): {
   shutdown(): Promise<void>;
   mode: "otlp" | "console" | "off";
 } {
@@ -69,7 +72,7 @@ export function startTelemetry(o: TelemetryOptions = {}): {
   const otlp = (env.OTEL_EXPORTER_OTLP_ENDPOINT ?? "") !== "";
   const resource = resourceFromAttributes({
     "service.name": env.OTEL_SERVICE_NAME ?? "draft-desktop",
-    "service.version": DRAFT_VERSION,
+    ...provenanceAttributes(o.provenance),
   });
 
   context.setGlobalContextManager(new AsyncLocalStorageContextManager().enable());

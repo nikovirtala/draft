@@ -1,14 +1,30 @@
+import { fileURLToPath } from "node:url";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "electron-vite";
+import { buildInfo } from "./build-info.ts";
 
-// draft-core is a workspace package shipped as TypeScript source (the "source" export
-// condition), so it is bundled into the main process instead of externalized; its own
-// dependencies are dependencies of this package and stay external.
+const build = buildInfo();
+
+// draft-core is a workspace package bundled from its TypeScript source, so the app never builds
+// against a stale dist/. An alias rather than the "source" export condition, which Vite applies
+// only to client builds and which some third-party packages also publish. Its own dependencies
+// are dependencies of this package and stay external.
 const core = { exclude: ["@nikovirtala/draft-core"] };
+const coreSource = (path: string) =>
+  fileURLToPath(new URL(`../../packages/core/src/${path}`, import.meta.url));
+const alias = [
+  { find: /^@nikovirtala\/draft-core$/, replacement: coreSource("index.ts") },
+  { find: /^@nikovirtala\/draft-core\/view$/, replacement: coreSource("view.ts") },
+];
 
 export default defineConfig({
   main: {
-    resolve: { conditions: ["source"] },
+    resolve: { alias },
+    // draft's deploy provenance, for its own telemetry (src/main/provenance.ts).
+    define: {
+      __DRAFT_REVISION__: JSON.stringify(build.revision),
+      __DRAFT_REPOSITORY__: JSON.stringify(build.repository),
+    },
     build: { externalizeDeps: core },
   },
   preload: {
@@ -18,7 +34,7 @@ export default defineConfig({
     },
   },
   renderer: {
-    resolve: { conditions: ["source"] },
+    resolve: { alias },
     plugins: [react()],
   },
 });
