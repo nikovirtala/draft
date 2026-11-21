@@ -1,0 +1,17 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M7Z93Y90N1QN4GQPE57VHMKG
+subject: a4wg1v6a
+type: opened
+at: 2026-11-21T14:45:41Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: 244629292+kiro-agent@users.noreply.github.com
+data:
+  title: Name threads and let a person rename them
+  template: task
+  template_version: 1
