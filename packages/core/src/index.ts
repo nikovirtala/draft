@@ -17,6 +17,7 @@ export * from "./kiro-client.ts";
 export * from "./log.ts";
 export * from "./machine.ts";
 export * from "./oauth.ts";
+export * from "./person-tools.ts";
 export * from "./projection.ts";
 export * from "./pull-request.ts";
 export * from "./resolver.ts";
