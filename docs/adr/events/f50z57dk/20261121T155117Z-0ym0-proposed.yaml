@@ -1,0 +1,17 @@
+envelope: ledger/v1
+kind: decision
+schema: decision/v1
+id: 01M7ZCW1FZYYYTPR238ZWN0YM0
+subject: f50z57dk
+type: proposed
+at: 2026-11-21T15:51:17Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: niko.virtala@hey.com
+data:
+  title: Order what needs you by kind, then age, and route it to the conversation it belongs to
+  template: nygard
+  template_version: 1
