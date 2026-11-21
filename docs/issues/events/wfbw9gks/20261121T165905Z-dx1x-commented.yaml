@@ -1,0 +1,15 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M7ZGR6HTK59Q94DGV6PBDX1X
+subject: wfbw9gks
+type: commented
+at: 2026-11-21T16:59:05Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: niko.virtala@hey.com
+data:
+  text: "Checked 21 Nov 2026 16:20 UTC: 2.9.0 (12:47 UTC) and 2.9.1 (14:43 UTC) are younger than pnpm's one day minimum, so the latest eligible 2.x is 2.8.0, which draft already uses. 2.9.1 passes the minimum at 22 Nov 14:43 UTC; the target is 2.9.1, not 2.9.0. No pin changed and nothing added to minimumReleaseAgeExclude."
