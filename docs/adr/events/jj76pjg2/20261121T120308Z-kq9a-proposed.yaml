@@ -1,0 +1,17 @@
+envelope: ledger/v1
+kind: decision
+schema: decision/v1
+id: 01M7YZT9ABZ8P9BG1XAE7DKQ9A
+subject: jj76pjg2
+type: proposed
+at: 2026-11-21T12:03:08Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: niko.virtala@hey.com
+data:
+  title: Treat the context log as a durable execution record
+  template: nygard
+  template_version: 1
