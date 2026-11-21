@@ -954,7 +954,7 @@ export class ConversationService {
     this.userSteps.add(started);
     let result: Awaited<ReturnType<KiroRemoteTools["call"]>>;
     try {
-      result = await this.actions.call(tool, input);
+      result = await this.actions.call(tool, input, { idempotencyKey });
     } catch (err) {
       m.steps.add(1, { "draft.step.outcome": "interrupted" });
       throw err;

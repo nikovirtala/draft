@@ -150,6 +150,8 @@ export async function decideTool(
 ): Promise<{
   answer: PermissionAnswer;
   decision: Extract<AgentEvent, { type: "tool-call" }>["decision"];
+  /** The key of the step the call began, for a tool that can use one. */
+  idempotencyKey?: string;
 }> {
   // A person's act is refused first, whatever server it comes from: nothing is asked or started.
   if (isPersonOnlyTool(name))
@@ -164,8 +166,9 @@ export async function decideTool(
       const answer = await hooks.confirmTool({ toolUseId, name, input });
       if (!answer.allow) return { answer, decision: "denied-by-user" };
       // Intent before effect: the step is in the log before the tool runs, or the tool doesn't run.
+      let idempotencyKey: string;
       try {
-        await hooks.beginStep({ toolUseId, name, input });
+        ({ idempotencyKey } = await hooks.beginStep({ toolUseId, name, input }));
       } catch {
         return {
           answer: {
@@ -175,7 +178,7 @@ export async function decideTool(
           decision: "denied-by-policy",
         };
       }
-      return { answer, decision: "approved-by-user" };
+      return { answer, decision: "approved-by-user", idempotencyKey };
     }
     default:
       return {
@@ -286,7 +289,12 @@ export class FakeAgentRuntime implements AgentRuntime {
         yield { type: "model-call-end", callId, inputTokens: promptTokens, outputTokens: 20 };
         const toolUseId = `toolu_fake_${this.calls}`;
         const name = sdkToolName(step.tool);
-        const { answer, decision } = await decideTool(name, step.input, toolUseId, hooks);
+        const { answer, decision, idempotencyKey } = await decideTool(
+          name,
+          step.input,
+          toolUseId,
+          hooks,
+        );
         yield { type: "tool-call", toolUseId, name, input: step.input, decision };
         if (!answer.allow) {
           yield {
@@ -299,7 +307,11 @@ export class FakeAgentRuntime implements AgentRuntime {
           continue;
         }
         try {
-          const r = await this.tools.call(step.tool, step.input);
+          const r = await this.tools.call(
+            step.tool,
+            step.input,
+            idempotencyKey === undefined ? {} : { idempotencyKey },
+          );
           yield {
             type: "tool-result",
             toolUseId,

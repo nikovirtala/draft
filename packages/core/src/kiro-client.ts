@@ -1,7 +1,12 @@
 import type { OAuthClientProvider } from "@modelcontextprotocol/sdk/client/auth.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import type { KiroRemoteTools, ToolCallResult } from "./kiro.ts";
+import {
+  type CallOptions,
+  type KiroRemoteTools,
+  type ToolCallResult,
+  withIdempotencyKey,
+} from "./kiro.ts";
 import { DRAFT_VERSION } from "./version.ts";
 
 export interface McpKiroOptions {
@@ -16,6 +21,8 @@ export interface McpKiroOptions {
 export class McpKiroRemoteTools implements KiroRemoteTools {
   private client: Client | null = null;
   private connecting: Promise<Client> | null = null;
+  /** Each tool's input schema, read once per connection: it decides whether a key is sent. */
+  private schemas: Map<string, unknown> | null = null;
 
   constructor(private readonly o: McpKiroOptions) {}
 
@@ -38,10 +45,36 @@ export class McpKiroRemoteTools implements KiroRemoteTools {
     return this.connecting;
   }
 
-  async call(tool: string, args: Record<string, unknown>): Promise<ToolCallResult> {
+  private async schemaOf(client: Client, tool: string): Promise<unknown> {
+    if (this.schemas === null) {
+      const schemas = new Map<string, unknown>();
+      try {
+        let cursor: string | undefined;
+        do {
+          const page = await client.listTools(cursor === undefined ? {} : { cursor });
+          for (const t of page.tools) schemas.set(t.name, t.inputSchema);
+          cursor = page.nextCursor;
+        } while (cursor !== undefined);
+      } catch {
+        // Without the list nothing is known to take a key, so none is sent.
+      }
+      this.schemas = schemas;
+    }
+    return this.schemas.get(tool);
+  }
+
+  async call(
+    tool: string,
+    args: Record<string, unknown>,
+    options: CallOptions = {},
+  ): Promise<ToolCallResult> {
     const client = await this.connect();
     try {
-      const r = await client.callTool({ name: tool, arguments: args });
+      const sent =
+        options.idempotencyKey === undefined
+          ? args
+          : withIdempotencyKey(await this.schemaOf(client, tool), args, options.idempotencyKey);
+      const r = await client.callTool({ name: tool, arguments: sent });
       return toToolCallResult(
         r as { content?: unknown; structuredContent?: unknown; isError?: unknown },
       );
@@ -55,6 +88,7 @@ export class McpKiroRemoteTools implements KiroRemoteTools {
   async close(): Promise<void> {
     const c = this.client;
     this.client = null;
+    this.schemas = null;
     await c?.close().catch(() => {});
   }
 }

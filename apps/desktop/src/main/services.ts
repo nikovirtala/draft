@@ -58,10 +58,10 @@ export async function createServices(o: {
     });
     const signIn = oauth;
     tools = {
-      async call(tool, args) {
+      async call(tool, args, options) {
         // The first call signs in through the browser; later calls use or refresh the token.
         if (signIn !== null) await signIn.accessToken();
-        return mcp.call(tool, args);
+        return mcp.call(tool, args, options);
       },
       close: () => mcp.close(),
     };

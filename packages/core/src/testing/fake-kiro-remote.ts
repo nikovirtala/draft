@@ -5,6 +5,7 @@ import { Server as McpServer } from "@modelcontextprotocol/sdk/server/index.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
+import { KIRO_MUTATING_TOOLS, KIRO_PERSON_ONLY_TOOLS, withIdempotencyKey } from "../kiro.ts";
 
 /**
  * A fake Kiro Remote for tests and the end-to-end run: the MCP endpoint at `/mcp` serving the
@@ -72,6 +73,14 @@ export interface FakeKiroRemoteOptions {
   /** Access token lifetime, for refresh tests. */
   tokenTtlSeconds?: number;
   port?: number;
+  /**
+   * Act as a Kiro Remote that has an optional `idempotencyKey` on every tool that changes
+   * something (kiro-remote 9be84d2): the schemas advertise it, and a repeated call with the same
+   * key and input returns the first result without running again. A key reused with different
+   * input is refused. Off, it is the Kiro Remote deployed when this fake was captured: the
+   * schemas have no key.
+   */
+  idempotency?: boolean;
 }
 
 export interface ReceivedCall {
@@ -159,6 +168,10 @@ export class FakeKiroRemote {
    * testing what happens to a step whose result never comes back.
    */
   readonly hang = new Set<string>();
+  /** Calls that ran, by tool, so a test can tell a replayed call from one that ran. */
+  readonly executed: ReceivedCall[] = [];
+  /** First results by tool and key, for 24 hours in the real one and for the life of this fake. */
+  private readonly keyed = new Map<string, { input: string; result: Record<string, unknown> }>();
   /** Called as each tool call arrives, before it is answered. */
   onCall: ((call: ReceivedCall) => void) | null = null;
   baseUrl = "";
@@ -166,12 +179,62 @@ export class FakeKiroRemote {
   constructor(private readonly o: FakeKiroRemoteOptions = {}) {
     const now = new Date().toISOString();
     for (const s of o.sessions ?? []) this.sessions.set(s.id, seedSession(s, now));
-    for (const t of KIRO_REMOTE_TOOLS) {
+    for (const t of this.tools()) {
       this.validators.set(
         t.name,
         z.fromJSONSchema(t.inputSchema as Parameters<typeof z.fromJSONSchema>[0]),
       );
     }
+  }
+
+  /** The tool list this fake serves: the captured one, with a key on the mutating tools if asked. */
+  tools(): ToolListEntry[] {
+    if (this.o.idempotency !== true) return [...KIRO_REMOTE_TOOLS];
+    const changing: readonly string[] = [...KIRO_MUTATING_TOOLS, ...KIRO_PERSON_ONLY_TOOLS];
+    return KIRO_REMOTE_TOOLS.map((t) => {
+      if (!changing.includes(t.name)) return t;
+      const schema = t.inputSchema as { properties?: Record<string, unknown> };
+      return {
+        ...t,
+        inputSchema: {
+          ...schema,
+          properties: {
+            ...schema.properties,
+            idempotencyKey: {
+              type: "string",
+              minLength: 1,
+              maxLength: 255,
+              pattern: "^[A-Za-z0-9._~:-]+$",
+            },
+          },
+        },
+      };
+    });
+  }
+
+  /**
+   * Runs a tool with its key, once per key: the first result comes back for the same key and input.
+   * The key is the input's own field, as in the real tools, and is never part of what runs.
+   */
+  private runKeyed(tool: string, args: Record<string, unknown>): Record<string, unknown> {
+    const { idempotencyKey, ...input } = args;
+    if (typeof idempotencyKey !== "string") return this.execute(tool, args);
+    const slot = `${tool}\u0000${idempotencyKey}`;
+    const known = this.keyed.get(slot);
+    const fingerprint = JSON.stringify(input, Object.keys(input).sort());
+    if (known !== undefined) {
+      if (known.input !== fingerprint)
+        throw new Error("idempotency key reused with a different request");
+      return known.result;
+    }
+    const result = this.execute(tool, input);
+    this.keyed.set(slot, { input: fingerprint, result });
+    return result;
+  }
+
+  private execute(tool: string, args: Record<string, unknown>): Record<string, unknown> {
+    this.executed.push({ tool, args, authorized: true });
+    return this.run(tool, args);
   }
 
   get mcpUrl(): string {
@@ -228,17 +291,24 @@ export class FakeKiroRemote {
     call(
       tool: string,
       args: Record<string, unknown>,
+      options?: { idempotencyKey?: string },
     ): Promise<{ isError: boolean; structured: unknown; text: string }>;
   } {
     return {
-      call: async (tool, args) => {
+      call: async (tool, rawArgs, options) => {
+        // As the MCP client does: the key goes only where the schema advertises one.
+        const args = withIdempotencyKey(
+          this.tools().find((t) => t.name === tool)?.inputSchema,
+          rawArgs,
+          options?.idempotencyKey,
+        );
         this.calls.push({ tool, args, authorized: true });
         try {
           if (this.failNext > 0) {
             this.failNext--;
             throw new Error("service unavailable (scripted failure)");
           }
-          const result = this.run(tool, args);
+          const result = this.runKeyed(tool, args);
           return { isError: false, structured: result, text: JSON.stringify(result) };
         } catch (err) {
           return {
@@ -390,7 +460,7 @@ export class FakeKiroRemote {
       { capabilities: { tools: {} } },
     );
     server.setRequestHandler(ListToolsRequestSchema, async () => ({
-      tools: [...KIRO_REMOTE_TOOLS] as never,
+      tools: this.tools() as never,
     }));
     server.setRequestHandler(CallToolRequestSchema, async (req) => {
       const name = req.params.name;
@@ -410,7 +480,7 @@ export class FakeKiroRemote {
           throw new Error(
             `invalid input: ${checked.error.issues.map((i) => i.message).join("; ")}`,
           );
-        const result = this.run(name, args);
+        const result = this.runKeyed(name, args);
         if (this.hang.has(name)) await new Promise(() => {});
         return {
           content: [{ type: "text", text: JSON.stringify(result) }],
