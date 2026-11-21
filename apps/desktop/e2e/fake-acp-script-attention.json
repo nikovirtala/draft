@@ -1,0 +1,58 @@
+{
+  "agent": { "name": "fake-acp-agent", "version": "1.0.0", "model": "fake-model-1" },
+  "starts": "kiro",
+  "style": "kiro",
+  "usage": { "inputTokens": 900, "outputTokens": 60, "totalTokens": 960 },
+  "credits": 0.02,
+  "turns": [
+    {
+      "match": "get going",
+      "steps": [
+        {
+          "text": "Let's get going. Branch a thread off this message and ask it to launch a session.",
+          "chunk": 4,
+          "delayMs": 10
+        }
+      ]
+    },
+    {
+      "match": "launch a session to fix",
+      "steps": [
+        {
+          "tool": "kiro_launch_session",
+          "input": {
+            "prompt": "Fix the flaky end-to-end test",
+            "repos": ["nikovirtala/draft"],
+            "title": "Fix the flaky test"
+          }
+        },
+        { "text": "The session is launching.", "delayMs": 0 }
+      ]
+    },
+    {
+      "match": "launch another",
+      "steps": [
+        {
+          "tool": "kiro_launch_session",
+          "input": {
+            "prompt": "Update the README",
+            "repos": ["nikovirtala/draft"],
+            "title": "Update the README"
+          }
+        },
+        { "text": "Launching another session.", "delayMs": 0 }
+      ]
+    },
+    {
+      "match": "wrap",
+      "steps": [
+        {
+          "text": "We launched a hosted session to fix the flaky test and allowed its permission request here. A second launch was interrupted and run again as a new step. Nothing else is open.",
+          "chunk": 5,
+          "delayMs": 5
+        }
+      ]
+    }
+  ],
+  "fallback": "I have nothing scripted for that."
+}

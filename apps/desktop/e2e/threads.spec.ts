@@ -271,7 +271,10 @@ test("branch threads on two agents, pop a status out into a window, focus, and r
   await say(panel.getByTestId("conversation"), "Please clean up the old session.");
   const anomaly = panel.locator('[data-testid="interrupt"][data-cause="unasked-call"]');
   await expect(anomaly).toContainText("without asking you first", { timeout: 30_000 });
-  await expect(main.getByTestId("interrupt")).toHaveCount(0);
+  // The main conversation has only what arose in it: the two hosted sessions' permission requests.
+  await expect(
+    main.locator('[data-testid="interrupt"]:not([data-cause="permission"])'),
+  ).toHaveCount(0);
   await stubB.getByRole("button", { name: "Open in panel" }).click();
   await expect(panel.getByTestId("thread-agent")).toHaveValue("fake-b");
   await say(panel.getByTestId("conversation"), "Please launch a session to update the README.");
@@ -279,7 +282,9 @@ test("branch threads on two agents, pop a status out into a window, focus, and r
     timeout: 30_000,
   });
   await expect(main.getByTestId("prompt")).toHaveCount(0);
-  await expect(page.getByTestId("attention-count")).toHaveText("2 need you");
+  // Two hosted permission requests in the main conversation, the unasked call in thread A and the
+  // local permission request in thread B.
+  await expect(page.getByTestId("attention-count")).toHaveText("4 need you");
   await shot(page, "t09-interrupts-in-their-threads");
 
   // 9. Focus on the thread in the panel, with what is selected: everything else folds, only this
@@ -288,7 +293,7 @@ test("branch threads on two agents, pop a status out into a window, focus, and r
   await panel.getByLabel("Message").focus();
   await page.keyboard.press("Control+.");
   await expect(page.getByTestId("app")).toHaveAttribute("data-focused", "true");
-  await expect(page.getByTestId("attention-count")).toHaveText("1 in focus, 1 elsewhere");
+  await expect(page.getByTestId("attention-count")).toHaveText("1 in focus, 3 elsewhere");
   await expect(page.getByTestId("focus-mark")).toContainText("In focus");
   await expect(panel.getByTestId("prompt")).toBeVisible();
   // The window folded with everything else: no real window is left open.
@@ -306,7 +311,7 @@ test("branch threads on two agents, pop a status out into a window, focus, and r
   await expect(page.getByTestId("app")).toHaveAttribute("data-focused", "false");
   await expect.poll(() => placements(page)).toEqual(before);
   await expect.poll(() => electronApp.windows().length, { timeout: 15_000 }).toBe(2);
-  await expect(page.getByTestId("attention-count")).toHaveText("2 need you");
+  await expect(page.getByTestId("attention-count")).toHaveText("4 need you");
   expect(await windowTitles(electronApp)).toContain(title);
   await shot(page, "t11-focus-left-layout-restored");
 
