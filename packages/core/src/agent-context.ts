@@ -227,3 +227,28 @@ export function renderAgentContext(c: AgentContext): string {
 export function contextDigest(c: AgentContext): string {
   return sha256Hex(renderAgentContext(c));
 }
+
+/**
+ * How big a new session's start is, as far as draft can measure it: counts and characters of the
+ * briefing and context it is given first. Tokens belong to each agent's own tokenizer, so draft
+ * doesn't guess them.
+ */
+export interface ContextSize {
+  messages: number;
+  openItems: number;
+  decisions: number;
+  references: number;
+  /** Characters of the briefing and the rendered context together. */
+  characters: number;
+}
+
+export function contextSize(c: AgentContext): ContextSize {
+  const rendered = renderAgentContext(c);
+  return {
+    messages: c.messages.length,
+    openItems: c.openItems.length,
+    decisions: c.decisions.length,
+    references: c.references.length,
+    characters: AGENT_BRIEFING.length + (rendered === "" ? 0 : rendered.length + 2),
+  };
+}

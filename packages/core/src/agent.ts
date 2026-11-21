@@ -108,6 +108,30 @@ export interface AgentRuntime extends AgentIdentity {
 }
 
 /**
+ * The agents a conversation can run on. A thread runs on the default agent unless a person chose
+ * another configured one when it started or switched it later.
+ */
+export interface AgentDirectory {
+  readonly defaultId: string;
+  /** Every configured agent, for choosing one. */
+  list(): { id: string; label: string }[];
+  /** The runtime of a configured agent; throws for one that isn't. */
+  get(id: string): AgentRuntime;
+}
+
+/** A directory of one agent: every conversation runs on it. */
+export function singleAgent(runtime: AgentRuntime): AgentDirectory {
+  return {
+    defaultId: runtime.id,
+    list: () => [{ id: runtime.id, label: runtime.id }],
+    get: (id) => {
+      if (id !== runtime.id) throw new Error(`the agent "${id}" isn't configured`);
+      return runtime;
+    },
+  };
+}
+
+/**
  * Applies the tool policy: read-only tools run, tools that change things ask through `hooks` and,
  * once allowed, begin a durable step before they run, and everything else is refused. Shared by
  * the ACP runtime's permission handler and the fake.
@@ -189,7 +213,7 @@ const sleep = (ms: number, signal?: AbortSignal) =>
 
 /** A scripted agent: streams scripted text and calls real tools through the same policy. */
 export class FakeAgentRuntime implements AgentRuntime {
-  readonly id = "fake";
+  readonly id: string;
   readonly model: string;
   readonly version = "fake-1";
   /** Every turn this agent was given, so tests can check what reached it. */
@@ -200,8 +224,9 @@ export class FakeAgentRuntime implements AgentRuntime {
   constructor(
     private readonly script: FakeScript,
     private readonly tools: KiroRemoteTools,
-    o: { model?: string } = {},
+    o: { model?: string; id?: string } = {},
   ) {
+    this.id = o.id ?? "fake";
     this.model = o.model ?? "fake-model";
   }
 
