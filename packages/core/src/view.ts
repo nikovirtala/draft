@@ -12,7 +12,7 @@ export const TextComponentSchema = z.object({
 });
 
 /** What a live stub can show: each type has a resolver behind it. */
-export const STUB_TYPES = ["kiro-session", "pull-request", "ark-issue", "artifact"] as const;
+export const STUB_TYPES = ["kiro-session", "pull-request", "ark-issue", "adr", "artifact"] as const;
 export type StubType = (typeof STUB_TYPES)[number];
 
 export const StatusStubComponentSchema = z.object({
