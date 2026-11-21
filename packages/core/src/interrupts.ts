@@ -7,9 +7,9 @@ import { defineMachine } from "./machine.ts";
  * cleared when its source stops needing the person (a check passes, a permission is answered
  * elsewhere). Nothing else closes one, and the agent can settle none of them.
  *
- * Attention order: blocking permission requests first, then failures, then what is left to
- * resolve, then reviews requested; oldest first within each. A new kind joins by naming its rank
- * (acceptance requests will be one).
+ * Attention order: blocking permission requests first, then failures, then acceptance requests
+ * (green work waiting for a yes), then what is left to resolve, then reviews requested; oldest
+ * first within each. A new kind joins by naming its rank.
  */
 
 export type InterruptKind =
@@ -21,7 +21,8 @@ export type InterruptKind =
   | "unasked-call"
   | "unfinished-step"
   | "conclusion"
-  | "review-requested";
+  | "review-requested"
+  | "acceptance";
 
 export interface InterruptKindSpec {
   /** Where the kind sits in the attention order: lower comes first. */
@@ -33,7 +34,7 @@ export interface InterruptKindSpec {
 }
 
 /** The attention ranks, in order. */
-export const RANKS = { blocking: 0, failure: 1, resolve: 2, review: 3 } as const;
+export const RANKS = { blocking: 0, failure: 1, accept: 2, resolve: 3, review: 4 } as const;
 
 export const INTERRUPT_KINDS: Record<InterruptKind, InterruptKindSpec> = {
   permission: {
@@ -64,6 +65,16 @@ export const INTERRUPT_KINDS: Record<InterruptKind, InterruptKindSpec> = {
     rank: RANKS.review,
     outcomes: ["acknowledged"],
     label: "Review requested",
+  },
+  /**
+   * Something is ready and waits for a person's yes, with its evidence green (docs/model.md,
+   * "Acceptance"). It ranks after failures, because something broken may make it moot, and before
+   * what is left to resolve, because it is what the rest of the process is stopped at.
+   */
+  acceptance: {
+    rank: RANKS.accept,
+    outcomes: ["accepted", "changes-requested", "rejected"],
+    label: "Acceptance request",
   },
 };
 

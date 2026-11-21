@@ -1,4 +1,14 @@
 import { context as otelContext, ROOT_CONTEXT, type Span, trace } from "@opentelemetry/api";
+import {
+  ACCEPTANCE_OUTCOMES as ACCEPTANCE_ANSWERS,
+  type AcceptanceActions,
+  type AcceptanceEffect,
+  type AcceptanceOutcome,
+  ANSWERS,
+  acceptanceKind,
+  acceptanceMachine,
+  evidenceGreen,
+} from "./acceptance.ts";
 import { conversationKey, itemAddress, parseAddress } from "./address.ts";
 import {
   type AgentDirectory,
@@ -264,6 +274,12 @@ export interface ConversationOptions {
    * is draft acting for the person, never the agent's tools. Without it, those can't be settled.
    */
   actions?: KiroRemoteTools;
+  /**
+   * The person's own tools, per kind of record: what accepting an ADR or merging a pull request
+   * runs, as the person (git with their identity and signing key, gh, adr). Reached only from a
+   * person's answer to an acceptance request. Without it, those can't be answered.
+   */
+  acceptance?: AcceptanceActions;
   /** Told when another conversation of the log changed, so it can show it. */
   touched?: (conversation: string) => void;
   /** Opens contexts when a person asks in a sentence and confirms. Without it, nothing opens. */
@@ -311,6 +327,7 @@ export class ConversationService {
   private readonly user: UserActor;
   private readonly newId: (() => string) | undefined;
   private readonly actions: KiroRemoteTools | null;
+  private readonly acceptance: AcceptanceActions | null;
   private readonly touched: ((conversation: string) => void) | undefined;
   private readonly launcher: ContextLauncher | null;
   private readonly crossContext: CrossContext | null;
@@ -340,6 +357,7 @@ export class ConversationService {
     this.user = o.user;
     this.newId = o.newId;
     this.actions = o.actions ?? null;
+    this.acceptance = o.acceptance ?? null;
     this.touched = o.touched;
     this.launcher = o.launcher ?? null;
     this.crossContext = o.crossContext ?? null;
@@ -782,7 +800,12 @@ export class ConversationService {
           conversation: open.conversation,
           actor,
           traceId,
-          data: { key: open.key, kind: open.kind, reason: "the source no longer reports it" },
+          data: {
+            key: open.key,
+            kind: open.kind,
+            reason:
+              resolver.clearedBecause?.(open, target, state) ?? "the source no longer reports it",
+          },
         });
         touched.add(open.conversation);
       }
@@ -846,10 +869,17 @@ export class ConversationService {
    * Kiro Remote as the person, and is logged as a step of theirs and then as the settlement. Retry
    * starts a new step with a new key, and the old one is never run again.
    */
-  async settleInterrupt(key: string, outcome: string): Promise<void> {
-    const block = this.interruptBlocks().find((b) => b.id === key);
+  async settleInterrupt(
+    key: string,
+    outcome: string,
+    input: { note?: string; reason?: string } = {},
+  ): Promise<void> {
+    // A key that was cleared and applies again is a new episode with the same key: the open one.
+    const blocks = this.interruptBlocks().filter((b) => b.id === key);
+    const block = blocks.find((b) => b.state === "open") ?? blocks[0];
     if (block === undefined) throw new Error(`no such interrupt: ${key}`);
     if (block.state !== "open") throw new Error("this interrupt is already settled");
+    if (block.cause === "acceptance") return this.answerAcceptance(block, outcome, input);
     const step = interruptMachine(block.cause).next("open", `settle:${outcome}`, "user");
     if (!step.ok) throw new Error(step.message);
     const traceId = this.systemTrace("draft.interrupt.settle");
@@ -914,17 +944,29 @@ export class ConversationService {
   }
 
   /**
-   * Runs a Kiro Remote tool as the person: its start is in the log before the call, and its
-   * result after. A call that throws leaves the step open, because it may have happened.
+   * Runs something as the person: its start is in the log before it runs, and its result after.
+   * By default it calls a Kiro Remote tool; an acceptance's answer passes `exec`, which carries it
+   * out with the person's own tools. A call that throws leaves the step open, because it may have
+   * happened.
    */
   private async userStep(
     name: string,
     input: Record<string, unknown>,
     traceId: string | null,
-    o: { retryOf?: string; before?: (started: string) => EventDraft[] } = {},
+    o: {
+      retryOf?: string;
+      before?: (started: string) => EventDraft[];
+      exec?: () => Promise<{
+        isError: boolean;
+        text: string;
+        structured: unknown;
+        effect?: AcceptanceEffect;
+      }>;
+    } = {},
   ): Promise<{ started: string; idempotencyKey: string; ok: boolean; summary: string }> {
     const tool = bareToolName(name);
-    if (this.actions === null || tool === null)
+    const actions = this.actions;
+    if (o.exec === undefined && (actions === null || tool === null))
       throw new Error("draft has no connection to Kiro Remote to act with");
     const m = draftMetrics();
     const started = itemAddress(this.conversation, newItemId(this.newId));
@@ -952,9 +994,17 @@ export class ConversationService {
     );
     m.steps.add(1, { "draft.step.outcome": "started" });
     this.userSteps.add(started);
-    let result: Awaited<ReturnType<KiroRemoteTools["call"]>>;
+    let result: {
+      isError: boolean;
+      text: string;
+      structured: unknown;
+      effect?: AcceptanceEffect;
+    };
     try {
-      result = await this.actions.call(tool, input, { idempotencyKey });
+      result =
+        o.exec !== undefined
+          ? await o.exec()
+          : await (actions as KiroRemoteTools).call(tool as string, input, { idempotencyKey });
     } catch (err) {
       m.steps.add(1, { "draft.step.outcome": "interrupted" });
       throw err;
@@ -971,13 +1021,159 @@ export class ConversationService {
           conversation: this.conversation,
           actor: this.user,
           traceId,
-          data: { started, idempotencyKey, resultSummary: summary },
+          data: {
+            started,
+            idempotencyKey,
+            resultSummary: summary,
+            ...(ok && result.effect !== undefined ? { effect: result.effect } : {}),
+          },
         },
       ],
       ok ? "step.completed" : "step.failed",
     );
     m.steps.add(1, { "draft.step.outcome": ok ? "completed" : "failed" });
     return { started, idempotencyKey, ok, summary };
+  }
+
+  /**
+   * A person's answer to an acceptance request: accept, request changes, or reject. Each is a
+   * transition of the kind's machine that only a person can fire (the agent has no way in, and the
+   * tool policy refuses every accept, reject and merge tool it might try).
+   *
+   * - Request changes puts the person's note into this conversation as a message to the agent,
+   *   and settles the request. It waits for new evidence: a new push is a new request.
+   * - Accept and reject look at the target again first and refuse if the evidence is no longer the
+   *   green evidence the request showed, then carry the answer out with the person's tools as a
+   *   step of theirs. The step's completion records the commit or merge it made, the evidence as
+   *   it was, and the declared inverse.
+   */
+  private async answerAcceptance(
+    block: Extract<UiBlock, { kind: "interrupt" }>,
+    outcome: string,
+    input: { note?: string; reason?: string },
+  ): Promise<void> {
+    if (!(ACCEPTANCE_ANSWERS as readonly string[]).includes(outcome))
+      throw new Error(`${outcome} is not an answer to an acceptance request`);
+    const answer = outcome as AcceptanceOutcome;
+    const d = block.detail as {
+      acceptance: string;
+      target: Target;
+      title: string;
+      sha: string;
+    };
+    const kind = acceptanceKind(d.acceptance);
+    if (kind === null) throw new Error(`draft doesn't know how to accept a ${d.acceptance}`);
+    const text = (answer === "rejected" ? input.reason : input.note)?.trim() ?? "";
+    const trigger = ANSWERS[answer];
+    const fired = acceptanceMachine(kind).next("requested", trigger, "user", text);
+    if (!fired.ok) throw new Error(fired.message);
+    const settledStep = interruptMachine("acceptance").next("open", `settle:${outcome}`, "user");
+    if (!settledStep.ok) throw new Error(settledStep.message);
+    const traceId = this.systemTrace("draft.acceptance.answer");
+    const settle = async (extra: { via: string | null; detail: Record<string, unknown> }) => {
+      await this.append(
+        [
+          this.settledDraft({
+            key: block.id,
+            kind: "acceptance",
+            outcome,
+            started: null,
+            traceId,
+            ...extra,
+          }),
+        ],
+        "interrupt.settled",
+      );
+      draftMetrics().interrupts.add(1, {
+        "draft.interrupt.kind": "acceptance",
+        "draft.interrupt.event": "settled",
+        "draft.interrupt.outcome": outcome,
+      });
+    };
+
+    if (answer === "changes-requested") {
+      const thread = this.threadFold();
+      if (thread !== null && isEnded(thread.state)) throw new Error("this thread has ended");
+      if (this.busy) throw new Error("a turn is already running; ask for the changes when it ends");
+      await settle({ via: null, detail: { note: text, sha: d.sha, acceptance: kind.name } });
+      const ask = `Changes requested on ${d.title} (${d.target.id}): ${text}`;
+      await this.submit(this.agentState() === "paused" ? `@agent ${ask}` : ask);
+      return;
+    }
+
+    const actions = this.acceptance?.[kind.name];
+    if (actions === undefined)
+      throw new Error(
+        `draft has no tools to ${answer === "accepted" ? "accept" : "reject"} a ${kind.name} with`,
+      );
+    // The evidence as it is now, not as it was when the request was raised.
+    const resolver = this.resolvers.get(d.target.type);
+    if (resolver === undefined) throw new Error(`no resolver for ${d.target.type}`);
+    const state = await resolver.fetch(d.target.id);
+    const subject = state === null ? null : kind.subject(d.target, state);
+    if (
+      state === null ||
+      subject === null ||
+      subject.key !== block.id ||
+      !evidenceGreen(subject.evidence)
+    ) {
+      if (state !== null) await this.observe(d.target, state, resolver);
+      throw new Error(
+        "the evidence changed since the request was raised, so nothing was done. Look at it again.",
+      );
+    }
+    const decl = answer === "accepted" ? kind.accept : kind.reject;
+    const r = await this.userStep(
+      `draft.${decl.effectKind}`,
+      {
+        acceptance: kind.name,
+        target: d.target,
+        sha: subject.sha,
+        ...(text === "" ? {} : { reason: text }),
+      },
+      traceId,
+      {
+        exec: async () => {
+          try {
+            const out =
+              answer === "accepted"
+                ? await actions.accept(subject.where)
+                : await actions.reject(subject.where, text);
+            return {
+              isError: false,
+              text: out.summary,
+              structured: null,
+              effect: {
+                kind: decl.effectKind,
+                target: d.target,
+                sha: out.sha,
+                evidence: subject.evidence,
+                inverse: decl.effect.inverse,
+              },
+            };
+          } catch (err) {
+            return {
+              isError: true,
+              text: err instanceof Error ? err.message : String(err),
+              structured: null,
+            };
+          }
+        },
+      },
+    );
+    if (!r.ok) throw new Error(r.summary);
+    await settle({
+      via: r.started,
+      detail: {
+        acceptance: kind.name,
+        sha: subject.sha,
+        effect: decl.effectKind,
+        inverse: decl.effect.inverse,
+        ...(text === "" ? {} : { reason: text }),
+      },
+    });
+    // The target is different now (a new commit, a merge): look at it at once.
+    await this.refresh(d.target);
   }
 
   /* ------------------------------------------------------------------------------------------ */
@@ -1401,7 +1597,7 @@ export class ConversationService {
                 const answer = await new Promise<PermissionAnswer>((resolve) => {
                   this.prompts.set(call.toolUseId, {
                     prompt: { id: call.toolUseId, tool: call.name, input: call.input },
-                    at: new Date().toISOString(),
+                    at: askedAt,
                     resolve,
                   });
                   this.emitState();

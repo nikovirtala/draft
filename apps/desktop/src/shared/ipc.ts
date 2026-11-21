@@ -95,7 +95,8 @@ export type InterruptCause =
   | "unasked-call"
   | "unfinished-step"
   | "conclusion"
-  | "review-requested";
+  | "review-requested"
+  | "acceptance";
 
 export type ThreadStateName = "open" | "concluding" | "wrapped-up" | "superseded" | "withdrawn";
 

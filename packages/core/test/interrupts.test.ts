@@ -39,6 +39,27 @@ describe("the attention order", () => {
     ]);
   });
 
+  it("puts acceptance requests after failures and before what is left to resolve", () => {
+    const items = [
+      item("review", "review-requested", "2026-11-20T10:00:00.000Z"),
+      item("conclusion", "conclusion", "2026-11-20T10:00:00.000Z"),
+      item("step", "unfinished-step", "2026-11-20T09:00:00.000Z"),
+      item("accept-new", "acceptance", "2026-11-20T11:00:00.000Z"),
+      item("accept-old", "acceptance", "2026-11-20T08:00:00.000Z"),
+      item("check", "failed-check", "2026-11-20T12:00:00.000Z"),
+      item("perm", "permission", "2026-11-20T13:00:00.000Z"),
+    ];
+    expect(orderAttention(items).map((i) => i.id)).toEqual([
+      "perm",
+      "check",
+      "accept-old",
+      "accept-new",
+      "step",
+      "conclusion",
+      "review",
+    ]);
+  });
+
   it("is oldest first within a rank, then by id", () => {
     const items = [
       item("b", "failed-check", "2026-11-20T10:00:00.000Z"),

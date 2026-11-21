@@ -129,3 +129,47 @@ describe("the event envelope", () => {
     ).toThrow(/refusing to write/);
   });
 });
+
+describe("the acceptance interrupt kind", () => {
+  const raised = (kind: string) => ({
+    ...sealEvent(
+      {
+        type: "interrupt.raised",
+        address: `${CONV}/r1@1`,
+        conversation: CONV,
+        actor: { kind: "resolver", id: "adr", version: "1" },
+        traceId: null,
+        data: {
+          key: "accept:adr:o/r:9p8jj6p5:abc",
+          kind: "acceptance",
+          target: { type: "adr", id: "o/r:9p8jj6p5" },
+          summary: "ready",
+          detail: {},
+        },
+      },
+      { id: "01KAHX0000000000000000000B", at: "2026-11-20T12:00:00.000Z", prevHash: GENESIS_HASH },
+    ),
+    kind,
+  });
+
+  it("is written at schema 2, so a build that doesn't know the kind keeps the event unread", () => {
+    const e = raised("acceptance");
+    expect(e.schema).toBe(2);
+    expect(parseEvent(e).ok).toBe(true);
+  });
+
+  it("still reads the events of schema 1 that older builds wrote", () => {
+    const { hash: _h, ...e } = { ...raised("acceptance"), schema: 1 };
+    const v1 = {
+      ...e,
+      data: { ...e.data, kind: "failed-check" },
+    };
+    expect(parseEvent({ ...v1, hash: eventHash(v1) }).ok).toBe(true);
+  });
+
+  it("refuses an interrupt kind nobody has heard of at the schema it was written for", () => {
+    const { hash: _h, ...e } = raised("acceptance");
+    const bad = { ...e, data: { ...e.data, kind: "teleport" } };
+    expect(parseEvent({ ...bad, hash: eventHash(bad) }).ok).toBe(false);
+  });
+});

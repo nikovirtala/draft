@@ -1,3 +1,10 @@
+import {
+  type AcceptanceKind,
+  acceptanceCandidates,
+  type EvidenceItem,
+  registerAcceptanceKind,
+  withdrawnBecause,
+} from "./acceptance.ts";
 import type { Target } from "./events.ts";
 import type { GithubClient } from "./github.ts";
 import type { InterruptCandidate } from "./interrupts.ts";
@@ -57,6 +64,9 @@ export interface PullRequestState {
   draft: boolean;
   author: string | null;
   headSha: string;
+  /** The branch it is from, and the repository that has it (a fork's, when it is from one). */
+  headRef: string;
+  headRepo: string | null;
   baseRef: string;
   /** Whether it can merge; null while GitHub is still working it out. */
   mergeable: boolean | null;
@@ -83,7 +93,7 @@ interface ApiPull {
   merged?: boolean;
   draft?: boolean;
   user?: { login: string } | null;
-  head: { sha: string };
+  head: { sha: string; ref?: string; repo?: { full_name: string } | null };
   base: { ref: string };
   mergeable: boolean | null;
   mergeable_state?: string;
@@ -187,9 +197,157 @@ export class PullRequestResolver implements Resolver {
         summary: `${name}: your review is requested`,
         detail: { pr: target.id, sha: s.headSha },
       });
+    out.push(...acceptanceCandidates(pullRequestAcceptance, target, state));
     return out;
   }
+
+  clearedBecause(
+    open: { detail: Record<string, unknown> },
+    target: Target,
+    state: Record<string, unknown>,
+  ) {
+    return open.detail.acceptance === pullRequestAcceptance.name
+      ? withdrawnBecause(pullRequestAcceptance, target, state)
+      : null;
+  }
 }
+
+/**
+ * The evidence of the checks of a commit: green when every check reported has passed, red when one
+ * failed, pending while one still runs. draft can't see which checks a repository requires without
+ * admin rights, so it asks for all of them: it shows a request later than it must, never earlier.
+ */
+export function checksEvidence(checks: readonly PullRequestCheck[], url: string): EvidenceItem {
+  const failed = checks.filter(
+    (c) => c.status === "completed" && c.conclusion !== null && FAILED.has(c.conclusion),
+  );
+  const pending = checks.filter((c) => c.status !== "completed");
+  const passed = checks.length - failed.length - pending.length;
+  const base = { id: "checks", label: "Checks", url };
+  if (failed.length > 0)
+    return {
+      ...base,
+      status: "red",
+      detail: `${failed.map((c) => c.name).join(", ")} failed (${passed} of ${checks.length} passed)`,
+    };
+  if (pending.length > 0)
+    return {
+      ...base,
+      status: "pending",
+      detail: `${pending.map((c) => c.name).join(", ")} still running (${passed} of ${checks.length} passed)`,
+    };
+  return {
+    ...base,
+    status: "green",
+    detail: checks.length === 0 ? "no checks reported" : `${passed} of ${checks.length} passed`,
+  };
+}
+
+/**
+ * A pull request waiting to merge. Ready means: open, not a draft, every check passed, GitHub
+ * says it can merge (its mergeable state is clean, which counts the repository's own rules: the
+ * required checks and reviews), and no review asks for changes. Accepting merges it by rebase
+ * as the person; rejecting closes it with the person's reason as a comment.
+ */
+export const pullRequestAcceptance: AcceptanceKind = {
+  name: "pull-request",
+  resolver: "pull-request",
+  accept: {
+    label: "Merge",
+    effectKind: "pull-request.merge",
+    effect: {
+      steps: ["pull-request.merge"],
+      inverse: { kind: "compensable", step: "pull-request.revert" },
+    },
+  },
+  reject: {
+    label: "Close",
+    effectKind: "pull-request.close",
+    effect: {
+      steps: ["pull-request.comment", "pull-request.close"],
+      inverse: { kind: "reversible", step: "pull-request.reopen" },
+    },
+  },
+  subject(target, state) {
+    const s = state as PullRequestState;
+    if (s.state !== "open") return null;
+    const state_: EvidenceItem =
+      s.mergeable === null || s.mergeableState === "unknown"
+        ? {
+            id: "mergeable",
+            label: "Mergeable",
+            status: "pending",
+            detail: "GitHub is still working it out",
+            url: null,
+          }
+        : s.mergeable === true && (s.mergeableState === "clean" || s.mergeableState === "has_hooks")
+          ? {
+              id: "mergeable",
+              label: "Mergeable",
+              status: "green",
+              detail: `GitHub says ${s.mergeableState}`,
+              url: null,
+            }
+          : {
+              id: "mergeable",
+              label: "Mergeable",
+              status: "red",
+              detail:
+                s.mergeable === false ? "it has a conflict" : `GitHub says ${s.mergeableState}`,
+              url: null,
+            };
+    const evidence: EvidenceItem[] = [
+      s.draft
+        ? {
+            id: "ready",
+            label: "Ready for review",
+            status: "red",
+            detail: "it is a draft",
+            url: null,
+          }
+        : { id: "ready", label: "Ready for review", status: "green", detail: null, url: null },
+      checksEvidence(s.checks, s.url),
+      state_,
+      s.review.decision === "changes_requested"
+        ? {
+            id: "reviews",
+            label: "Reviews",
+            status: "red",
+            detail: `${s.review.reviews
+              .filter((r) => r.state === "CHANGES_REQUESTED")
+              .map((r) => r.user)
+              .join(", ")} requested changes`,
+            url: s.url,
+          }
+        : {
+            id: "reviews",
+            label: "Reviews",
+            status: "green",
+            detail:
+              s.review.decision === "approved"
+                ? `approved by ${s.review.reviews
+                    .filter((r) => r.state === "APPROVED")
+                    .map((r) => r.user)
+                    .join(", ")}`
+                : "no review asks for changes",
+            url: null,
+          },
+    ];
+    const name = `${s.repo}#${s.number}`;
+    return {
+      key: `accept:pull-request:${target.id}:${s.headSha}`,
+      title: s.title,
+      summary: `${name}: ready to merge, “${s.title}”`,
+      sha: s.headSha,
+      url: s.url,
+      evidence,
+      accepts: `Merge ${name} into ${s.baseRef} by rebase, as you, at ${s.headSha.slice(0, 7)}.`,
+      rejects: `Close ${name} with your reason as a comment.`,
+      where: { repo: s.repo, number: s.number, base: s.baseRef, headSha: s.headSha },
+    };
+  },
+};
+registerAcceptanceKind(pullRequestAcceptance);
 
 function toState(
   p: { owner: string; repo: string; number: number },
@@ -246,6 +404,8 @@ function toState(
     draft: pull.draft === true,
     author: pull.user?.login ?? null,
     headSha: pull.head.sha,
+    headRef: pull.head.ref ?? "",
+    headRepo: pull.head.repo?.full_name ?? null,
     baseRef: pull.base.ref,
     mergeable: pull.mergeable,
     mergeableState: pull.mergeable_state ?? "unknown",
