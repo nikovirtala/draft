@@ -1,0 +1,17 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M7Z3ETZGRA2Z5TW0S3KNSBSG
+subject: y1e1bty3
+type: opened
+at: 2026-11-21T13:06:47Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: niko.virtala@hey.com
+data:
+  title: Show what an agent reports for usage and cost
+  template: task
+  template_version: 1
