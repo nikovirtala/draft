@@ -1,0 +1,64 @@
+{
+  "agent": {
+    "name": "fake-acp-agent-b",
+    "version": "2.0.0",
+    "model": "fake-b-model"
+  },
+  "starts": "kiro",
+  "style": "kiro",
+  "usage": {
+    "inputTokens": 900,
+    "outputTokens": 60,
+    "totalTokens": 960
+  },
+  "turns": [
+    {
+      "match": "opinion",
+      "steps": [
+        {
+          "text": "A second opinion from the other agent: the release notes session is the one to watch.",
+          "chunk": 4,
+          "delayMs": 10
+        }
+      ]
+    },
+    {
+      "match": "slow",
+      "steps": [
+        {
+          "text": "This answer comes in slowly, a few characters at a time, so the thread stub can show that the thread is working while its block is minimized.",
+          "chunk": 3,
+          "delayMs": 40
+        }
+      ]
+    },
+    {
+      "match": "launch",
+      "steps": [
+        {
+          "tool": "kiro_launch_session",
+          "input": {
+            "prompt": "Update the README for the third slice",
+            "repos": ["nikovirtala/draft"],
+            "title": "Update the README again"
+          }
+        },
+        {
+          "text": "The session is launching.",
+          "delayMs": 0
+        }
+      ]
+    },
+    {
+      "match": "continue",
+      "steps": [
+        {
+          "text": "Picking up the thread from the log: the running session is 01KAHX7Z1M2N3P4Q5R6S7T8V9W.",
+          "chunk": 4,
+          "delayMs": 10
+        }
+      ]
+    }
+  ],
+  "fallback": "I have nothing scripted for that."
+}

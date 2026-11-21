@@ -55,7 +55,7 @@ export function ConversationView({ conversation }: { conversation: string }) {
                 key={m.address}
                 message={m}
                 conversation={conversation}
-                stubs={state.stubs}
+                stubs={ws.stubs}
                 threads={threadsHere(m.address)}
               />
             );

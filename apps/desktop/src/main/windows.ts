@@ -133,6 +133,8 @@ export class WindowManager {
       ...(bounds ?? {}),
       title: this.o.titleOf(block),
     });
+    // Some platforms clamp a window to the screen when it is made: say where it belongs again.
+    if (bounds !== null) win.setBounds(bounds);
     this.popped.set(block, win);
     this.blockOf.set(win.webContents.id, block);
     const id = win.webContents.id;
@@ -180,7 +182,13 @@ export class WindowManager {
 /** Whether saved bounds still land on a display that is connected now. */
 function onScreen(b: { x: number; y: number; width: number; height: number }): boolean {
   try {
-    return screen.getAllDisplays().some((d) => {
+    // A display too small to hold a window isn't a screen (a headless run reports 1 by 1): with
+    // none to check against, the saved bounds are kept.
+    const real = screen
+      .getAllDisplays()
+      .filter((d) => d.workArea.width >= 200 && d.workArea.height >= 200);
+    if (real.length === 0) return true;
+    return real.some((d) => {
       const a = d.workArea;
       return (
         b.x < a.x + a.width && b.x + b.width > a.x && b.y < a.y + a.height && b.y + b.height > a.y

@@ -18,7 +18,7 @@ function statusProps(ws: Workspace, entry: Entry): StatusProps | null {
     from,
     conversation: entry.info.home,
     target: { type: type as string, id },
-    stub: state?.stubs[target],
+    stub: ws.stubs[target],
     snapshot: ref?.snapshot,
   };
 }
