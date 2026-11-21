@@ -1378,6 +1378,26 @@ export class ConversationService {
                 const ask = tracer().startSpan("draft.permission.ask", {
                   attributes: { "draft.tool.name": call.name, "draft.tool.use_id": call.toolUseId },
                 });
+                // The prompt's age is in the log, like every other interrupt's.
+                let askedAt = new Date().toISOString();
+                try {
+                  const [asked] = await this.append(
+                    [
+                      {
+                        type: "agent.permission_asked",
+                        address: itemAddress(this.conversation, newItemId(this.newId)),
+                        conversation: this.conversation,
+                        actor: agentActor(),
+                        traceId,
+                        data: { toolUseId: call.toolUseId, name: call.name, input: call.input },
+                      },
+                    ],
+                    "agent.permission_asked",
+                  );
+                  if (asked !== undefined) askedAt = asked.at;
+                } catch {
+                  // The prompt still shows, with the time draft saw it.
+                }
                 const answer = await new Promise<PermissionAnswer>((resolve) => {
                   this.prompts.set(call.toolUseId, {
                     prompt: { id: call.toolUseId, tool: call.name, input: call.input },

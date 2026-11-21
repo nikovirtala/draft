@@ -444,7 +444,8 @@ export class Projection {
         );
         return;
       case "agent.session_started":
-        // Recorded for the audit; nothing on screen is computed from it.
+      case "agent.permission_asked":
+        // Recorded for the audit and for the age of a local prompt; no table needs it.
         return;
       case "log.recovered":
         this.run(
