@@ -11,7 +11,7 @@ draft is an ACP client. It speaks the Agent Client Protocol (protocol version 1,
 - **Any other ACP agent works** without changes to draft: `agent` and `agents` in `config.json`.
 - **Sessions are keyed by conversation address,** so each thread can be its own ACP session, even on different agents. Every session starts from one projection of the log, never the agent's own memory (ADR h89hcrk6).
 - **Every agent is made to ask.** draft switches Kiro's autopilot off and Claude's mode to `default`, without Claude's user settings or built-in tools, and won't start a session the agent won't take that on. Permission requests go through `decideTool`, so an approved call that changes something is a durable step before the agent proceeds. A call that runs without asking is logged as `agent.anomaly` and shown as an interrupt (ADR 06wp7907).
-- **The agent runs in its own directory** under draft's data, with no `fs` or `terminal` capability: its only tools are Kiro Remote's, handed over in `session/new` over HTTP with a bearer header (or the `kiro-remote` stdio client when the agent has no HTTP MCP).
+- **The agent runs where its context says.** Its working directory is the folder a person trusted for the context, or the context's own `agent-workspace` until then ([Contexts](#contexts)). It has no `fs` or `terminal` capability and its only tools are Kiro Remote's, handed over in `session/new` over HTTP with a bearer header (or the `kiro-remote` stdio client when the agent has no HTTP MCP). The tool policy is the same in a project folder: the agent's own file and shell tools are still refused (issue below).
 - **ACP updates stream into the conversation.** The log's actor names the agent and the model it reports. Usage is what the agent reports (token counts, Kiro's credits, context fill); a turn that reports nothing says so in its span.
 - **draft builds on standard ACP.** Agent-specific extensions, such as Kiro's `_kiro/...` methods, are used only when the agent advertises them, so draft never turns into a single-agent client.
 
@@ -24,13 +24,14 @@ Two connections, kept apart:
 
 ## Architecture sketch
 
-Everything goes through one append-only log per context, and everything on screen is computed from it. It has two outward connections, kept apart: ACP to its own agent, and Kiro Remote to the hosted coding agents it supervises.
+Everything goes through one append-only log per context, and everything on screen is computed from it. Each open context has its own copy of everything below the registry, and a window of its own. It has two outward connections, kept apart: ACP to its own agent, and Kiro Remote to the hosted coding agents it supervises.
 
 ```mermaid
 flowchart TB
     ui["UI shell<br/>blocks from view state; placement per device"]
-    win["Electron windows<br/>one per block placed in a window, plus the panel"]
-    subgraph main["Electron main process"]
+    win["Electron windows<br/>per context: a main window, one per block placed in a window, plus the panel"]
+    reg[("Context registry<br/>contexts.json: names, folders, last activity;<br/>device-local, in no log")]
+    subgraph main["Electron main process, one set per open context"]
         acp["ACP client (AcpRuntime per agent)<br/>one session per conversation address,<br/>started from one projection of the log;<br/>permission requests → decideTool → steps"]
         conv["Workspace<br/>main conversation and threads: turns, audience,<br/>pause/play, interrupts, attention per conversation"]
         dev[("Device view state<br/>layout, focus, window bounds, move record;<br/>never in the log")]
@@ -38,10 +39,12 @@ flowchart TB
         proj["Kinds and projections<br/>SQLite views, agent context"]
         res["Resolvers<br/>live stubs, snapshots"]
     end
-    agent["Local agent process (ACP over stdio)<br/>kiro-cli acp by default, claude-agent-acp,<br/>or any ACP agent; cwd under draft's data"]
+    agent["Local agent process (ACP over stdio)<br/>kiro-cli acp by default, claude-agent-acp,<br/>or any ACP agent; cwd is the context's trusted folder,<br/>else its own agent-workspace"]
     kr["Kiro Remote<br/>hosted Kiro sessions"]
     artifact["artifact<br/>raw HTML views over SSE"]
     ui <--> conv
+    reg --> win
+    reg -. "folder, trust step" .-> acp
     ui <--> dev
     dev --> win
     conv --> log --> proj --> conv
@@ -54,6 +57,7 @@ flowchart TB
 ```
 
 - **UI shell** renders blocks from view state. Placement and focus are stored per device, apart from the log, in the device's view-state store: the layout, focus, window bounds and a record of every placement change (block, kind, from, to, when, why). The rules are a pure state machine (`apps/desktop/src/shared/placement.ts`). Only a person's gesture changes the layout: the agent can't.
+- **Contexts** are listed in the registry and opened one window each; see [Contexts](#contexts).
 - **Windows** are real Electron windows. Each block placed in a window gets one, titled with what it is and where it came from, with its bounds kept per device. Closing one returns the block to the place it came from. The panel is a column of the main window.
 - **Threads** are conversations with a parent message. The `Workspace` runs the main conversation and every thread over one log, each with its own turns, interrupts and agent session. The agent is chosen when a thread starts (the default, or another configured agent) and can be switched later; the switch is logged as `agent.selected` and the new session starts from the projection (ADR h89hcrk6).
 - **Focus** is a layout state on the device. It minimizes every open block except the focused one and its thread, filters the attention count by conversation ("N in focus, M elsewhere") and restores the layout exactly when it ends. It is entered by a gesture (Ctrl or Cmd + period on the selected block) and left with Esc or the same gesture.
@@ -67,6 +71,39 @@ flowchart TB
 - **artifact** is the escape hatch for raw HTML views, with reload over SSE. Windows are real Electron windows now, not synced tabs.
 
 The agent describes a view using a fixed set of components (a JSON description), not raw HTML. That keeps the grammar stable, makes views safe to render, and lets them update live from references. Raw HTML through artifact is only for what the components can't express.
+
+## Contexts
+
+A context is a log with its projections and view state, a permanent name, and, on this device, maybe a folder its agent works in ([model.md](model.md), "Contexts and the universe"). Decisions: ADRs 17gtag9n (contexts and the registry), 1vey5j12 (where the agent runs, and Kiro's trust), 4e115peq (a window per context) and gw4vxvw4 (references across contexts).
+
+**On disk**, under the data directory (`DRAFT_DATA_DIR`, else Electron's `userData`):
+
+```text
+contexts.json                the registry: device-local, written atomically
+log.jsonl views.db device.db agent-workspace/      the context "local", where it always was
+contexts/<name>/{log.jsonl, views.db, device.db, agent-workspace/}
+```
+
+- **The registry** holds per context its name, title, the folder it is bound to, a folder that was asked about and isn't trusted, the name its log's own addresses carry, its last activity (updated on every write) and which contexts were open at exit. A device with no registry gets one holding only `local`; the files already there are not touched. A registry that can't be read is moved aside and rebuilt from `contexts/*/`.
+- **Names** are address segments, unique on the device and permanent. A new context is named from its folder (`longplay`, then `longplay-2`); `local` is never handed out.
+- **Per context:** log, projection, device view state, window bounds, agent processes and polling. Nothing is shared but the identity, the Kiro Remote connection and the resolvers.
+
+**Binding a folder.** Opening a folder nobody trusted for a context shows a trust step with its real path and git remote (read from the repository's config file, credentials removed, without running git). The answer is `context.folder_decided` in that context's log, with the person as actor: the decision, the remote and a SHA-256 of the path, never the path. The path is kept in the registry only. Declined or unanswered, the context opens without a folder and the agent stays in its own workspace; opening the same folder again asks again.
+
+**Where the agent runs.** The working directory of the agent process and of each session is the trusted folder's real path, read when a process or session starts, so a change applies to new sessions. If the folder is gone, the agent stays in its own workspace and the header says so. The agent is told the folder's name, not its path. draft doesn't mark the folder trusted for Kiro: Kiro keeps asking before shell and MCP calls there and loads nothing from the folder's `.kiro` until the person trusts it in Kiro.
+
+**Opening a context.**
+
+- *By sentence.* "open longplay" (a context on this device) and "new context for ~/code/x" are recognised by draft, posted for people only, and become one action to confirm. The agent can't open anything. Confirming records `context.crossed` (`opened`, via sentence).
+- *From the recent list* in the title bar, with "Open a folder…" and "Import a data directory…".
+- *With a path at launch.* `draft <folder>` opens or makes that folder's context. A second launch hands its folders to the running app (single-instance lock) and exits. From the dev script, use absolute paths, because the app runs in `apps/desktop`: `pnpm --filter @nikovirtala/draft-desktop dev -- "$HOME/code/longplay"`. Packaging is issue cwrr4ff1. With no path, the contexts open at the last exit open again, else `local`.
+- *Importing a `DRAFT_DATA_DIR` setup.* `draft --import <dir>` or the menu. The old log is verified and copied byte for byte into a new context (the original is only read), and importing the same directory again finds the context. The old log says `local` in its addresses and can't be rewritten, so the registry's name for it differs from the name its addresses carry; people use the registry name. If its `agent-workspace` was a symbolic link, its target is offered through the trust step.
+
+**Across contexts.** An address of another context's item typed in a message (`<context>/<conversation>/<item>@1`, copied with "Copy ref") becomes a reference with a snapshot of its context, address, title, version and event hash, taken by draft from the other log (read only, verified) and never polled. Snapshots are in the referencing log; the agent's context leaves them out until a person pulls one in, which ends the conversation's running session so the next starts from the log with it. Referencing, following, pulling in and opening are `context.crossed` events. Only a person's own messages create references; the agent's words never make draft read another log.
+
+**Windows.** One main window per context; opening an open context focuses it. Closing a context's window ends that context; the last one ends draft (not on macOS).
+
+**Left out:** sharing contexts, contexts the agent suggests, the universe view in the map, rebinding or unbinding a folder, and letting the agent use its own file and shell tools in a project folder as asking steps. See the issues opened with this slice.
 
 ## Resolvers
 
@@ -261,7 +298,7 @@ The first live prototype is a local, single-user desktop app in TypeScript, buil
 | Telemetry | [OpenTelemetry JS SDK](https://opentelemetry.io/blog/2026/otel-js-sdk-3-0/) | 3.0 | Traces, metrics and logs are all stable in JavaScript. A local collector for now. |
 | Raw HTML views | artifact | v1 | The escape hatch, with reload over SSE. |
 
-Left out of the first prototype: more than one context (addresses are still context-qualified), imports, kinds and reprocessing, AWS deployment and sign-in.
+Left out of the first prototype: sharing contexts, imports of other sources, kinds and reprocessing, AWS deployment and sign-in.
 
 Native Swift stays the candidate for version 2, once the grammar has settled. Tauri was passed over because it adds Rust and embedding external sites inside a panel is still rough there.
 
@@ -288,6 +325,7 @@ The first job to test: supervising the software factory's Kiro sessions from one
 3. **Slice 2: agents over ACP. Done.** One ACP client runtime: local `kiro-cli acp` by default, `claude-agent-acp` as the alternative, sessions keyed by conversation address and started from one projection of the log, permission requests as steps, unasked calls as interrupts. The Agent SDK runtime is gone. Every message carries its audience, and the agent can be paused and played. A half-written last line of the log is moved aside instead of refusing the log. Proven against a scripted ACP agent over stdio, and in one real turn with kiro-cli.
 4. **Slice 3: blocks, placements and focus. Done.** Inline, minimized, panel and a real Electron window, threads branched off any message with their own agent session and a live stub at the branch point, and focus. Placement and focus are per-device view state and survive a restart. Proven on two scripted ACP agents in Electron.
 5. **Interrupts and attention. Done.** Kiro Remote permission requests, PR events, failed and interrupted steps arrive in the thread they belong to, in one attention order with the local agent's own requests, and are settled there as you. Live stubs for pull requests, ark issues and artifact pages. A thread wraps up and its conclusion returns to the main conversation. Thread and interrupt lifecycles run on one state machine module. Proven against a fake Kiro Remote, a fake GitHub and a scripted ACP agent in Electron.
+5a. **Contexts bound to folders.** Several contexts on one device, each with its own log, view state, agent and window, listed in a device-local registry. A folder a person trusted is where the context's agent works; the existing log stays as `local`. Opened by sentence, from a recent list, with a path at launch or by importing an older data directory. References across contexts keep a snapshot and are recorded as crossings. Proven in Electron on the scripted ACP agent.
 5b. **Acceptance.** The acceptance pattern for ADRs, PRs and issues: an interrupt kind in the same order, shown only with green evidence, accepted as you. The PR resolver already carries checks, reviews and mergeability, and the ark issue resolver status and events. A resolver for ADRs.
 6. **Graph, linear view, import.** The identity spike comes right before the first kinds: decision, task and design candidates from conversations, promoted into ark records, with a replay over the existing history.
 7. **Multiplayer.** A shared, hosted log, identities and sign-in, the driver role and personal notes.
