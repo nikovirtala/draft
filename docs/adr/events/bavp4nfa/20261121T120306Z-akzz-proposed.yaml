@@ -1,0 +1,19 @@
+envelope: ledger/v1
+kind: decision
+schema: decision/v1
+id: 01M7YZT7RR55QB0CS9XFB3AKZZ
+subject: bavp4nfa
+type: proposed
+at: 2026-11-21T12:03:06Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: niko.virtala@hey.com
+data:
+  title: draft speaks ACP to every agent
+  template: nygard
+  template_version: 1
+  supersedes:
+    - rrfst5qk
