@@ -1,0 +1,16 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M7Z94ES9TTVWY016FHS91H2S
+subject: x0fvskee
+type: closed
+at: 2026-11-21T14:45:58Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: 244629292+kiro-agent@users.noreply.github.com
+reason: A thread starts from any message and continues in the panel while the main conversation stays on the left (e2e threads.spec.ts). The main conversation keeps a thread stub with new messages, waiting on you and artifacts. Stubs have working panel and pop-out icons. Placements and windows survive a restart and no placement or focus event is in the log (same e2e).
+data:
+  resolution: done
