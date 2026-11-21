@@ -8,6 +8,7 @@ import { MessageView, StreamingMessage } from "./MessageView.tsx";
 import { NoteBlock } from "./NoteBlock.tsx";
 import { NoticeBlock } from "./NoticeBlock.tsx";
 import { PromptCard } from "./PromptCard.tsx";
+import { ProposalCard } from "./ProposalCard.tsx";
 import { UnknownBlock } from "./UnknownBlock.tsx";
 
 /**
@@ -21,7 +22,7 @@ export function ConversationView({ conversation }: { conversation: string }) {
   const bottom = useRef<HTMLDivElement>(null);
   const messageCount = state?.timeline.length ?? 0;
   const streamingLength = state?.streaming?.text.length ?? 0;
-  const promptCount = state?.prompts.length ?? 0;
+  const promptCount = (state?.prompts.length ?? 0) + (state?.proposals.length ?? 0);
   // biome-ignore lint/correctness/useExhaustiveDependencies: scroll when the conversation grows
   useEffect(() => {
     bottom.current?.scrollIntoView({ block: "end" });
@@ -75,6 +76,9 @@ export function ConversationView({ conversation }: { conversation: string }) {
                 onAnswer={(allow) => void window.draft.answerPrompt(conversation, p.id, allow)}
               />
             ))}
+          {state.proposals.map((p) => (
+            <ProposalCard key={p.id} proposal={p} conversation={conversation} />
+          ))}
           {state.thread?.state === "concluding" && state.thread.conclusion !== null && (
             <ConclusionCard conversation={conversation} conclusion={state.thread.conclusion} />
           )}

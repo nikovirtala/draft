@@ -26,6 +26,17 @@ const bridge: DraftBridge = {
   declineConclusion: (conversation) => ipcRenderer.invoke(CHANNELS.declineConclusion, conversation),
   endThread: (conversation, as, reason) =>
     ipcRenderer.invoke(CHANNELS.endThread, conversation, as, reason),
+  trust: (answer) => ipcRenderer.invoke(CHANNELS.trust, answer),
+  contexts: () => ipcRenderer.invoke(CHANNELS.contexts),
+  openContext: (name) => ipcRenderer.invoke(CHANNELS.openContext, name),
+  chooseFolder: () => ipcRenderer.invoke(CHANNELS.chooseFolder),
+  chooseImport: () => ipcRenderer.invoke(CHANNELS.chooseImport),
+  answerProposal: (conversation, id, accept) =>
+    ipcRenderer.invoke(CHANNELS.answerProposal, conversation, id, accept),
+  followReference: (conversation, address) =>
+    ipcRenderer.invoke(CHANNELS.followReference, conversation, address),
+  pullReference: (conversation, address) =>
+    ipcRenderer.invoke(CHANNELS.pullReference, conversation, address),
   onChange: (cb) => {
     const listener = (_e: unknown, c: Change) => cb(c);
     ipcRenderer.on(CHANNELS.change, listener);

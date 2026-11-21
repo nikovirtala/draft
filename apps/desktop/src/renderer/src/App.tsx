@@ -4,7 +4,9 @@ import { windowTitle } from "../../shared/placement.ts";
 import { AgentState, agentLabel } from "./components/AgentState.tsx";
 import { AttentionBar } from "./components/AttentionBar.tsx";
 import { BlockContent } from "./components/BlockContent.tsx";
+import { ContextBar } from "./components/ContextBar.tsx";
 import { ConversationView } from "./components/ConversationView.tsx";
+import { TrustStep } from "./components/TrustStep.tsx";
 import { useVisibleStubs } from "./visibility.ts";
 import { panelEntry, useWorkspace, type Workspace, WorkspaceProvider } from "./workspace.tsx";
 
@@ -37,6 +39,7 @@ function MainWindow() {
     <div className="app" data-testid="app" data-focused={ws.view.layout.focus !== null}>
       <header className="titlebar">
         <span className="brand">draft</span>
+        <ContextBar />
         <span className="title">{main?.title ?? ""}</span>
         {main !== undefined && (
           <AgentState
@@ -95,9 +98,9 @@ function Shell({ boot }: { boot: Ready }) {
 
 export function App() {
   const [boot, setBoot] = useState<Boot | null>(null);
-  useEffect(() => {
-    void window.draft.boot().then(setBoot);
-  }, []);
+  const load = () => void window.draft.boot().then(setBoot);
+  useEffect(load, []);
+  if (boot?.kind === "trust") return <TrustStep question={boot.question} onAnswered={load} />;
 
   if (boot?.kind === "refused") {
     return (

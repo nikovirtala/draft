@@ -81,6 +81,8 @@ const READ_ONLY = new Set([
 
 interface SessionState {
   id: string;
+  /** The working directory the client gave in session/new; `{cwd}` in a reply says it. */
+  cwd: string;
   mcp: acp.McpServer | undefined;
   mcpClient: Client | null;
   autopilot: "on" | "off";
@@ -189,6 +191,7 @@ const agentApp = acp
   .onRequest(acp.methods.agent.session.new, async ({ params }) => {
     const s: SessionState = {
       id: `fake-session-${++sessionCount}`,
+      cwd: params.cwd,
       mcp: params.mcpServers[0],
       mcpClient: null,
       autopilot: "on",
@@ -270,13 +273,14 @@ const agentApp = acp
       if ("text" in step) {
         const size = step.chunk ?? 6;
         messageId = step.messageId ?? `msg-${++s.calls}`;
-        for (let i = 0; i < step.text.length; i += size) {
+        const text = step.text.replaceAll("{cwd}", s.cwd);
+        for (let i = 0; i < text.length; i += size) {
           if (s.cancelled) break;
           await sleep(step.delayMs ?? 15);
           await update({
             sessionUpdate: "agent_message_chunk",
             messageId,
-            content: { type: "text", text: step.text.slice(i, i + size) },
+            content: { type: "text", text: text.slice(i, i + size) },
           });
           chunksSent++;
           if (script.crashAfterChunks !== undefined && chunksSent >= script.crashAfterChunks)
