@@ -1,0 +1,15 @@
+envelope: ledger/v1
+kind: decision
+schema: decision/v1
+id: 01M7ZF7EZK3FAR5JAN3K1QW2R3
+subject: 06wp7907
+type: noted
+at: 2026-11-21T16:32:28Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: 244629292+kiro-agent@users.noreply.github.com
+data:
+  text: "Where it runs is refined by 1vey5j12: a context's agent starts in the folder its person trusted in draft; without one it still starts in its own agent-workspace. The ask-first policy here is unchanged."
