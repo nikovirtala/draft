@@ -270,6 +270,36 @@ export const EventData = {
     target: TargetSchema,
     state: z.record(z.string(), z.unknown()),
   }),
+  /**
+   * A person's answer to "may this context work in this folder?", on this device. It names the
+   * folder by its git remote (credentials removed) and a SHA-256 of its real path, never by the
+   * path: where a folder is belongs to the device, not to a log that other devices may read
+   * (ADR 17gtag9n). The context has no conversation yet or any: it is about the whole context.
+   */
+  "context.folder_decided": z.object({
+    decision: z.enum(["trusted", "declined"]),
+    remote: z.string().nullable(),
+    pathHash: Hex64,
+  }),
+  /**
+   * Something crossed a context boundary, made from this conversation: a reference to an item of
+   * another context was made, a person followed it or pulled its snapshot into the agent's
+   * context, or confirmed opening another context. The other context's log is never read by the
+   * agent (ADR gw4vxvw4).
+   */
+  "context.crossed": z.object({
+    purpose: z.enum(["referenced", "followed", "pulled", "opened"]),
+    /** The other context, by the name this device knows it by. */
+    context: z.string().min(1),
+    /** The item's address in the other context; `null` when a whole context was opened. */
+    target: z.string().nullable(),
+    /** The message the crossing was made from, when there is one. */
+    from: AddressString(true).nullable(),
+    /** The hash of the target's event in the snapshot that was kept; `null` without a snapshot. */
+    snapshotHash: Hex64.nullable(),
+    /** How a context was opened; `null` for the other purposes. */
+    via: z.enum(["sentence", "recent", "launch", "import", "reference"]).nullable(),
+  }),
 } as const;
 
 export type EventType = keyof typeof EventData;
@@ -304,6 +334,8 @@ export const SCHEMA_VERSIONS: Record<EventType, number> = {
   "reference.made": 1,
   "status.observed": 1,
   "log.recovered": 1,
+  "context.folder_decided": 1,
+  "context.crossed": 1,
 };
 
 export function schemaVersionOf(type: EventType): number {
@@ -387,7 +419,11 @@ export type EventDraft<T extends EventType = EventType> = T extends EventType
   : never;
 
 /** Events about the whole context or its log, not about a conversation. */
-const NO_CONVERSATION: ReadonlySet<string> = new Set(["context.created", "log.recovered"]);
+const NO_CONVERSATION: ReadonlySet<string> = new Set([
+  "context.created",
+  "log.recovered",
+  "context.folder_decided",
+]);
 
 export type ParseResult = { ok: true; event: DraftEvent } | { ok: false; reason: string };
 
@@ -483,7 +519,7 @@ export function parseEvent(raw: unknown): ParseResult {
     return { ok: false, reason: `schema version ${e.schema} is newer than ${latest}` };
   }
   if ((e.conversation === null) !== NO_CONVERSATION.has(e.type)) {
-    return { ok: false, reason: "only context.created and log.recovered have no conversation" };
+    return { ok: false, reason: "only context-level events have no conversation" };
   }
   const schema = dataSchema(e.type as EventType, e.schema);
   if (schema === null) {

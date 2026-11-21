@@ -22,7 +22,7 @@ import { type Citations, foldThread, type ThreadEventRow, type ThreadFold } from
  */
 
 /** Bump when the tables change; a projection with another version is rebuilt. */
-export const PROJECTION_VERSION = 4;
+export const PROJECTION_VERSION = 5;
 
 const SCHEMA = `
 create table if not exists meta (key text primary key, value text not null);
@@ -77,6 +77,13 @@ create table if not exists thread_events (
 create table if not exists notices (
   event_id text primary key, what text not null, text text not null, at text not null,
   seq integer not null);
+create table if not exists folder_decisions (
+  event_id text primary key, decision text not null, remote text, path_hash text not null,
+  actor_json text not null, at text not null, seq integer not null);
+create table if not exists crossings (
+  event_id text primary key, conversation text not null, purpose text not null,
+  context text not null, target text, from_address text, snapshot_hash text, via text,
+  at text not null, seq integer not null);
 create table if not exists unknown_events (
   event_id text primary key, type text not null, schema integer not null, reason text not null,
   conversation text, at text, seq integer not null);
@@ -98,6 +105,8 @@ const TABLES = [
   "settlements",
   "thread_events",
   "notices",
+  "folder_decisions",
+  "crossings",
   "unknown_events",
 ] as const;
 
@@ -238,6 +247,29 @@ export interface NoticeRow {
   text: string;
   at: string;
   seq: number;
+}
+
+/** A person's answer about a folder, as the log recorded it. */
+export interface FolderDecisionRow {
+  eventId: string;
+  decision: "trusted" | "declined";
+  remote: string | null;
+  pathHash: string;
+  actor: { kind: string; id: string; name?: string };
+  at: string;
+}
+
+/** One time something crossed into another context, made from a conversation. */
+export interface CrossingRow {
+  eventId: string;
+  conversation: string;
+  purpose: "referenced" | "followed" | "pulled" | "opened";
+  context: string;
+  target: string | null;
+  from: string | null;
+  snapshotHash: string | null;
+  via: string | null;
+  at: string;
 }
 
 /** An event this build doesn't understand, as the conversation shows it. */
@@ -580,6 +612,33 @@ export class Projection {
         );
         return;
       }
+      case "context.folder_decided":
+        this.run(
+          "insert or replace into folder_decisions values (?, ?, ?, ?, ?, ?, ?)",
+          e.id,
+          e.data.decision,
+          e.data.remote,
+          e.data.pathHash,
+          canonicalJson(e.actor),
+          e.at,
+          seq,
+        );
+        return;
+      case "context.crossed":
+        this.run(
+          "insert or replace into crossings values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+          e.id,
+          e.conversation as string,
+          e.data.purpose,
+          e.data.context,
+          e.data.target,
+          e.data.from,
+          e.data.snapshotHash,
+          e.data.via,
+          e.at,
+          seq,
+        );
+        return;
       case "status.observed": {
         const key = targetKey(e.data.target);
         this.run(
@@ -704,6 +763,53 @@ export class Projection {
       snapshot: JSON.parse(r.snapshot_json as string) as Record<string, unknown>,
       at: r.at as string,
     }));
+  }
+
+  /** Every answer about a folder, oldest first. The latest one is the one in force. */
+  folderDecisions(): FolderDecisionRow[] {
+    return (
+      this.db.prepare("select * from folder_decisions order by seq").all() as Record<
+        string,
+        unknown
+      >[]
+    ).map((r) => ({
+      eventId: r.event_id as string,
+      decision: r.decision as "trusted" | "declined",
+      remote: (r.remote as string | null) ?? null,
+      pathHash: r.path_hash as string,
+      actor: JSON.parse(r.actor_json as string) as FolderDecisionRow["actor"],
+      at: r.at as string,
+    }));
+  }
+
+  /** The crossings made from a conversation, or from every conversation, oldest first. */
+  crossings(conversation?: string): CrossingRow[] {
+    const rows =
+      conversation === undefined
+        ? this.db.prepare("select * from crossings order by seq").all()
+        : this.db
+            .prepare("select * from crossings where conversation = ? order by seq")
+            .all(conversation);
+    return (rows as Record<string, unknown>[]).map((r) => ({
+      eventId: r.event_id as string,
+      conversation: r.conversation as string,
+      purpose: r.purpose as CrossingRow["purpose"],
+      context: r.context as string,
+      target: (r.target as string | null) ?? null,
+      from: (r.from_address as string | null) ?? null,
+      snapshotHash: (r.snapshot_hash as string | null) ?? null,
+      via: (r.via as string | null) ?? null,
+      at: r.at as string,
+    }));
+  }
+
+  /** The targets in other contexts that a person pulled into `conversation`. */
+  pulledTargets(conversation: string): Set<string> {
+    return new Set(
+      this.crossings(conversation)
+        .filter((c) => c.purpose === "pulled" && c.target !== null)
+        .map((c) => c.target as string),
+    );
   }
 
   /** Whether `conversation` already references `target`. */

@@ -5,6 +5,7 @@ export * from "./ark-issue.ts";
 export * from "./artifact-page.ts";
 export * from "./canonical.ts";
 export * from "./conversation.ts";
+export * from "./cross-context.ts";
 export * from "./events.ts";
 export * from "./github.ts";
 export * from "./ids.ts";
