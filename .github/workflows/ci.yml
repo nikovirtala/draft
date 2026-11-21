@@ -93,7 +93,10 @@ jobs:
           node-version: "26"
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # The PR head, not the merge commit, as the build's vcs.ref.head.revision.
       - run: pnpm build
+        env:
+          DRAFT_BUILD_REVISION: ${{ github.event.pull_request.head.sha || github.sha }}
       - run: xvfb-run -a pnpm test:e2e
       - if: ${{ !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
