@@ -1,12 +1,17 @@
 import { context as otelContext, ROOT_CONTEXT, type Span, trace } from "@opentelemetry/api";
 import { conversationKey, itemAddress } from "./address.ts";
-import type { AgentEvent, AgentRuntime, PermissionAnswer } from "./agent.ts";
+import type { AgentEvent, AgentRuntime, AgentUsage, PermissionAnswer } from "./agent.ts";
+import { buildAgentContext, contextDigest } from "./agent-context.ts";
 import {
   type Actor,
+  type AgentState,
+  type Audience,
   type DraftEvent,
   type EdgeKind,
   type EventDraft,
   isUnknown,
+  PEOPLE_AND_AGENT,
+  PEOPLE_ONLY,
   type Target,
   targetKey,
 } from "./events.ts";
@@ -36,6 +41,8 @@ export interface UiMessage {
   text: string;
   segments: MessageSegment[];
   references: UiReference[];
+  /** Who the message is for. A message the agent can't read is an aside. */
+  audience: Audience;
 }
 
 export interface UiStub {
@@ -66,14 +73,26 @@ export type UiBlock =
     }
   | {
       /**
-       * A step that started but never finished: draft stopped (or lost the result) while it ran,
-       * so it may or may not have happened. It is never run again.
+       * Something that needs a person, derived from the log: a step that started but never
+       * finished (draft stopped, or lost the result, while it ran, so it may or may not have
+       * happened; it is never run again), or a call that ran without the agent asking first.
        */
       kind: "interrupt";
+      cause: "unfinished-step" | "unasked-call";
       id: string;
       tool: string;
       input: unknown;
-      idempotencyKey: string;
+      /** The step's key; a call that ran unasked had no step. */
+      idempotencyKey: string | null;
+      at: string;
+    }
+  | {
+      /** The log's last line was never completed; its bytes were moved aside when it opened. */
+      kind: "notice";
+      id: string;
+      what: "log-recovered";
+      sidecar: string;
+      bytes: number;
       at: string;
     };
 
@@ -81,7 +100,7 @@ export interface UiState {
   context: string;
   conversation: string;
   title: string;
-  agent: { model: string; version: string };
+  agent: { id: string; model: string; version: string; state: AgentState };
   messages: UiMessage[];
   timeline: UiBlock[];
   stubs: Record<string, UiStub>;
@@ -94,6 +113,34 @@ export interface UiState {
 export type UiChange =
   | { type: "state"; state: UiState }
   | { type: "delta"; address: string; text: string };
+
+/**
+ * Span and log attributes for what an agent reported about a turn's use. Nothing is filled in for
+ * what it didn't report, and `draft.usage.reported` says whether it reported anything.
+ */
+export function usageAttributes(
+  usage: AgentUsage | null,
+): Record<string, string | number | boolean> {
+  const a: Record<string, string | number | boolean> = { "draft.usage.reported": usage !== null };
+  if (usage === null) return a;
+  if (usage.inputTokens !== undefined) a["gen_ai.usage.input_tokens"] = usage.inputTokens;
+  if (usage.outputTokens !== undefined) a["gen_ai.usage.output_tokens"] = usage.outputTokens;
+  if (usage.totalTokens !== undefined) a["draft.usage.total_tokens"] = usage.totalTokens;
+  if (usage.contextUsedPercent !== undefined)
+    a["draft.usage.context_used_percent"] = usage.contextUsedPercent;
+  for (const c of usage.cost ?? []) {
+    a[`draft.usage.cost.${c.unit}`] = c.amount;
+  }
+  return a;
+}
+
+export interface SubmitOptions {
+  /** Post for people only: the agent never reads it, and no turn starts. */
+  aside?: boolean;
+}
+
+/** `@agent` anywhere in a message, as a word of its own. */
+export const AGENT_MENTION = /(?:^|[^\w@])@agent\b/i;
 
 export interface ConversationOptions {
   log: LogStore;
@@ -132,6 +179,8 @@ export class ConversationService {
   >();
   private streaming: { address: string; text: string } | null = null;
   private busy = false;
+  /** The turn in progress, for pausing it. `addressed` means @agent started it in a paused conversation. */
+  private turn: { abort: AbortController; addressed: boolean } | null = null;
   private error: string | null = null;
   private writes: Promise<unknown> = Promise.resolve();
   /** Steps this process started and is waiting on, by tool use id. Every other open step is interrupted. */
@@ -243,7 +292,12 @@ export class ConversationService {
       context: this.context,
       conversation: this.conversation,
       title: conv?.title ?? "Conversation",
-      agent: { model: this.agent.model, version: this.agent.version },
+      agent: {
+        id: this.agent.id,
+        model: this.agent.model,
+        version: this.agent.version,
+        state: this.projection.agentState(this.conversation),
+      },
       messages: messages.map((m) => ({
         address: m.address,
         role: m.role,
@@ -251,6 +305,7 @@ export class ConversationService {
         text: m.text,
         segments: segmentMessage(m.text),
         references: refsByMessage.get(m.address) ?? [],
+        audience: m.audience,
       })),
       timeline: this.timeline(messages),
       stubs,
@@ -287,11 +342,39 @@ export class ConversationService {
         seq: s.startedSeq,
         block: {
           kind: "interrupt",
+          cause: "unfinished-step",
           id: s.started,
           tool: s.name,
           input: s.input,
           idempotencyKey: s.idempotencyKey,
           at: s.startedAt,
+        },
+      });
+    }
+    for (const a of this.projection.anomalies(this.conversation)) {
+      blocks.push({
+        seq: a.seq,
+        block: {
+          kind: "interrupt",
+          cause: "unasked-call",
+          id: a.address,
+          tool: a.name,
+          input: a.input,
+          idempotencyKey: null,
+          at: a.at,
+        },
+      });
+    }
+    for (const r of this.projection.recoveries()) {
+      blocks.push({
+        seq: r.seq,
+        block: {
+          kind: "notice",
+          id: r.eventId,
+          what: "log-recovered",
+          sidecar: r.sidecar,
+          bytes: r.bytes,
+          at: r.at,
         },
       });
     }
@@ -322,28 +405,115 @@ export class ConversationService {
     draftMetrics().invalidViews.add(1, { "draft.view.invalid_reason": reason });
   }
 
-  /** Runs one turn: the user's message, the agent's streamed answer, its tool calls, references. */
-  async submit(text: string): Promise<void> {
-    if (this.busy) throw new Error("a turn is already running");
+  /** Whether the agent is paused: it starts no turns and no steps until someone plays it. */
+  agentState(): AgentState {
+    return this.projection.agentState(this.conversation);
+  }
+
+  /**
+   * Pauses or plays the agent. Pausing a turn that is running cancels it and refuses its steps;
+   * a turn that @agent started in a paused conversation is left alone.
+   */
+  async setAgentState(state: AgentState): Promise<void> {
+    if (this.agentState() === state) return;
+    const traceId = this.systemTrace("draft.agent.state");
+    await this.append(
+      [
+        {
+          type: "agent.state_changed",
+          address: itemAddress(this.conversation, newItemId(this.newId)),
+          conversation: this.conversation,
+          actor: this.user,
+          traceId,
+          data: { state },
+        },
+      ],
+      "agent.state",
+    );
+    if (state === "paused" && this.turn !== null && !this.turn.addressed) {
+      this.turn.abort.abort();
+      for (const p of this.prompts.values())
+        p.resolve({ allow: false, message: "The conversation was paused." });
+      this.prompts.clear();
+      this.emitState();
+    }
+  }
+
+  /** A trace ID for something that isn't a turn, such as an aside or a change of state. */
+  private systemTrace(name: string): string {
+    const span = tracer().startSpan(
+      name,
+      { attributes: { "draft.conversation": this.conversation } },
+      ROOT_CONTEXT,
+    );
+    span.end();
+    return span.spanContext().traceId;
+  }
+
+  /** Posts a message only people read: the agent isn't started and never sees it. */
+  private async postPeopleOnly(text: string): Promise<void> {
+    const span = tracer().startSpan(
+      "draft.message",
+      { attributes: { "draft.conversation": this.conversation, "draft.audience.agent": false } },
+      ROOT_CONTEXT,
+    );
+    const traceId = span.spanContext().traceId;
+    try {
+      const address = itemAddress(this.conversation, newItemId(this.newId));
+      await this.append(
+        [
+          {
+            type: "message.posted",
+            address,
+            conversation: this.conversation,
+            actor: this.user,
+            traceId,
+            data: { role: "user", text, audience: PEOPLE_ONLY },
+          },
+        ],
+        "user.message",
+      );
+      await otelContext.with(trace.setSpan(ROOT_CONTEXT, span), () =>
+        this.makeReferences(address, [{ text, source: "text" }], "explicit", traceId),
+      );
+    } finally {
+      span.end();
+    }
+  }
+
+  /**
+   * Posts a message. Its audience comes from the agent's state: to people and the agent while
+   * the agent is active, to people only while it is paused. Only exceptions are marked: an aside
+   * skips the agent in an active conversation, and @agent reaches it in a paused one, for that
+   * message only. A message the agent may read runs one turn: the streamed answer, its tool
+   * calls, references.
+   */
+  async submit(text: string, options: SubmitOptions = {}): Promise<void> {
     if (text.trim() === "") return;
+    const state = this.agentState();
+    const addressed = state === "paused" && AGENT_MENTION.test(text);
+    const toAgent = options.aside !== true && (state === "active" || addressed);
+    if (!toAgent) return this.postPeopleOnly(text);
+    if (this.busy) throw new Error("a turn is already running");
     this.busy = true;
     this.error = null;
     const m = draftMetrics();
     const span = tracer().startSpan(
       "draft.turn",
-      { attributes: { "draft.conversation": this.conversation } },
+      { attributes: { "draft.conversation": this.conversation, "draft.audience.agent": true } },
       ROOT_CONTEXT,
     );
     const ctx = trace.setSpan(ROOT_CONTEXT, span);
     const traceId = span.spanContext().traceId;
     const started = performance.now();
+    const abort = new AbortController();
+    this.turn = { abort, addressed };
+    // Steps are allowed in an active conversation, and in a turn @agent started in a paused one.
+    const stepsAllowed = () => addressed || this.agentState() === "active";
     let toolCount = 0;
-    let tokens = { input: 0, output: 0 };
+    let usage = null as AgentUsage | null;
     try {
       await otelContext.with(ctx, async () => {
-        const history = this.projection
-          .messages(this.conversation)
-          .map((msg) => ({ role: msg.role, text: msg.text }));
         const userAddress = itemAddress(this.conversation, newItemId(this.newId));
         span.setAttribute("draft.message.user", userAddress);
         await this.append(
@@ -354,12 +524,17 @@ export class ConversationService {
               conversation: this.conversation,
               actor: this.user,
               traceId,
-              data: { role: "user", text },
+              data: { role: "user", text, audience: PEOPLE_AND_AGENT },
             },
           ],
           "user.message",
         );
         await this.makeReferences(userAddress, [{ text, source: "text" }], "explicit", traceId);
+        // What a session that starts now starts from: one projection of the log, never a
+        // people-only message.
+        const context = buildAgentContext(this.projection, this.conversation, {
+          exclude: [userAddress],
+        });
 
         const agentAddress = itemAddress(this.conversation, newItemId(this.newId));
         span.setAttribute("draft.message.agent", agentAddress);
@@ -375,23 +550,25 @@ export class ConversationService {
         const turnSteps: string[] = [];
         let final = "";
         let failure: string | null = null;
-        // Read when each event is written: a runtime may learn its version during the turn.
+        // Read when each event is written: a runtime may learn its model and version during the turn.
         const agentActor = (): Actor => ({
           kind: "agent",
-          id: "draft-agent",
+          id: this.agent.id,
           model: this.agent.model,
           version: this.agent.version,
         });
 
         const agentSpan = tracer().startSpan("draft.agent.turn", {
-          attributes: { "gen_ai.request.model": this.agent.model },
+          attributes: { "gen_ai.request.model": this.agent.model, "draft.agent": this.agent.id },
         });
         const agentCtx = trace.setSpan(ctx, agentSpan);
         const events = this.agent.runTurn(
-          { conversation: this.conversation, text, history },
+          { conversation: this.conversation, text, context, signal: abort.signal },
           {
             confirmTool: (call) =>
               otelContext.with(agentCtx, async () => {
+                if (!stepsAllowed())
+                  return { allow: false, message: "The conversation is paused." };
                 const ask = tracer().startSpan("draft.permission.ask", {
                   attributes: { "draft.tool.name": call.name, "draft.tool.use_id": call.toolUseId },
                 });
@@ -408,6 +585,8 @@ export class ConversationService {
               }),
             beginStep: (call) =>
               otelContext.with(agentCtx, async () => {
+                // A pause between the answer and the step still wins: no step starts while paused.
+                if (!stepsAllowed()) throw new Error("the conversation is paused");
                 const started = itemAddress(this.conversation, newItemId(this.newId));
                 const idempotencyKey = newItemId(this.newId);
                 await this.append(
@@ -438,6 +617,51 @@ export class ConversationService {
         );
         for await (const ev of events) {
           switch (ev.type) {
+            case "session-started":
+              await this.append(
+                [
+                  {
+                    type: "agent.session_started",
+                    address: itemAddress(this.conversation, newItemId(this.newId)),
+                    conversation: this.conversation,
+                    actor: agentActor(),
+                    traceId,
+                    data: {
+                      agent: this.agent.id,
+                      agentVersion: this.agent.version,
+                      model: this.agent.model,
+                      contextHash: contextDigest(context),
+                      contextMessages: context.messages.length,
+                      contextOpenItems: context.openItems.length,
+                    },
+                  },
+                ],
+                "agent.session",
+              );
+              break;
+            case "anomaly":
+              await this.append(
+                [
+                  {
+                    type: "agent.anomaly",
+                    address: itemAddress(this.conversation, newItemId(this.newId)),
+                    conversation: this.conversation,
+                    actor: agentActor(),
+                    traceId,
+                    data: {
+                      kind: "call-without-permission",
+                      toolUseId: ev.toolUseId,
+                      name: ev.name,
+                      input: ev.input,
+                      status: ev.status,
+                    },
+                  },
+                ],
+                "agent.anomaly",
+              );
+              m.anomalies.add(1, { "draft.anomaly.kind": "call-without-permission" });
+              agentSpan.addEvent("draft.anomaly", { "draft.tool.name": ev.name });
+              break;
             case "model-call-start": {
               const s = tracer().startSpan("draft.model.call", {}, agentCtx);
               modelSpans.set(ev.callId, { span: s, t0: performance.now() });
@@ -589,7 +813,7 @@ export class ConversationService {
             }
             case "done":
               final = ev.text;
-              tokens = { input: ev.inputTokens, output: ev.outputTokens };
+              usage = ev.usage;
               break;
             case "error":
               failure = ev.message;
@@ -605,8 +829,10 @@ export class ConversationService {
         for (const s of modelSpans.values()) s.span.end();
         for (const t of toolSpans.values()) t.span.end();
         agentSpan.setAttributes({
-          "gen_ai.usage.input_tokens": tokens.input,
-          "gen_ai.usage.output_tokens": tokens.output,
+          ...usageAttributes(usage),
+          // The model the agent reported, which a runtime may only learn once its session starts.
+          "gen_ai.response.model": this.agent.model,
+          "draft.agent.version": this.agent.version,
           "draft.tool_calls": toolCount,
         });
         if (failure !== null) failSpan(agentSpan, new Error("agent"));
@@ -628,7 +854,7 @@ export class ConversationService {
               conversation: this.conversation,
               actor: agentActor(),
               traceId,
-              data: { role: "agent", text: replyText },
+              data: { role: "agent", text: replyText, audience: PEOPLE_AND_AGENT },
             },
           ],
           "agent.message",
@@ -641,13 +867,12 @@ export class ConversationService {
         );
       });
       m.turns.add(1, { "draft.turn.outcome": this.error === null ? "ok" : "error" });
-      m.turnTokens.record(tokens.input, { "gen_ai.token.type": "input" });
-      m.turnTokens.record(tokens.output, { "gen_ai.token.type": "output" });
-      span.setAttributes({
-        "gen_ai.usage.input_tokens": tokens.input,
-        "gen_ai.usage.output_tokens": tokens.output,
-        "draft.tool_calls": toolCount,
-      });
+      // Only what the agent reported is recorded: a turn that reported nothing says so.
+      if (usage?.inputTokens !== undefined)
+        m.turnTokens.record(usage.inputTokens, { "gen_ai.token.type": "input" });
+      if (usage?.outputTokens !== undefined)
+        m.turnTokens.record(usage.outputTokens, { "gen_ai.token.type": "output" });
+      span.setAttributes({ ...usageAttributes(usage), "draft.tool_calls": toolCount });
     } catch (err) {
       failSpan(span, err);
       this.error = err instanceof Error ? err.name : "error";
@@ -660,11 +885,11 @@ export class ConversationService {
         "draft.conversation": this.conversation,
         "draft.trace_id": traceId,
         "draft.tool_calls": toolCount,
-        "gen_ai.usage.input_tokens": tokens.input,
-        "gen_ai.usage.output_tokens": tokens.output,
+        ...usageAttributes(usage),
         "draft.duration_ms": Math.round(ms),
       });
       span.end();
+      this.turn = null;
       this.streaming = null;
       this.stepsInFlight.clear();
       this.busy = false;

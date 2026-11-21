@@ -1,10 +1,6 @@
-import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
-  type AgentRuntime,
   ConversationService,
-  FakeAgentRuntime,
-  FakeScriptSchema,
   FileLogStore,
   KiroOAuth,
   type KiroRemoteTools,
@@ -17,7 +13,7 @@ import {
 } from "@nikovirtala/draft-core";
 import { app, BrowserWindow, ipcMain, shell } from "electron";
 import { type Boot, CHANNELS, type Change, type Placement } from "../shared/ipc.ts";
-import { ClaudeAgentRuntime, packagedClaudeExecutable } from "./agent-sdk.ts";
+import { AcpRuntime } from "./acp/runtime.ts";
 import { loadConfig } from "./config.ts";
 import { ensureIdentity, userActor } from "./identity.ts";
 import { provenance } from "./provenance.ts";
@@ -58,7 +54,7 @@ async function start(): Promise<Boot> {
   const logPath = join(config.dataDir, "log.jsonl");
   let log: FileLogStore;
   try {
-    log = FileLogStore.open(logPath);
+    log = FileLogStore.open(logPath, { context: "local" });
   } catch (err) {
     if (err instanceof LogRefusedError)
       return { kind: "refused", path: logPath, reason: err.message };
@@ -92,29 +88,23 @@ async function start(): Promise<Boot> {
       close: () => mcp.close(),
     };
   }
-  const noTools: KiroRemoteTools = {
-    call: async () => ({ isError: true, structured: null, text: "Kiro Remote is not configured" }),
-  };
-
-  let agent: AgentRuntime;
-  if (config.agent === "fake") {
-    const script = FakeScriptSchema.parse(
-      config.fakeScript === null
-        ? { turns: [] }
-        : JSON.parse(readFileSync(config.fakeScript, "utf8")),
-    );
-    agent = new FakeAgentRuntime(script, tools ?? noTools, { model: config.model });
-  } else {
-    agent = new ClaudeAgentRuntime({
-      model: config.model,
-      apiKey: process.env.ANTHROPIC_API_KEY,
-      kiro:
-        mcpUrl === null
-          ? null
-          : { url: mcpUrl, token: async () => (oauth === null ? null : oauth.accessToken()) },
-      executable: packagedClaudeExecutable(app.isPackaged),
-    });
-  }
+  const agent = new AcpRuntime({
+    spec: config.agent,
+    cwd: config.agentCwd,
+    env: process.env,
+    clientInfo: { name: "draft", version: app.getVersion() },
+    ...(process.env.DRAFT_ACP_TRANSCRIPT === undefined
+      ? {}
+      : { transcript: process.env.DRAFT_ACP_TRANSCRIPT }),
+    kiro:
+      mcpUrl === null || config.kiroRemoteUrl === null
+        ? null
+        : {
+            url: mcpUrl,
+            baseUrl: config.kiroRemoteUrl,
+            token: async () => (oauth === null ? null : oauth.accessToken()),
+          },
+  });
 
   const resolvers: Resolver[] = tools === null ? [] : [new KiroSessionResolver(tools)];
   service = await ConversationService.open({
@@ -147,9 +137,13 @@ function registerIpc(): void {
     boot ??= await start();
     return boot;
   });
-  ipcMain.handle(CHANNELS.submit, async (_e, text: unknown) => {
+  ipcMain.handle(CHANNELS.submit, async (_e, text: unknown, aside: unknown) => {
     if (typeof text !== "string" || service === null) return;
-    await service.submit(text.slice(0, 20_000));
+    await service.submit(text.slice(0, 20_000), { aside: aside === true });
+  });
+  ipcMain.handle(CHANNELS.setAgentState, async (_e, state: unknown) => {
+    if ((state === "active" || state === "paused") && service !== null)
+      await service.setAgentState(state);
   });
   ipcMain.handle(CHANNELS.answerPrompt, (_e, id: unknown, allow: unknown) => {
     if (typeof id === "string" && typeof allow === "boolean") service?.answerPrompt(id, allow);

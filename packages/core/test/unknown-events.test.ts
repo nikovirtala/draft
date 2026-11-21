@@ -39,7 +39,7 @@ const newerSchema = (conversation: string) => ({
   address: `${conversation}/01m8000000000000000000000b@1`,
   conversation,
   type: "message.posted",
-  schema: 2,
+  schema: 3,
   actor: { kind: "person", id: "01m8000000000000000000000c", handle: "@niko" },
   traceId: null,
   data: { role: "user", parts: [{ kind: "text", text: "a v2 message" }] },
@@ -58,7 +58,7 @@ describe("events this build doesn't understand", () => {
     const unknown = r.ok ? r.events.filter(isUnknown) : [];
     expect(unknown.map((u) => [u.type, u.schema, u.reason])).toEqual([
       ["thread.summarized", 1, "unknown-type"],
-      ["message.posted", 2, "newer-schema"],
+      ["message.posted", 3, "newer-schema"],
     ]);
     expect(unknown[0]?.raw).toEqual(
       JSON.parse(readFileSync(path, "utf8").trim().split("\n").at(-2) as string),
@@ -87,7 +87,7 @@ describe("events this build doesn't understand", () => {
     expect(state.timeline[3]).toMatchObject({
       kind: "unknown",
       type: "message.posted",
-      schema: 2,
+      schema: 3,
       reason: "newer-schema",
     });
     // The newer message is not read as a message of this build.

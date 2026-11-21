@@ -60,16 +60,18 @@ export async function openService(
 ) {
   const log = FileLogStore.open(join(dir, "log.jsonl"));
   const projection = Projection.open(join(dir, "views.db"));
+  const agent = new FakeAgentRuntime(script, tools, { model: "claude-opus-5-5" });
   const service = await ConversationService.open({
     log,
     projection,
-    agent: new FakeAgentRuntime(script, tools, { model: "claude-opus-5-5" }),
+    agent,
     resolvers: [new KiroSessionResolver(tools)],
     user: USER,
     poller: { baseMs: 0 },
   });
   return {
     service,
+    agent,
     log,
     projection,
     close: () => {

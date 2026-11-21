@@ -1,16 +1,19 @@
 import { z } from "zod";
+import type { AgentContext } from "./agent-context.ts";
 import { type KiroRemoteTools, sdkToolName, toolPermission } from "./kiro.ts";
 
 /**
  * The agent behind a conversation. One runtime serves many conversations and keeps one agent
- * session per conversation. The real one runs on the Claude Agent SDK in the desktop app; the
- * scripted fake below runs the same protocol for tests.
+ * session per conversation address. The real one speaks ACP to a local agent process in the
+ * desktop app; the scripted fake below runs the same protocol for tests.
  */
 
 export interface AgentIdentity {
-  /** The model id, e.g. claude-opus-5-5. */
+  /** Which agent this is, as configured: "kiro", "claude", "fake". */
+  readonly id: string;
+  /** The model the agent reports, or "unreported" until it does. */
   readonly model: string;
-  /** The runtime's version: the Agent SDK and Claude Code versions, or the fake's. */
+  /** The agent's own name and version, as far as it reports them. */
   readonly version: string;
 }
 
@@ -26,9 +29,27 @@ export interface StepCall {
 export interface AgentTurnInput {
   conversation: string;
   text: string;
-  /** Earlier messages of the conversation, from the log, for a session that starts after a restart. */
-  history: readonly { role: "user" | "agent"; text: string }[];
+  /**
+   * What a session that starts with this turn starts from: the projection of the log for this
+   * conversation. Only messages that reach the agent are in it. A runtime that keeps a session
+   * across turns uses it for the first turn only.
+   */
+  context: AgentContext;
   signal?: AbortSignal;
+}
+
+/**
+ * What an agent reports about a turn's use. Absent fields were not reported; draft never
+ * estimates them.
+ */
+export interface AgentUsage {
+  inputTokens?: number;
+  outputTokens?: number;
+  totalTokens?: number;
+  /** Cost the agent reports, such as Kiro's credits. */
+  cost?: { amount: number; unit: string }[];
+  /** How full the context window is, 0 to 100. */
+  contextUsedPercent?: number;
 }
 
 export interface AgentTurnHooks {
@@ -42,6 +63,10 @@ export interface AgentTurnHooks {
 }
 
 export type AgentEvent =
+  | {
+      /** The runtime started an agent session for the conversation, from the turn's context. */
+      type: "session-started";
+    }
   | { type: "model-call-start"; callId: string }
   | { type: "model-call-end"; callId: string; inputTokens: number; outputTokens: number }
   | { type: "text-delta"; text: string }
@@ -61,7 +86,18 @@ export type AgentEvent =
       /** The permission decision, when it was made after the call was announced. */
       decision?: "allowed-read-only" | "approved-by-user" | "denied-by-user" | "denied-by-policy";
     }
-  | { type: "done"; text: string; inputTokens: number; outputTokens: number; model: string }
+  | {
+      /**
+       * A call that changes something, or that draft can't tell from one, ran without a
+       * permission request: no step was started before it.
+       */
+      type: "anomaly";
+      toolUseId: string;
+      name: string;
+      input: Record<string, unknown>;
+      status: string;
+    }
+  | { type: "done"; text: string; usage: AgentUsage | null; model: string }
   | { type: "error"; message: string };
 
 export interface AgentRuntime extends AgentIdentity {
@@ -73,7 +109,8 @@ export interface AgentRuntime extends AgentIdentity {
 
 /**
  * Applies the tool policy: read-only tools run, tools that change things ask through `hooks` and,
- * once allowed, begin a durable step before they run, and everything else is refused. Shared by the SDK runtime's permission callback and the fake.
+ * once allowed, begin a durable step before they run, and everything else is refused. Shared by
+ * the ACP runtime's permission handler and the fake.
  */
 export async function decideTool(
   name: string,
@@ -123,6 +160,8 @@ const StepSchema = z.union([
     delayMs: z.number().min(0).optional(),
   }),
   z.object({ tool: z.string(), input: z.record(z.string(), z.unknown()).default({}) }),
+  /** A call that changes something and runs without asking, as a misbehaving agent would. */
+  z.object({ unasked: z.string(), input: z.record(z.string(), z.unknown()).default({}) }),
 ]);
 
 export const FakeScriptSchema = z.object({
@@ -150,8 +189,11 @@ const sleep = (ms: number, signal?: AbortSignal) =>
 
 /** A scripted agent: streams scripted text and calls real tools through the same policy. */
 export class FakeAgentRuntime implements AgentRuntime {
+  readonly id = "fake";
   readonly model: string;
   readonly version = "fake-1";
+  /** Every turn this agent was given, so tests can check what reached it. */
+  readonly received: AgentTurnInput[] = [];
   private readonly used = new Set<number>();
   private calls = 0;
 
@@ -164,6 +206,7 @@ export class FakeAgentRuntime implements AgentRuntime {
   }
 
   async *runTurn(input: AgentTurnInput, hooks: AgentTurnHooks): AsyncIterable<AgentEvent> {
+    this.received.push(input);
     const index = this.script.turns.findIndex(
       (t, i) =>
         !this.used.has(i) && (t.match === undefined || new RegExp(t.match, "i").test(input.text)),
@@ -191,6 +234,15 @@ export class FakeAgentRuntime implements AgentRuntime {
         inTokens += promptTokens;
         outTokens += out;
         yield { type: "model-call-end", callId, inputTokens: promptTokens, outputTokens: out };
+      } else if ("unasked" in step) {
+        yield { type: "model-call-end", callId, inputTokens: promptTokens, outputTokens: 20 };
+        yield {
+          type: "anomaly",
+          toolUseId: `toolu_fake_${this.calls}`,
+          name: sdkToolName(step.unasked),
+          input: step.input,
+          status: "in_progress",
+        };
       } else {
         inTokens += promptTokens;
         outTokens += 20;
@@ -224,7 +276,12 @@ export class FakeAgentRuntime implements AgentRuntime {
         }
       }
     }
-    yield { type: "done", text, inputTokens: inTokens, outputTokens: outTokens, model: this.model };
+    yield {
+      type: "done",
+      text,
+      usage: { inputTokens: inTokens, outputTokens: outTokens },
+      model: this.model,
+    };
   }
 
   closeConversation(): void {}

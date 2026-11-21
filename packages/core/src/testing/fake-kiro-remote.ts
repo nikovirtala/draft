@@ -159,6 +159,8 @@ export class FakeKiroRemote {
    * testing what happens to a step whose result never comes back.
    */
   readonly hang = new Set<string>();
+  /** Called as each tool call arrives, before it is answered. */
+  onCall: ((call: ReceivedCall) => void) | null = null;
   baseUrl = "";
 
   constructor(private readonly o: FakeKiroRemoteOptions = {}) {
@@ -393,7 +395,9 @@ export class FakeKiroRemote {
     server.setRequestHandler(CallToolRequestSchema, async (req) => {
       const name = req.params.name;
       const args = (req.params.arguments ?? {}) as Record<string, unknown>;
-      this.calls.push({ tool: name, args, authorized });
+      const received = { tool: name, args, authorized };
+      this.calls.push(received);
+      this.onCall?.(received);
       try {
         if (this.failNext > 0) {
           this.failNext--;

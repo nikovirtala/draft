@@ -1,5 +1,6 @@
 export * from "./address.ts";
 export * from "./agent.ts";
+export * from "./agent-context.ts";
 export * from "./canonical.ts";
 export * from "./conversation.ts";
 export * from "./events.ts";

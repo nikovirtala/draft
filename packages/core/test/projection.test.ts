@@ -1,7 +1,7 @@
 import { DatabaseSync } from "node:sqlite";
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
-import { type EventDraft, isUnknown } from "../src/events.ts";
+import { type EventDraft, isUnknown, PEOPLE_ONLY } from "../src/events.ts";
 import { MemoryLogStore } from "../src/log.ts";
 import { Projection } from "../src/projection.ts";
 import { sealRawRecord } from "../src/testing/index.ts";
@@ -24,10 +24,38 @@ let item = 0;
 const next = () => `i${++item}`;
 
 const arbDraft: fc.Arbitrary<() => EventDraft> = fc.oneof(
-  fc.tuple(fc.constantFrom("user", "agent" as const), fc.string()).map(
-    ([role, text]) =>
+  fc.tuple(fc.constantFrom("user", "agent" as const), fc.string(), fc.boolean()).map(
+    ([role, text, aside]) =>
       () =>
-        messageDraft(next(), role as "user" | "agent", text),
+        aside
+          ? messageDraft(next(), role as "user" | "agent", text, PEOPLE_ONLY)
+          : messageDraft(next(), role as "user" | "agent", text),
+  ),
+  fc.constantFrom("active", "paused" as const).map(
+    (state) => (): EventDraft => ({
+      type: "agent.state_changed",
+      address: `${CONV}/${next()}@1`,
+      conversation: CONV,
+      actor: { kind: "user", id: "01kahx0000000000000000user", name: "Test User" },
+      traceId: TRACE,
+      data: { state: state as "active" | "paused" },
+    }),
+  ),
+  fc.constantFrom("kiro_delete_session", "kiro_launch_session").map(
+    (name) => (): EventDraft => ({
+      type: "agent.anomaly",
+      address: `${CONV}/${next()}@1`,
+      conversation: CONV,
+      actor: AGENT,
+      traceId: TRACE,
+      data: {
+        kind: "call-without-permission",
+        toolUseId: `toolu_${item}`,
+        name,
+        input: { sessionId: SESSIONS[0] },
+        status: "in_progress",
+      },
+    }),
   ),
   fc
     .tuple(fc.constantFrom("kiro_get_session", "kiro_launch_session"), fc.boolean(), fc.boolean())
@@ -133,7 +161,11 @@ describe("projections", () => {
           schema: fc.integer({ min: 1, max: 4 }),
         }),
         fc.record({
-          type: fc.constantFrom("message.posted", "status.observed"),
+          type: fc.constantFrom("message.posted"),
+          schema: fc.integer({ min: 3, max: 5 }),
+        }),
+        fc.record({
+          type: fc.constantFrom("status.observed", "agent.state_changed"),
           schema: fc.integer({ min: 2, max: 4 }),
         }),
       )
