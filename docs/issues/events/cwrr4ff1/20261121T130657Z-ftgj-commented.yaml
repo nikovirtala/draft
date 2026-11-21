@@ -1,0 +1,15 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M7Z3F53SVJ5RKA8TGQM3FTGJ
+subject: cwrr4ff1
+type: commented
+at: 2026-11-21T13:06:57Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: niko.virtala@hey.com
+data:
+  text: The Agent SDK and its platform binary are gone (slice 2). Packaging now needs to locate `kiro-cli` (and `claude-agent-acp` when configured) rather than ship them; draft resolves them from PATH or the `agents` entries in config.json. A packaged app started from the Dock gets a minimal PATH, so this needs a lookup in the usual install locations (`~/.local/bin`, `/opt/homebrew/bin`).
