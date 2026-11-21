@@ -99,6 +99,7 @@ export function interruptMachine(kind: InterruptKind): Machine<InterruptState> {
           to: "settled" as const,
           trigger: `settle:${o}`,
           actors: ["user"] as readonly ActorKind[],
+          personOnly: true,
         })),
         {
           from: "open",

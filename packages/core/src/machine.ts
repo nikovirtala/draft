@@ -28,6 +28,23 @@ export interface StateSpec {
   };
 }
 
+/**
+ * How an effect is undone (docs/model.md, "Revert"): by putting things back, by a named step that
+ * compensates, or not at all, with the reason. Nothing executes an inverse yet; it is declared so
+ * a revert can be planned from the log.
+ */
+export type Inverse =
+  | { kind: "reversible"; step: string }
+  | { kind: "compensable"; step: string }
+  | { kind: "irreversible"; reason: string };
+
+/** What a transition does outside the machine: the steps it runs, and how to undo them. */
+export interface Effect {
+  /** The durable steps it runs, by name. */
+  steps: readonly string[];
+  inverse: Inverse;
+}
+
 export interface TransitionSpec<S extends string> {
   from: S | readonly S[];
   to: S;
@@ -37,6 +54,14 @@ export interface TransitionSpec<S extends string> {
   actors: readonly ActorKind[];
   /** The firing must carry a reason: the standard ends need one. */
   reason?: boolean;
+  /**
+   * Marks a transition that needs a person (an acceptance, a rejection). The checker refuses a
+   * machine that marked one and lets anyone but a person fire it, and proves the agent can fire
+   * none of them.
+   */
+  personOnly?: boolean;
+  /** What the transition changes outside the machine. Every effect declares its inverse. */
+  effect?: Effect;
 }
 
 export interface MachineSpec<S extends string> {
@@ -56,7 +81,9 @@ export type ProblemCode =
   | "wait-without-owner"
   | "wait-without-timeout"
   | "no-actor"
-  | "duplicate-transition";
+  | "duplicate-transition"
+  | "person-only-actor"
+  | "no-inverse";
 
 export interface Problem {
   code: ProblemCode;
@@ -97,6 +124,32 @@ export function checkMachine<S extends string>(spec: MachineSpec<S>): Problem[] 
     if (!known.has(t.to))
       add("unknown-state", t.to, `${t.trigger} enters ${t.to}, which is not declared`);
     if (t.actors.length === 0) add("no-actor", null, `${t.trigger} names no actor who may fire it`);
+    if (t.personOnly === true && t.actors.some((a) => a !== "user"))
+      add(
+        "person-only-actor",
+        null,
+        `${t.trigger} is marked person-only but ${t.actors.filter((a) => a !== "user").join(" and ")} may fire it`,
+      );
+    if (t.effect !== undefined) {
+      const i = t.effect.inverse as Partial<Record<string, unknown>> | undefined;
+      const named = (k: string) => typeof i?.[k] === "string" && (i[k] as string).trim() !== "";
+      if (i === undefined)
+        add("no-inverse", null, `${t.trigger} has an effect and declares no inverse`);
+      else if (i.kind === "irreversible" ? !named("reason") : !named("step"))
+        add(
+          "no-inverse",
+          null,
+          i.kind === "irreversible"
+            ? `${t.trigger} is irreversible and gives no reason`
+            : `${t.trigger} declares its inverse ${String(i.kind)} and names no step`,
+        );
+      else if (i.kind !== "irreversible" && i.kind !== "reversible" && i.kind !== "compensable")
+        add(
+          "no-inverse",
+          null,
+          `${t.trigger} declares an inverse of unknown kind ${String(i.kind)}`,
+        );
+    }
   }
 
   for (const s of states) {
@@ -199,6 +252,33 @@ export class Machine<S extends string> {
     return t !== undefined && t.actors.length === 1 && t.actors[0] === "user";
   }
 
+  /**
+   * Every trigger that someone other than a person may fire, from any state. A trigger marked
+   * person-only is never among them: that is what the checker proves about the agent.
+   */
+  triggersFirableBy(actor: ActorKind): string[] {
+    return [
+      ...new Set(
+        this.spec.transitions.filter((t) => t.actors.includes(actor)).map((t) => t.trigger),
+      ),
+    ];
+  }
+
+  /** The triggers marked person-only. */
+  personOnlyTriggers(): string[] {
+    return [
+      ...new Set(this.spec.transitions.filter((t) => t.personOnly === true).map((t) => t.trigger)),
+    ];
+  }
+
+  /** What `trigger` does outside the machine, with its declared inverse, or null when nothing. */
+  effectOf(trigger: string): Effect | null {
+    return (
+      this.spec.transitions.find((t) => t.trigger === trigger && t.effect !== undefined)?.effect ??
+      null
+    );
+  }
+
   private find(state: S, trigger: string): TransitionSpec<S> | undefined {
     return this.spec.transitions.find((t) => t.trigger === trigger && froms(t).includes(state));
   }
@@ -280,4 +360,34 @@ export function withStandardEnds<S extends string, E extends StandardEnd>(
       ),
     ],
   } as MachineSpec<S | E>;
+}
+
+/**
+ * Proves that only a person fires `triggers`. Each must exist, be marked person-only, and be
+ * refused for every other actor kind from every state that has it: the machine itself says no, so
+ * the proof holds however the caller got there. Returns what failed; nothing means proved.
+ */
+export function proveOnlyPersonFires<S extends string>(
+  machine: Machine<S>,
+  triggers: readonly string[],
+): string[] {
+  const failures: string[] = [];
+  const others: ActorKind[] = ["agent", "resolver", "system"];
+  const states = Object.keys(machine.spec.states) as S[];
+  for (const trigger of triggers) {
+    const there = states.filter((s) => machine.triggers(s).includes(trigger));
+    if (there.length === 0) {
+      failures.push(`${machine.name}: no state has ${trigger}`);
+      continue;
+    }
+    if (!machine.personOnlyTriggers().includes(trigger))
+      failures.push(`${machine.name}: ${trigger} is not marked person-only`);
+    for (const s of there)
+      for (const actor of others) {
+        const r = machine.next(s, trigger, actor, "proof");
+        if (r.ok || r.reason !== "actor-not-allowed")
+          failures.push(`${machine.name}: ${actor} may fire ${trigger} from ${s}`);
+      }
+  }
+  return failures;
 }
