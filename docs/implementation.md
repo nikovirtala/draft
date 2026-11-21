@@ -61,10 +61,42 @@ flowchart TB
 - **Local agent** is a separate process speaking ACP over stdio: `kiro-cli acp` by default, `claude-agent-acp` or any other ACP agent by configuration. It reaches its tools over MCP, Kiro Remote included.
 - **Context log** is the raw layer: append-only and hash-chained, with an actor and a trace ID on every event. Slice 1 built draft's own log; the ark ledger was measured fast enough and stays an option. A torn last line is moved to a sidecar and recorded (ADR 4gwyn86q).
 - **Kinds and projections** extract things and edges, build the graph and view state, and run reprocessing generations.
-- **Resolvers** turn references to outside things (hosted Kiro sessions, PRs, ark issues) into live stubs, talking to Kiro Remote directly with no model involved, and take a snapshot whenever one is referenced.
+- **Resolvers** turn references to outside things into live stubs, with no model involved, and take a snapshot whenever one is referenced. See [Resolvers](#resolvers).
+- **Interrupts** are what needs a person, derived from the log, in one attention order. See [Interrupts and attention](#interrupts-and-attention).
+- **State machines** (`packages/core/src/machine.ts`) hold the thread and interrupt lifecycles. See [The state machine module](#the-state-machine-module).
 - **artifact** is the escape hatch for raw HTML views, with reload over SSE. Windows are real Electron windows now, not synced tabs.
 
 The agent describes a view using a fixed set of components (a JSON description), not raw HTML. That keeps the grammar stable, makes views safe to render, and lets them update live from references. Raw HTML through artifact is only for what the components can't express.
+
+## Resolvers
+
+One `Resolver` per reference type, each with a version, `detect` (candidate ids in text), `fetch` (the target's state, `null` when it doesn't exist, a throw when it can't tell) and, optionally, `interrupts` (what in that state needs a person, a pure function of the state). A snapshot is taken when a target is first referenced; `status.observed` is written only when the state changes; polling covers only the stubs on screen, doubles its interval while nothing changes (to a maximum), resets on a change, and a failure is counted in telemetry and never polled sooner than the source asks. The target of each type is in the view schema (`STUB_TYPES`).
+
+| Type | A reference is | The state carries |
+| --- | --- | --- |
+| `kiro-session` | a 26-character session id | title, status, pending permission requests with their options |
+| `pull-request` | `owner/repo#12` or a pull request link; id `owner/repo/pull/12` | check runs and statuses with conclusions, review decision and each reviewer's verdict, requested reviewers, mergeable state, head commit |
+| `ark-issue` | `<source>:<id>` (`draft:15cxvdep`, the source names are `arkSources` in `config.json`) or a link to the issue's files | status and resolution folded from the event files, the events with their times |
+| `artifact` | a link to a page on the configured artifact server | title, current version, versions, update time |
+
+GitHub: `GITHUB_TOKEN` from the environment, else `gh auth token`, else public access with a note in the main conversation. The client only sends GET and sends the ETag it saw, so an unchanged resource answers 304 (proposed ADR 9p8jj6p5). The artifact server comes from `artifactUrl` (default `http://localhost:4400`, `ARTIFACT_TOKEN` as the bearer).
+
+## Interrupts and attention
+
+An interrupt is something that needs a person, in the conversation it belongs to. Some are computed from other events (a step that started and never finished, a step that failed, a call that ran without asking); the rest are raised by a resolver (`interrupt.raised`, with the time it arose, so its age is derivable from the log) and cleared by it when the source stops needing anyone (`interrupt.cleared`, with a reason). A person settles one with `interrupt.settled`, as themselves; the agent can't, and `kiro_answer_permission` is refused by the tool policy.
+
+- **Order.** Blocking permission requests; then failures (failed checks, merge conflicts, changes requested, failed steps, calls that ran without asking); then what is left to resolve (interrupted steps, a conclusion to confirm); then reviews requested. Oldest first within each, then by place in the log. One count in the title bar, with the whole list under it.
+- **Where they belong.** A hosted session's interrupts go to the conversation whose step launched it (the step's result names the session), else the conversation that first referenced it, else the main conversation. Other targets go to the conversation that first referenced them, else the main one.
+- **Settling.** A hosted permission request is allowed or denied: draft writes a step of the person's own, calls Kiro Remote as them, and then writes the settlement. An interrupted step is settled as done, failed or retry, naming the started step; retry writes the settlement and a new step (new key, `retryOf`) together, then runs it. The old step is never run again. A failed step is acknowledged or retried. PR events and calls that ran unasked are acknowledged.
+- **Keys.** A check's key includes the commit and the check's name, a conflict's the commit, a review's the review, so a new push is a new interrupt and a settled one stays settled while the source reports the same thing.
+
+## Thread lifecycle
+
+A thread is open, concluding (its agent drafted a conclusion and it waits for a yes), wrapped up, superseded or withdrawn. "Wrap this up" (or the Wrap up button) makes the thread's agent draft a conclusion; draft records it as `thread.conclusion_proposed` with citations (the thread, its branch point, its message count and what it produced). One confirmation, `thread.wrapped_up` as the person, returns it to the conversation the thread branched off, shown at the thread's stub and given to that conversation's agent. Declining reopens the thread. Superseded and withdrawn need a reason. Closing on production use comes later.
+
+## The state machine module
+
+`machine.ts` declares a machine as data: states (active, waiting with an owner and a timeout, terminal), transitions with a trigger and the actors who may fire each, and standard ends (`dismissed`, `superseded`, `withdrawn`) that need a person and a reason. `checkMachine` refuses a machine with an unreachable state, an open end, a wait without an owner or timeout, a way out of a terminal state or a transition nobody may fire. `Machine.next` checks the trigger, the actor and the reason, and `replay` runs a log through a machine and reports what it didn't allow (counted as `draft.machine.violations`). The interrupt machine of each kind and the thread machine are built on it; kinds will be.
 
 ## Data model
 
@@ -222,6 +254,7 @@ The first live prototype is a local, single-user desktop app in TypeScript, buil
 | Agent protocol | [ACP TypeScript SDK](https://agentclientprotocol.com/libraries/typescript) (`@agentclientprotocol/sdk`), client side | 2.8 (ACP protocol version 1) | One protocol for every agent, one session per conversation address. Slice 2. |
 | Agents | Kiro CLI (`kiro-cli acp --agent-engine=v3 --auth-method=cli`), and Claude through [`claude-agent-acp`](https://github.com/agentclientprotocol/claude-agent-acp) | Kiro CLI 3.5, claude-agent-acp 0.109 | Local Kiro by default, with its own sign-in; Claude by configuration, with a Console API key from the environment. |
 | Hosted coding agents | Kiro Remote | current | Live stubs and interrupts from draft's resolver, and an MCP server for the local agent. |
+| GitHub and artifact pages | REST API, read only; the artifact server's JSON API | 2022-11-28 | Pull request and ark issue stubs; no SDK, `fetch` with ETags. |
 | The tool's own MCP server | MCP TypeScript SDK | 1.32 | Exposes contexts to other agents and to Claude. |
 | Raw log | draft's own append-only, hash-chained log | slice 1 | The ark ledger measured about 5 ms per message and stays an option; slice 1's PR records why draft started with its own. |
 | Views and graph index | SQLite through [node:sqlite](https://nodejs.org/docs/latest/api/sqlite.html) | built in (release candidate) | No native module to rebuild for Electron. |
@@ -254,7 +287,8 @@ The first job to test: supervising the software factory's Kiro sessions from one
 2. **Slice 1: log and live Kiro session stubs.** Built in draft PR #1, proven against fakes: the hash-chained log with an actor and trace ID on every event, projections, the Kiro session resolver, the conversation UI and telemetry. Its agent ran in-process on the Agent SDK.
 3. **Slice 2: agents over ACP. Done.** One ACP client runtime: local `kiro-cli acp` by default, `claude-agent-acp` as the alternative, sessions keyed by conversation address and started from one projection of the log, permission requests as steps, unasked calls as interrupts. The Agent SDK runtime is gone. Every message carries its audience, and the agent can be paused and played. A half-written last line of the log is moved aside instead of refusing the log. Proven against a scripted ACP agent over stdio, and in one real turn with kiro-cli.
 4. **Slice 3: blocks, placements and focus. Done.** Inline, minimized, panel and a real Electron window, threads branched off any message with their own agent session and a live stub at the branch point, and focus. Placement and focus are per-device view state and survive a restart. Proven on two scripted ACP agents in Electron.
-5. **Interrupts, attention and acceptance.** Kiro Remote permission requests and PR events routed into the right threads, in one attention order with the local agent's own requests. The acceptance pattern for ADRs, PRs and issues, with resolvers for ADRs and ark issues.
+5. **Interrupts and attention. Done.** Kiro Remote permission requests, PR events, failed and interrupted steps arrive in the thread they belong to, in one attention order with the local agent's own requests, and are settled there as you. Live stubs for pull requests, ark issues and artifact pages. A thread wraps up and its conclusion returns to the main conversation. Thread and interrupt lifecycles run on one state machine module. Proven against a fake Kiro Remote, a fake GitHub and a scripted ACP agent in Electron.
+5b. **Acceptance.** The acceptance pattern for ADRs, PRs and issues: an interrupt kind in the same order, shown only with green evidence, accepted as you. The PR resolver already carries checks, reviews and mergeability, and the ark issue resolver status and events. A resolver for ADRs.
 6. **Graph, linear view, import.** The identity spike comes right before the first kinds: decision, task and design candidates from conversations, promoted into ark records, with a replay over the existing history.
 7. **Multiplayer.** A shared, hosted log, identities and sign-in, the driver role and personal notes.
 
