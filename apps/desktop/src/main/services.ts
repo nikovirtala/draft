@@ -1,5 +1,7 @@
 import { join } from "node:path";
 import {
+  type AcceptanceActions,
+  AdrResolver,
   ArkIssueResolver,
   ArtifactPageResolver,
   GithubClient,
@@ -9,7 +11,9 @@ import {
   KiroSessionResolver,
   kiroMcpUrl,
   McpKiroRemoteTools,
+  PersonTools,
   PullRequestResolver,
+  personActions,
   type Resolver,
   resolveGithubAuth,
 } from "@nikovirtala/draft-core";
@@ -27,6 +31,8 @@ export interface Services {
   user: ReturnType<typeof userActor>;
   actions: (KiroRemoteTools & { close?(): Promise<void> }) | null;
   resolvers: Resolver[];
+  /** How an answer to an acceptance request is carried out: the person's own git, gh and adr. */
+  acceptance: AcceptanceActions;
   /** How draft reaches GitHub, for the note the main conversation shows; null for nothing to say. */
   githubNote: string | null;
   makeAgent: RuntimeDeps["makeAgent"];
@@ -79,9 +85,20 @@ export async function createServices(o: {
           () => null,
         )
       : Promise.resolve(null));
+  // The person's own tools (git with their identity and signing key, gh, adr): how an answer to an
+  // acceptance request is carried out, as them, in clones draft manages. Only that answer reaches
+  // them; the read-only GitHub client above never writes (ADRs wkcnp3zr, k8af6zrg).
+  const person = new PersonTools({
+    dir: config.dataDir,
+    ...(config.person.gh === null ? {} : { gh: config.person.gh }),
+    ...(config.person.adr === null ? {} : { adr: config.person.adr }),
+    remotes: config.person.gitRemotes,
+  });
+  const pulls = new PullRequestResolver(github, viewerLogin);
   const resolvers: Resolver[] = [
     ...(tools === null ? [] : [new KiroSessionResolver(tools)]),
-    new PullRequestResolver(github, viewerLogin),
+    pulls,
+    new AdrResolver(github, pulls, { sources: config.arkSources, verifier: person }),
     new ArkIssueResolver(github, { sources: config.arkSources }),
     new ArtifactPageResolver({
       baseUrl: config.artifactUrl,
@@ -93,6 +110,7 @@ export async function createServices(o: {
     user: userActor(identity),
     actions: tools,
     resolvers,
+    acceptance: personActions(person),
     githubNote: githubNote(githubAuth),
     // One ACP agent process per agent a conversation chose, in each context, started where that
     // context's agent works.

@@ -1118,3 +1118,55 @@ textarea:focus-visible {
   border: 0;
   cursor: pointer;
 }
+
+/* Acceptance requests: the evidence the kind declares, and the person's three answers. */
+.evidence {
+  list-style: none;
+  margin: 6px 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+  font-family: var(--sans);
+}
+
+.evidence li {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+}
+
+.evidence-mark {
+  display: inline-block;
+  min-width: 4.5em;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.evidence-green .evidence-mark {
+  color: #00663c;
+}
+
+.evidence-red .evidence-mark {
+  color: #a8071a;
+}
+
+.evidence-pending .evidence-mark {
+  color: var(--waiting);
+}
+
+.acceptance-words {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.acceptance-words textarea {
+  font: inherit;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--text);
+  resize: vertical;
+}

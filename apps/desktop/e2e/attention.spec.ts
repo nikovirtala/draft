@@ -52,6 +52,8 @@ test.beforeAll(async () => {
       { name: "e2e", conclusion: "failure" },
     ],
     requestedReviewers: ["niko"],
+    // Blocked on the review, so it is not ready to merge: no acceptance request in this scenario.
+    mergeableState: "blocked",
   });
   github.addIssue(REPO, "15cxvdep", [
     {

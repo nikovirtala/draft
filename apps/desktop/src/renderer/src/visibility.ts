@@ -7,11 +7,13 @@ import { useEffect } from "react";
  */
 export function useVisibleStubs(): void {
   useEffect(() => {
-    const visible = new Set<string>();
+    // Several elements can name one target (a stub and the request about it): it is on screen
+    // while any of them is.
+    const onScreen = new Map<Element, string>();
     let pending: ReturnType<typeof setTimeout> | null = null;
     const flush = () => {
       pending = null;
-      const targets = [...visible].map((t) => {
+      const targets = [...new Set(onScreen.values())].map((t) => {
         const [type, ...rest] = t.split(":");
         return { type: type as string, id: rest.join(":") };
       });
@@ -21,8 +23,8 @@ export function useVisibleStubs(): void {
       for (const e of entries) {
         const target = (e.target as HTMLElement).dataset.stubTarget;
         if (target === undefined) continue;
-        if (e.isIntersecting) visible.add(target);
-        else visible.delete(target);
+        if (e.isIntersecting) onScreen.set(e.target, target);
+        else onScreen.delete(e.target);
       }
       pending ??= setTimeout(flush, 100);
     });

@@ -1,4 +1,5 @@
 import {
+  type AcceptanceActions,
   type ContextLauncher,
   type CrossContext,
   FileLogStore,
@@ -29,6 +30,8 @@ export interface RuntimeDeps {
   resolvers: readonly Resolver[];
   /** Kiro Remote as the person: what answering a permission request and retrying a step call. */
   actions: KiroRemoteTools | null;
+  /** What answering an acceptance request runs, as the person. */
+  acceptance: AcceptanceActions;
   /** Makes the ACP runtime of one agent, working where `place` says. */
   makeAgent(spec: AgentSpec, place: { cwd: () => string; note: () => string | null }): AcpRuntime;
   /** How draft reaches GitHub, for a note in the main conversation; null for nothing to say. */
@@ -86,6 +89,7 @@ export class ContextRuntime {
       launcher: deps.launcher(name),
       crossContext: deps.crossContext(name),
       ...(deps.actions === null ? {} : { actions: deps.actions }),
+      acceptance: deps.acceptance,
       poller: { baseMs: deps.config.pollBaseMs, maxMs: deps.config.pollMaxMs },
     });
     const runtime = new ContextRuntime(name, deps, workspace, layout, store, agents, [

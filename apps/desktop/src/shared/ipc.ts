@@ -286,8 +286,17 @@ export interface DraftBridge {
   branch(parentMessage: string, agent?: string): Promise<void>;
   previewSwitch(conversation: string, agent: string): Promise<SwitchPreview>;
   switchAgent(conversation: string, agent: string): Promise<void>;
-  /** Settles an interrupt as the person: allowed, done, retry, acknowledged... */
-  settleInterrupt(conversation: string, key: string, outcome: string): Promise<void>;
+  /**
+   * Settles an interrupt as the person: allowed, done, retry, acknowledged... An answer to an
+   * acceptance request takes the person's words: a `note` for changes requested, a `reason` for
+   * a rejection.
+   */
+  settleInterrupt(
+    conversation: string,
+    key: string,
+    outcome: string,
+    input?: { note?: string; reason?: string },
+  ): Promise<void>;
   /** Asks a thread's agent to draft its conclusion. */
   wrapUp(conversation: string): Promise<void>;
   confirmConclusion(conversation: string): Promise<void>;

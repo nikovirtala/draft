@@ -19,8 +19,8 @@ const bridge: DraftBridge = {
     ipcRenderer.invoke(CHANNELS.previewSwitch, conversation, agent),
   switchAgent: (conversation, agent) =>
     ipcRenderer.invoke(CHANNELS.switchAgent, conversation, agent),
-  settleInterrupt: (conversation, key, outcome) =>
-    ipcRenderer.invoke(CHANNELS.settleInterrupt, conversation, key, outcome),
+  settleInterrupt: (conversation, key, outcome, input) =>
+    ipcRenderer.invoke(CHANNELS.settleInterrupt, conversation, key, outcome, input ?? {}),
   wrapUp: (conversation) => ipcRenderer.invoke(CHANNELS.wrapUp, conversation),
   confirmConclusion: (conversation) => ipcRenderer.invoke(CHANNELS.confirmConclusion, conversation),
   declineConclusion: (conversation) => ipcRenderer.invoke(CHANNELS.declineConclusion, conversation),
