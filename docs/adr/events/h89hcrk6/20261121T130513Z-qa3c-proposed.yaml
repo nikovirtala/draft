@@ -1,0 +1,17 @@
+envelope: ledger/v1
+kind: decision
+schema: decision/v1
+id: 01M7Z3BZABG40PMY254D29QA3C
+subject: h89hcrk6
+type: proposed
+at: 2026-11-21T13:05:13Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: niko.virtala@hey.com
+data:
+  title: Start every agent session from one projection of the log
+  template: nygard
+  template_version: 1
