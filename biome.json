@@ -8,7 +8,14 @@
   },
   "files": {
     "ignoreUnknown": true,
-    "includes": ["**", "!**/*.md", "!pnpm-lock.yaml", "!docs/adr", "!docs/issues"]
+    "includes": [
+      "**",
+      "!**/*.md",
+      "!pnpm-lock.yaml",
+      "!docs/adr",
+      "!docs/issues",
+      "!packages/core/test/rfc8785"
+    ]
   },
   "formatter": {
     "enabled": true,
