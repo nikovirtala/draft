@@ -1,0 +1,17 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M7Z3ETEQHPMK6GNAM4Y44HM3
+subject: a905p818
+type: opened
+at: 2026-11-21T13:06:46Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: niko.virtala@hey.com
+data:
+  title: Load Claude's skills and memory without its permission settings
+  template: task
+  template_version: 1
