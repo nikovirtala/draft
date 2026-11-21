@@ -1,6 +1,6 @@
 import type { Prompt } from "../../../shared/ipc.ts";
 
-const ACTIONS: Record<string, string> = {
+export const ACTIONS: Record<string, string> = {
   kiro_launch_session: "launch a Kiro session",
   kiro_adopt_session: "adopt a Kiro session",
   kiro_send_prompt: "send a prompt to a Kiro session",

@@ -30,6 +30,8 @@ export interface DraftMetrics {
   resolverFailures: ReturnType<ReturnType<typeof metrics.getMeter>["createCounter"]>;
   invalidViews: ReturnType<ReturnType<typeof metrics.getMeter>["createCounter"]>;
   unknownEvents: ReturnType<ReturnType<typeof metrics.getMeter>["createCounter"]>;
+  steps: ReturnType<ReturnType<typeof metrics.getMeter>["createCounter"]>;
+  interruptedSteps: ReturnType<ReturnType<typeof metrics.getMeter>["createCounter"]>;
 }
 
 let cached: { meter: unknown; m: DraftMetrics } | null = null;
@@ -55,6 +57,13 @@ export function draftMetrics(): DraftMetrics {
     }),
     invalidViews: meter.createCounter("draft.view.invalid", {
       description: "View descriptions that failed validation and fell back to plain text",
+    }),
+    steps: meter.createCounter("draft.steps", {
+      description:
+        "Steps (calls that change something) by outcome: started, completed, failed, interrupted",
+    }),
+    interruptedSteps: meter.createCounter("draft.steps.found_interrupted", {
+      description: "Steps an earlier run started and never finished, counted when a log opens",
     }),
     unknownEvents: meter.createCounter("draft.log.unknown_events", {
       description:

@@ -63,11 +63,19 @@ export const EventData = {
     role: z.enum(["user", "agent"]),
     text: z.string(),
   }),
+  /**
+   * A tool call that changes nothing: a read-only call with its result, or a refused call. Calls
+   * that change something are steps (`step.started`, then `step.completed` or `step.failed`).
+   */
   "agent.tool_called": z.object({
     toolUseId: z.string().min(1),
     name: z.string().min(1),
     input: z.unknown(),
-    /** How the call was allowed or refused: the grounds of the action. */
+    /**
+     * How the call was allowed or refused: the grounds of the action. `approved-by-user` appears
+     * only if a call that changes something reported a result without a step, which draft's tool
+     * policy doesn't allow to happen.
+     */
     decision: z.enum([
       "allowed-read-only",
       "approved-by-user",
@@ -77,6 +85,30 @@ export const EventData = {
     /** A bounded summary of the result; `null` when the call never ran. */
     resultSummary: z.string().nullable(),
     isError: z.boolean(),
+  }),
+  /**
+   * A call that changes something, recorded after it is allowed and before it runs: its intent and
+   * its grounds. A step without a completion never runs again; it shows as an interrupt.
+   */
+  "step.started": z.object({
+    /** A fresh key per step, for services that deduplicate retried calls. */
+    idempotencyKey: z.string().min(1),
+    toolUseId: z.string().min(1),
+    name: z.string().min(1),
+    input: z.unknown(),
+    decision: z.literal("approved-by-user"),
+  }),
+  /** The step ran and its tool reported success. */
+  "step.completed": z.object({
+    started: AddressString(true),
+    idempotencyKey: z.string().min(1),
+    resultSummary: z.string(),
+  }),
+  /** The step ran and its tool reported an error. */
+  "step.failed": z.object({
+    started: AddressString(true),
+    idempotencyKey: z.string().min(1),
+    resultSummary: z.string(),
   }),
   "reference.made": z.object({
     from: AddressString(true),

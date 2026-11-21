@@ -51,6 +51,14 @@ export type Block =
       schema: number;
       reason: "unknown-type" | "newer-schema";
       at: string | null;
+    }
+  | {
+      kind: "interrupt";
+      id: string;
+      tool: string;
+      input: unknown;
+      idempotencyKey: string;
+      at: string;
     };
 
 export interface ConversationState {

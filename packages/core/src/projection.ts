@@ -36,6 +36,11 @@ create table if not exists edges (
 create table if not exists stubs (
   target text primary key, type text not null, id text not null, state_json text not null,
   observed_at text not null, first_seq integer not null, last_seq integer not null);
+create table if not exists steps (
+  started text primary key, conversation text not null, idempotency_key text not null,
+  tool_use_id text not null, name text not null, input_json text not null,
+  started_at text not null, started_seq integer not null,
+  outcome text, result_summary text, finished_at text, finished_seq integer);
 create table if not exists unknown_events (
   event_id text primary key, type text not null, schema integer not null, reason text not null,
   conversation text, at text, seq integer not null);
@@ -48,6 +53,7 @@ const TABLES = [
   "tool_calls",
   "edges",
   "stubs",
+  "steps",
   "unknown_events",
 ] as const;
 
@@ -90,6 +96,21 @@ export interface ToolCallRow {
   isError: boolean;
   resultSummary: string | null;
   at: string;
+}
+
+/** A call that changes something: started, then completed or failed, or neither (interrupted). */
+export interface StepRow {
+  /** The address of its `step.started` event. */
+  started: string;
+  conversation: string;
+  idempotencyKey: string;
+  toolUseId: string;
+  name: string;
+  input: unknown;
+  startedAt: string;
+  startedSeq: number;
+  outcome: "completed" | "failed" | null;
+  resultSummary: string | null;
 }
 
 /** An event this build doesn't understand, as the conversation shows it. */
@@ -239,6 +260,32 @@ export class Projection {
           seq,
         );
         return;
+      case "step.started":
+        this.run(
+          "insert into steps values (?, ?, ?, ?, ?, ?, ?, ?, null, null, null, null)",
+          e.address,
+          e.conversation as string,
+          e.data.idempotencyKey,
+          e.data.toolUseId,
+          e.data.name,
+          canonicalJson(e.data.input ?? null),
+          e.at,
+          seq,
+        );
+        return;
+      case "step.completed":
+      case "step.failed":
+        // The first completion of a step counts; a step completes once.
+        this.run(
+          `update steps set outcome = ?, result_summary = ?, finished_at = ?, finished_seq = ?
+           where started = ? and outcome is null`,
+          e.type === "step.completed" ? "completed" : "failed",
+          e.data.resultSummary,
+          e.at,
+          seq,
+          e.data.started,
+        );
+        return;
       case "reference.made": {
         const key = targetKey(e.data.target);
         this.run(
@@ -369,6 +416,26 @@ export class Projection {
       conversation: (r.conversation as string | null) ?? null,
       at: (r.at as string | null) ?? null,
       seq: Number(r.seq),
+    }));
+  }
+
+  /** The steps of `conversation`, in the order they started. */
+  steps(conversation: string): StepRow[] {
+    return (
+      this.db
+        .prepare("select * from steps where conversation = ? order by started_seq")
+        .all(conversation) as Record<string, unknown>[]
+    ).map((r) => ({
+      started: r.started as string,
+      conversation: r.conversation as string,
+      idempotencyKey: r.idempotency_key as string,
+      toolUseId: r.tool_use_id as string,
+      name: r.name as string,
+      input: JSON.parse(r.input_json as string) as unknown,
+      startedAt: r.started_at as string,
+      startedSeq: Number(r.started_seq),
+      outcome: (r.outcome as "completed" | "failed" | null) ?? null,
+      resultSummary: (r.result_summary as string | null) ?? null,
     }));
   }
 

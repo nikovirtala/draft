@@ -16,6 +16,13 @@ export interface AgentIdentity {
 
 export type PermissionAnswer = { allow: true } | { allow: false; message: string };
 
+/** A tool call about to change something, as the step that records it sees it. */
+export interface StepCall {
+  toolUseId: string;
+  name: string;
+  input: Record<string, unknown>;
+}
+
 export interface AgentTurnInput {
   conversation: string;
   text: string;
@@ -26,11 +33,12 @@ export interface AgentTurnInput {
 
 export interface AgentTurnHooks {
   /** Asked before a tool that needs the user's approval runs. */
-  confirmTool(call: {
-    toolUseId: string;
-    name: string;
-    input: Record<string, unknown>;
-  }): Promise<PermissionAnswer>;
+  confirmTool(call: StepCall): Promise<PermissionAnswer>;
+  /**
+   * Called once a call that changes something is allowed and before it runs: it durably records
+   * the step's intent and returns its idempotency key. If it fails, the call is refused.
+   */
+  beginStep(call: StepCall): Promise<{ idempotencyKey: string }>;
 }
 
 export type AgentEvent =
@@ -64,8 +72,8 @@ export interface AgentRuntime extends AgentIdentity {
 }
 
 /**
- * Applies the tool policy: read-only tools run, tools that change things ask through `hooks`, and
- * everything else is refused. Shared by the SDK runtime's permission callback and the fake.
+ * Applies the tool policy: read-only tools run, tools that change things ask through `hooks` and,
+ * once allowed, begin a durable step before they run, and everything else is refused. Shared by the SDK runtime's permission callback and the fake.
  */
 export async function decideTool(
   name: string,
@@ -81,7 +89,20 @@ export async function decideTool(
       return { answer: { allow: true }, decision: "allowed-read-only" };
     case "ask": {
       const answer = await hooks.confirmTool({ toolUseId, name, input });
-      return { answer, decision: answer.allow ? "approved-by-user" : "denied-by-user" };
+      if (!answer.allow) return { answer, decision: "denied-by-user" };
+      // Intent before effect: the step is in the log before the tool runs, or the tool doesn't run.
+      try {
+        await hooks.beginStep({ toolUseId, name, input });
+      } catch {
+        return {
+          answer: {
+            allow: false,
+            message: "draft could not record this action, so it did not run it.",
+          },
+          decision: "denied-by-policy",
+        };
+      }
+      return { answer, decision: "approved-by-user" };
     }
     default:
       return {
