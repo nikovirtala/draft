@@ -1,0 +1,17 @@
+envelope: ledger/v1
+kind: decision
+schema: decision/v1
+id: 01M7Z3B5CVARGZBD49EE6YXBH7
+subject: 06wp7907
+type: proposed
+at: 2026-11-21T13:04:47Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: niko.virtala@hey.com
+data:
+  title: Make every agent ask before it acts, and log a call that didn't
+  template: nygard
+  template_version: 1
