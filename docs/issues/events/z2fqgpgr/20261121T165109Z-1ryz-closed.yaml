@@ -1,0 +1,16 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M7ZG9NJVFT8RPZHGV4S21RYZ
+subject: z2fqgpgr
+type: closed
+at: 2026-11-21T16:51:09Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: 244629292+kiro-agent@users.noreply.github.com
+reason: "Local log opens unchanged as local (e2e: same bytes and hash); trusted folder is the agent's cwd and a declined one leaves it in its workspace, with the decision as a user event; opening works by sentence with one confirmation, recent list, launch path with single-instance handoff, and import; cross-context references carry a snapshot, stay out of the agent's context until pulled, and every crossing is logged; pnpm check and the end-to-end run pass."
+data:
+  resolution: done
