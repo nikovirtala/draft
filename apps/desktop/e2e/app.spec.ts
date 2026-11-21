@@ -120,9 +120,11 @@ test("one conversation with live Kiro session stubs, restored from the log", asy
   await expect(stubs.nth(0)).toHaveAttribute("data-status", "running");
   await expect(stubs.nth(1)).toHaveAttribute("data-status", "awaiting_permission");
   await expect(stubs.nth(1).getByTestId("stub-pending")).toHaveText("1 permission waiting");
-  // Only expand and minimize: no panel or pop-out icons.
-  await expect(stubs.nth(0).getByRole("button")).toHaveCount(1);
+  // Minimized, a status has the model's three icons: expand, open in panel, pop out.
+  await expect(stubs.nth(0).getByRole("button")).toHaveCount(3);
   await expect(stubs.nth(0).getByRole("button", { name: "Expand" })).toBeVisible();
+  await expect(stubs.nth(0).getByRole("button", { name: "Open in panel" })).toBeVisible();
+  await expect(stubs.nth(0).getByRole("button", { name: "Pop out" })).toBeVisible();
   await shot(page, "03-two-session-stubs");
 
   // 4. The session changes; the stub on screen follows.

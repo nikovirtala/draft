@@ -10,11 +10,14 @@ export function Composer({
   agentState,
   agentLabel,
   onSubmit,
+  onFocus,
 }: {
   busy: boolean;
   agentState: "active" | "paused";
   agentLabel: string;
   onSubmit: (text: string, aside: boolean) => void;
+  /** Speaking in a conversation selects it, which is what focus takes. */
+  onFocus?: () => void;
 }) {
   const [text, setText] = useState("");
   const [altHeld, setAltHeld] = useState(false);
@@ -48,6 +51,7 @@ export function Composer({
           rows={1}
           value={text}
           onChange={(e) => setText(e.target.value)}
+          onFocus={onFocus}
           onKeyDown={onKey}
           onKeyUp={(e) => setAltHeld(e.altKey)}
           onBlur={() => setAltHeld(false)}

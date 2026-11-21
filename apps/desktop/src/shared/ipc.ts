@@ -2,6 +2,7 @@
  * The bridge between the renderer and the main process. The renderer only ever sees view state:
  * no API key, no token and no file system access crosses it.
  */
+import type { BlockInfo, Focus, FocusTarget, Layout, Move, Refusal } from "./placement.ts";
 
 export interface Segment {
   kind: "text" | "view";
@@ -75,6 +76,8 @@ export type Block =
 export interface ConversationState {
   context: string;
   conversation: string;
+  /** The message this conversation branched off; null for the main conversation. */
+  parent: string | null;
   title: string;
   agent: { id: string; model: string; version: string; state: "active" | "paused" };
   messages: Message[];
@@ -86,28 +89,110 @@ export interface ConversationState {
   error: string | null;
 }
 
+/** A thread as the conversation it branched off shows it: the live state of its stub. */
+export interface Thread {
+  conversation: string;
+  parent: string;
+  parentConversation: string;
+  title: string;
+  /** Only `open` exists so far; closing a thread adds states. */
+  state: "open";
+  depth: number;
+  agent: string;
+  messages: number;
+  artifacts: number;
+  waiting: number;
+  busy: boolean;
+  last: { role: "user" | "agent"; text: string } | null;
+}
+
+/** Something that needs a person, in one conversation. */
+export interface Attention {
+  id: string;
+  conversation: string;
+  cause: "permission" | "unfinished-step" | "unasked-call";
+  at: string;
+}
+
+export interface AgentOption {
+  id: string;
+  label: string;
+}
+
+/**
+ * What this device shows: placements, focus and which messages of each thread it has shown. View
+ * state, per device; none of it is in the log.
+ */
+export interface View {
+  layout: Layout;
+  /** Messages of each thread already shown on this device. */
+  seen: Record<string, number>;
+}
+
 export type Change =
   | { type: "state"; state: ConversationState }
-  | { type: "delta"; address: string; text: string };
+  | { type: "delta"; conversation: string; address: string; text: string }
+  | { type: "threads"; threads: Thread[]; attention: Attention[] }
+  | { type: "view"; view: View };
 
-/** What the window shows: the conversation, or why the log was refused. */
+/** What the window shows: the conversation and its threads, or why the log was refused. */
 export type Boot =
-  | { kind: "ready"; state: ConversationState }
+  | {
+      kind: "ready";
+      main: string;
+      states: Record<string, ConversationState>;
+      threads: Thread[];
+      attention: Attention[];
+      view: View;
+      agents: AgentOption[];
+      defaultAgent: string;
+      /** The block this window shows in full, or null for the main window. */
+      block: string | null;
+    }
   | { kind: "refused"; path: string; reason: string };
 
-/** Placement is view state per device, never in the log. Only these two work in this slice. */
-export type Placement = "inline" | "minimized";
+/** What starting a thread on another agent would start from: counts and characters, measured. */
+export interface SwitchPreview {
+  conversation: string;
+  from: string;
+  to: string;
+  size: {
+    messages: number;
+    openItems: number;
+    decisions: number;
+    references: number;
+    characters: number;
+  };
+}
+
+export type MoveOutcome = { ok: true } | { ok: false; reason: Refusal };
+
+export type { BlockInfo, Focus, FocusTarget, Layout, Move, Refusal };
+
+/** A block the renderer shows, with where it starts when the device hasn't seen it before. */
+export interface BlockRegistration {
+  info: BlockInfo;
+  initial: "inline" | "minimized";
+}
 
 export interface DraftBridge {
   boot(): Promise<Boot>;
   /** `aside` posts for people only: the agent never reads it. */
-  submit(text: string, aside?: boolean): Promise<void>;
-  setAgentState(state: "active" | "paused"): Promise<void>;
-  answerPrompt(id: string, allow: boolean): Promise<void>;
+  submit(conversation: string, text: string, aside?: boolean): Promise<void>;
+  setAgentState(conversation: string, state: "active" | "paused"): Promise<void>;
+  answerPrompt(conversation: string, id: string, allow: boolean): Promise<void>;
   setVisible(targets: { type: string; id: string }[]): void;
   reportInvalidView(reason: "not-json" | "schema"): void;
-  placements(): Promise<Record<string, Placement>>;
-  setPlacement(key: string, placement: Placement): Promise<void>;
+  /** Tells this device about blocks that are on screen; a block seen before stays where it is. */
+  ensureBlocks(blocks: BlockRegistration[]): Promise<void>;
+  /** A person's move. The agent never reaches this: it can only suggest. */
+  move(move: Move): Promise<MoveOutcome>;
+  /** Enters focus on a block or a conversation, or leaves it with `null`. */
+  focus(target: FocusTarget | null): Promise<void>;
+  /** Branches a thread off a message; it opens in the panel. */
+  branch(parentMessage: string, agent?: string): Promise<void>;
+  previewSwitch(conversation: string, agent: string): Promise<SwitchPreview>;
+  switchAgent(conversation: string, agent: string): Promise<void>;
   onChange(cb: (c: Change) => void): () => void;
 }
 
@@ -118,7 +203,11 @@ export const CHANNELS = {
   answerPrompt: "draft:answer-prompt",
   setVisible: "draft:set-visible",
   invalidView: "draft:invalid-view",
-  placements: "draft:placements",
-  setPlacement: "draft:set-placement",
+  ensureBlocks: "draft:ensure-blocks",
+  move: "draft:move",
+  focus: "draft:focus",
+  branch: "draft:branch",
+  previewSwitch: "draft:preview-switch",
+  switchAgent: "draft:switch-agent",
   change: "draft:change",
 } as const;

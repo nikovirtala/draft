@@ -1,4 +1,9 @@
-import type { Message, Placement, Stub } from "../../../shared/ipc.ts";
+import { useState } from "react";
+import type { Message, Stub, Thread } from "../../../shared/ipc.ts";
+import { useWorkspace } from "../workspace.tsx";
+import { agentName } from "./AgentState.tsx";
+import { BranchIcon } from "./Icons.tsx";
+import { ThreadStub } from "./ThreadStub.tsx";
 import { ViewBlock } from "./ViewBlock.tsx";
 
 const SESSION_ID = /([0-7][0-9A-HJKMNP-TV-Z]{25})/g;
@@ -27,19 +32,64 @@ export function Prose({ text }: { text: string }) {
   );
 }
 
+/**
+ * Branch a thread off a message. With one agent configured the icon starts the thread at once;
+ * with more, it first asks which agent the thread runs on: the default, or another.
+ */
+function BranchControl({ message }: { message: Message }) {
+  const ws = useWorkspace();
+  const [choosing, setChoosing] = useState(false);
+  const several = ws.agents.length > 1;
+  return (
+    <span className="branch">
+      <button
+        type="button"
+        className="icon branch-icon"
+        aria-label="Branch a thread"
+        title="Branch a thread off this message"
+        data-testid="branch"
+        onClick={() => (several ? setChoosing((c) => !c) : ws.branch(message.address))}
+      >
+        <BranchIcon />
+      </button>
+      {choosing && (
+        <span className="branch-agents" role="menu" data-testid="branch-agents">
+          {ws.agents.map((a) => (
+            <button
+              key={a.id}
+              type="button"
+              role="menuitem"
+              className="branch-agent"
+              data-agent={a.id}
+              onClick={() => {
+                setChoosing(false);
+                ws.branch(message.address, a.id);
+              }}
+            >
+              {agentName(a.id)}
+              {a.id === ws.defaultAgent ? " (default)" : ""}
+            </button>
+          ))}
+        </span>
+      )}
+    </span>
+  );
+}
+
 export function MessageView({
   message,
+  conversation,
   stubs,
-  placements,
-  onPlace,
+  threads,
 }: {
   message: Message;
+  conversation: string;
   stubs: Record<string, Stub>;
-  placements: Record<string, Placement>;
-  onPlace: (key: string, p: Placement) => void;
+  threads: Thread[];
 }) {
   const role = message.role;
   const aside = !message.audience.agent;
+  const context = { stubs, from: message.address, conversation };
   return (
     <article
       className={`message ${role}${aside ? " aside" : ""}`}
@@ -59,11 +109,7 @@ export function MessageView({
           return s.kind === "text" ? (
             <Prose key={key} text={s.text ?? ""} />
           ) : (
-            <ViewBlock
-              key={key}
-              description={s.source ?? ""}
-              context={{ stubs, placements, onPlace, from: message.address }}
-            />
+            <ViewBlock key={key} description={s.source ?? ""} context={context} />
           );
         })}
       </div>
@@ -73,11 +119,21 @@ export function MessageView({
             <ViewBlock
               key={r.target}
               description={{ component: "status-stub", target: { type: r.type, id: r.id } }}
-              context={{ stubs, placements, onPlace, from: message.address, snapshot: r.snapshot }}
+              context={{ ...context, snapshot: r.snapshot }}
             />
           ))}
         </div>
       )}
+      {threads.length > 0 && (
+        <div className="threads">
+          {threads.map((t) => (
+            <ThreadStub key={t.conversation} thread={t} />
+          ))}
+        </div>
+      )}
+      <div className="message-actions">
+        <BranchControl message={message} />
+      </div>
     </article>
   );
 }

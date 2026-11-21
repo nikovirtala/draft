@@ -1,7 +1,13 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
-import { type AgentSpec, AgentSpecSchema, DEFAULT_AGENT, resolveAgent } from "./acp/agents.ts";
+import {
+  type AgentConfig,
+  type AgentSpec,
+  AgentSpecSchema,
+  DEFAULT_AGENT,
+  resolveAgent,
+} from "./acp/agents.ts";
 
 /**
  * draft's configuration: `config.json` in the data directory, overridden by environment
@@ -29,8 +35,10 @@ export interface Config {
   kiroRemoteUrl: string | null;
   /** "oauth" for the real service; "none" for a local fake without sign-in. */
   kiroAuth: "oauth" | "none";
-  /** The agent conversations run on, and how to start it. */
+  /** The default agent, and how to start it. */
   agent: AgentSpec;
+  /** Every agent a thread can run on: the default's id and the configured definitions. */
+  agentConfig: AgentConfig;
   /**
    * Where the agent starts: a dedicated directory under the data directory, never a user
    * repository. Kiro treats a folder nobody trusted as untrusted, so it asks before every shell
@@ -65,6 +73,7 @@ export function loadConfig(dataDir: string, env: NodeJS.ProcessEnv = process.env
     kiroRemoteUrl: env.DRAFT_KIRO_REMOTE_URL ?? fromFile.kiroRemoteUrl ?? null,
     kiroAuth: env.DRAFT_KIRO_AUTH === "none" ? "none" : "oauth",
     agent: resolveAgent({ agent: id, agents }),
+    agentConfig: { agent: id, agents },
     agentCwd: join(dataDir, "agent-workspace"),
     pollBaseMs: Number(env.DRAFT_POLL_BASE_MS ?? 2000),
     pollMaxMs: Number(env.DRAFT_POLL_MAX_MS ?? 60_000),

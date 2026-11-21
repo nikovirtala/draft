@@ -1,52 +1,102 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import type { Boot, ConversationState, Placement } from "../../shared/ipc.ts";
+import { useEffect, useState } from "react";
+import type { Boot } from "../../shared/ipc.ts";
+import { windowTitle } from "../../shared/placement.ts";
 import { AgentState, agentLabel } from "./components/AgentState.tsx";
-import { Composer } from "./components/Composer.tsx";
-import { InterruptBlock } from "./components/InterruptBlock.tsx";
-import { MessageView, StreamingMessage } from "./components/MessageView.tsx";
-import { NoticeBlock } from "./components/NoticeBlock.tsx";
-import { PromptCard } from "./components/PromptCard.tsx";
-import { UnknownBlock } from "./components/UnknownBlock.tsx";
+import { AttentionBar } from "./components/AttentionBar.tsx";
+import { BlockContent } from "./components/BlockContent.tsx";
+import { ConversationView } from "./components/ConversationView.tsx";
 import { useVisibleStubs } from "./visibility.ts";
+import { panelEntry, useWorkspace, type Workspace, WorkspaceProvider } from "./workspace.tsx";
+
+type Ready = Extract<Boot, { kind: "ready" }>;
+
+/** The gestures: Ctrl or Cmd with a period enters focus on what is selected, and leaves it; Esc leaves. */
+function useFocusGesture(ws: Workspace) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && ws.view.layout.focus !== null) {
+        e.preventDefault();
+        ws.leaveFocus();
+      } else if ((e.metaKey || e.ctrlKey) && e.key === ".") {
+        e.preventDefault();
+        ws.toggleFocus();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [ws]);
+}
+
+function MainWindow() {
+  const ws = useWorkspace();
+  useFocusGesture(ws);
+  useVisibleStubs();
+  const main = ws.states[ws.main];
+  const panel = panelEntry(ws);
+  return (
+    <div className="app" data-testid="app" data-focused={ws.view.layout.focus !== null}>
+      <header className="titlebar">
+        <span className="brand">draft</span>
+        <span className="title">{main?.title ?? ""}</span>
+        {main !== undefined && (
+          <AgentState
+            agent={main.agent}
+            onChange={(s) => void window.draft.setAgentState(ws.main, s)}
+          />
+        )}
+        <span className="spacer" />
+        <AttentionBar />
+      </header>
+      <div className={`workspace${panel === null ? "" : " with-panel"}`}>
+        <section className="left" aria-label="Conversation">
+          <ConversationView conversation={ws.main} />
+        </section>
+        {panel !== null && (
+          <aside className="panel" data-testid="panel" aria-label="Panel">
+            <BlockContent key={panel.info.address} entry={panel} />
+          </aside>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** A window that shows one block in full, titled with what it is and where it came from. */
+function BlockWindow({ block }: { block: string }) {
+  const ws = useWorkspace();
+  useFocusGesture(ws);
+  useVisibleStubs();
+  const entry = ws.entry(block);
+  const origin = entry === undefined ? null : (ws.threadOf(entry.info.home)?.title ?? null);
+  useEffect(() => {
+    if (entry !== undefined) document.title = windowTitle(entry.info, origin);
+  }, [entry, origin]);
+  return (
+    <div className="app window-app" data-testid="window" data-block={block}>
+      <header className="titlebar window-bar">
+        <span className="title" data-testid="window-title">
+          {entry === undefined ? "" : windowTitle(entry.info, origin)}
+        </span>
+        <span className="spacer" />
+        <AttentionBar />
+      </header>
+      {entry === undefined || entry.placement !== "window" ? null : <BlockContent entry={entry} />}
+    </div>
+  );
+}
+
+function Shell({ boot }: { boot: Ready }) {
+  return (
+    <WorkspaceProvider boot={boot}>
+      {boot.block === null ? <MainWindow /> : <BlockWindow block={boot.block} />}
+    </WorkspaceProvider>
+  );
+}
 
 export function App() {
   const [boot, setBoot] = useState<Boot | null>(null);
-  const [state, setState] = useState<ConversationState | null>(null);
-  const [placements, setPlacements] = useState<Record<string, Placement>>({});
-  const bottom = useRef<HTMLDivElement>(null);
-  const column = useRef<HTMLDivElement>(null);
-
   useEffect(() => {
-    const off = window.draft.onChange((c) => {
-      if (c.type === "state") setState(c.state);
-      else
-        setState((s) =>
-          s === null || s.streaming === null || s.streaming.address !== c.address
-            ? s
-            : { ...s, streaming: { ...s.streaming, text: s.streaming.text + c.text } },
-        );
-    });
-    void window.draft.boot().then((b) => {
-      setBoot(b);
-      if (b.kind === "ready") setState(b.state);
-    });
-    void window.draft.placements().then(setPlacements);
-    return off;
-  }, []);
-
-  const messageCount = state?.timeline.length ?? 0;
-  const streamingLength = state?.streaming?.text.length ?? 0;
-  const promptCount = state?.prompts.length ?? 0;
-  // biome-ignore lint/correctness/useExhaustiveDependencies: scroll when the conversation grows
-  useEffect(() => {
-    bottom.current?.scrollIntoView({ block: "end" });
-  }, [messageCount, streamingLength, promptCount]);
-
-  useVisibleStubs(column, state);
-
-  const place = useCallback((key: string, p: Placement) => {
-    setPlacements((all) => ({ ...all, [key]: p }));
-    void window.draft.setPlacement(key, p);
+    void window.draft.boot().then(setBoot);
   }, []);
 
   if (boot?.kind === "refused") {
@@ -69,61 +119,8 @@ export function App() {
       </div>
     );
   }
-
-  return (
-    <div className="app">
-      <header className="titlebar">
-        <span className="brand">draft</span>
-        <span className="title">{state?.title ?? ""}</span>
-        {state !== null && (
-          <AgentState agent={state.agent} onChange={(s) => void window.draft.setAgentState(s)} />
-        )}
-      </header>
-      <main className="conversation" ref={column}>
-        <div className="column">
-          {state !== null && state.timeline.length === 0 && state.streaming === null && (
-            <p className="empty" data-testid="empty">
-              Ask about your Kiro sessions. Every session mentioned here stays live in the
-              conversation.
-            </p>
-          )}
-          {state?.timeline.map((b) => {
-            if (b.kind === "unknown") return <UnknownBlock key={b.id} block={b} />;
-            if (b.kind === "interrupt") return <InterruptBlock key={b.id} block={b} />;
-            if (b.kind === "notice") return <NoticeBlock key={b.id} block={b} />;
-            const m = state.messages.find((x) => x.address === b.address);
-            return m === undefined ? null : (
-              <MessageView
-                key={m.address}
-                message={m}
-                stubs={state.stubs}
-                placements={placements}
-                onPlace={place}
-              />
-            );
-          })}
-          {state?.streaming && <StreamingMessage text={state.streaming.text} />}
-          {state?.prompts.map((p) => (
-            <PromptCard
-              key={p.id}
-              prompt={p}
-              onAnswer={(allow) => void window.draft.answerPrompt(p.id, allow)}
-            />
-          ))}
-          {state?.error && (
-            <p className="error" role="alert">
-              {state.error}
-            </p>
-          )}
-          <div ref={bottom} />
-        </div>
-      </main>
-      <Composer
-        busy={state?.busy ?? true}
-        agentState={state?.agent.state ?? "active"}
-        agentLabel={state === null ? "the agent" : agentLabel(state.agent)}
-        onSubmit={(t, aside) => void window.draft.submit(t, aside)}
-      />
-    </div>
-  );
+  if (boot === null) return <div className="app" />;
+  return <Shell boot={boot} />;
 }
+
+export { agentLabel };

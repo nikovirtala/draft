@@ -1,6 +1,5 @@
 import { join } from "node:path";
 import {
-  ConversationService,
   FileLogStore,
   KiroOAuth,
   type KiroRemoteTools,
@@ -10,16 +9,22 @@ import {
   McpKiroRemoteTools,
   Projection,
   type Resolver,
+  Workspace,
 } from "@nikovirtala/draft-core";
-import { app, BrowserWindow, ipcMain, shell } from "electron";
-import { type Boot, CHANNELS, type Change, type Placement } from "../shared/ipc.ts";
+import { app, ipcMain, shell } from "electron";
+import { z } from "zod";
+import { type Boot, CHANNELS, type Change } from "../shared/ipc.ts";
+import { BlockInfoSchema, MOVE_TYPES, windowTitle } from "../shared/placement.ts";
+import { AgentRegistry } from "./acp/registry.ts";
 import { AcpRuntime } from "./acp/runtime.ts";
 import { loadConfig } from "./config.ts";
 import { ensureIdentity, userActor } from "./identity.ts";
+import { LayoutService } from "./layout.ts";
 import { provenance } from "./provenance.ts";
 import { SafeStorageSecretStore } from "./secrets.ts";
 import { JsonFileSpanExporter, startTelemetry } from "./telemetry.ts";
 import { ViewStateStore } from "./view-state.ts";
+import { WindowManager } from "./windows.ts";
 
 // A data directory from the environment keeps Chromium's own state there too (tests, profiles).
 if (process.env.DRAFT_DATA_DIR !== undefined) app.setPath("userData", process.env.DRAFT_DATA_DIR);
@@ -35,11 +40,24 @@ const telemetry = startTelemetry({
       : [new JsonFileSpanExporter(process.env.DRAFT_SPAN_FILE)],
 });
 
-let boot: Boot | null = null;
-let service: ConversationService | null = null;
+/** What `start` built: everything a window needs to show the workspace. */
+interface Running {
+  workspace: Workspace;
+  layout: LayoutService;
+  agents: { id: string; label: string }[];
+  defaultAgent: string;
+  user: ReturnType<typeof userActor>;
+}
+
+type Started = { kind: "ready"; running: Running } | Extract<Boot, { kind: "refused" }>;
+
+let starting: Promise<Started> | null = null;
+let running: Running | null = null;
 let viewState: ViewStateStore | null = null;
 let closeAll: (() => Promise<void>) | null = null;
-let window: BrowserWindow | null = null;
+let windows: WindowManager | null = null;
+/** The stubs each window has on screen; the union of them is what gets polled. */
+const visible = new Map<number, { type: string; id: string }[]>();
 
 function openBrowser(url: string): Promise<void> {
   if (!/^https?:\/\//.test(url))
@@ -48,7 +66,7 @@ function openBrowser(url: string): Promise<void> {
 }
 
 /** Opens the log, verifies it, and builds everything the conversation needs. */
-async function start(): Promise<Boot> {
+async function start(): Promise<Started> {
   const config = loadConfig(app.getPath("userData"));
   const identity = ensureIdentity(config.dataDir);
   const logPath = join(config.dataDir, "log.jsonl");
@@ -61,7 +79,9 @@ async function start(): Promise<Boot> {
     throw err;
   }
   const projection = Projection.open(join(config.dataDir, "views.db"));
-  viewState = new ViewStateStore(join(config.dataDir, "device.db"));
+  const store = new ViewStateStore(join(config.dataDir, "device.db"));
+  viewState = store;
+  const layout = new LayoutService(store);
 
   let tools: (KiroRemoteTools & { close?(): Promise<void> }) | null = null;
   let oauth: KiroOAuth | null = null;
@@ -88,69 +108,141 @@ async function start(): Promise<Boot> {
       close: () => mcp.close(),
     };
   }
-  const agent = new AcpRuntime({
-    spec: config.agent,
-    cwd: config.agentCwd,
-    env: process.env,
-    clientInfo: { name: "draft", version: app.getVersion() },
-    ...(process.env.DRAFT_ACP_TRANSCRIPT === undefined
-      ? {}
-      : { transcript: process.env.DRAFT_ACP_TRANSCRIPT }),
-    kiro:
-      mcpUrl === null || config.kiroRemoteUrl === null
-        ? null
-        : {
-            url: mcpUrl,
-            baseUrl: config.kiroRemoteUrl,
-            token: async () => (oauth === null ? null : oauth.accessToken()),
-          },
-  });
+  // One ACP agent process per agent that a conversation chose, each with one session per
+  // conversation. The default is the one in config; a thread can start on another.
+  const registry = new AgentRegistry(
+    config.agentConfig,
+    (spec) =>
+      new AcpRuntime({
+        spec,
+        cwd: config.agentCwd,
+        env: process.env,
+        clientInfo: { name: "draft", version: app.getVersion() },
+        ...(process.env.DRAFT_ACP_TRANSCRIPT === undefined
+          ? {}
+          : { transcript: process.env.DRAFT_ACP_TRANSCRIPT }),
+        kiro:
+          mcpUrl === null || config.kiroRemoteUrl === null
+            ? null
+            : {
+                url: mcpUrl,
+                baseUrl: config.kiroRemoteUrl,
+                token: async () => (oauth === null ? null : oauth.accessToken()),
+              },
+      }),
+  );
 
   const resolvers: Resolver[] = tools === null ? [] : [new KiroSessionResolver(tools)];
-  service = await ConversationService.open({
+  const user = userActor(identity);
+  const workspace = await Workspace.open({
     log,
     projection,
-    agent,
+    agent: registry.get(registry.defaultId),
+    agents: registry,
     resolvers,
-    user: userActor(identity),
+    user,
     poller: { baseMs: config.pollBaseMs, maxMs: config.pollMaxMs },
   });
-  service.onChange((c: Change) => window?.webContents.send(CHANNELS.change, c));
+  workspace.onChange((c) => {
+    windows?.send(c as Change);
+    if (c.type === "threads") layout.markShown(c.threads);
+  });
+  layout.onChange((view) => {
+    windows?.sync(view.layout);
+    windows?.send({ type: "view", view });
+  });
   const timer = setInterval(
-    () => void service?.tick(),
+    () => void workspace.tick(),
     Math.max(100, Math.min(500, config.pollBaseMs)),
   );
   closeAll = async () => {
     clearInterval(timer);
-    await service?.close();
-    await agent.close();
+    await workspace.close();
+    await registry.close();
     await tools?.close?.();
     log.close();
     projection.close();
-    viewState?.close();
+    store.close();
   };
-  return { kind: "ready", state: service.state() };
+  running = {
+    workspace,
+    layout,
+    agents: registry.list(),
+    defaultAgent: registry.defaultId,
+    user,
+  };
+  // Windows that were open when draft last ended open again, where they were.
+  windows?.sync(layout.view().layout);
+  return { kind: "ready", running };
+}
+
+function bootFor(started: Started, webContentsId: number): Boot {
+  if (started.kind === "refused") return started;
+  const r = started.running;
+  return {
+    kind: "ready",
+    main: r.workspace.mainConversation,
+    states: r.workspace.states(),
+    threads: r.workspace.threads(),
+    attention: r.workspace.attention(),
+    view: r.layout.view(),
+    agents: r.agents,
+    defaultAgent: r.defaultAgent,
+    block: windows?.blockFor(webContentsId) ?? null,
+  };
+}
+
+const str = (v: unknown, max = 500): v is string => typeof v === "string" && v.length <= max;
+const RegistrationsSchema = z
+  .array(z.object({ info: BlockInfoSchema, initial: z.enum(["inline", "minimized"]) }))
+  .max(200);
+const MoveSchema = z.object({ type: z.enum(MOVE_TYPES), block: z.string().min(1).max(500) });
+const FocusSchema = z
+  .union([
+    z.object({ block: z.string().min(1).max(500) }).strict(),
+    z.object({ conversation: z.string().min(1).max(500) }).strict(),
+  ])
+  .nullable();
+
+function requireRunning(): Running {
+  if (running === null) throw new Error("draft hasn't started yet");
+  return running;
+}
+
+/** The thread's name for a block made in `conversation`, or null for the main conversation. */
+function originOf(r: Running, conversation: string): string | null {
+  return r.workspace.threads().find((t) => t.conversation === conversation)?.title ?? null;
 }
 
 function registerIpc(): void {
-  ipcMain.handle(CHANNELS.boot, async () => {
-    boot ??= await start();
-    return boot;
+  ipcMain.handle(CHANNELS.boot, async (e) => {
+    starting ??= start();
+    return bootFor(await starting, e.sender.id);
   });
-  ipcMain.handle(CHANNELS.submit, async (_e, text: unknown, aside: unknown) => {
-    if (typeof text !== "string" || service === null) return;
-    await service.submit(text.slice(0, 20_000), { aside: aside === true });
+  ipcMain.handle(
+    CHANNELS.submit,
+    async (_e, conversation: unknown, text: unknown, aside: unknown) => {
+      if (!str(conversation) || typeof text !== "string" || running === null) return;
+      await running.workspace
+        .conversation(conversation)
+        .submit(text.slice(0, 20_000), { aside: aside === true });
+    },
+  );
+  ipcMain.handle(CHANNELS.setAgentState, async (_e, conversation: unknown, state: unknown) => {
+    if (str(conversation) && (state === "active" || state === "paused") && running !== null)
+      await running.workspace.conversation(conversation).setAgentState(state);
   });
-  ipcMain.handle(CHANNELS.setAgentState, async (_e, state: unknown) => {
-    if ((state === "active" || state === "paused") && service !== null)
-      await service.setAgentState(state);
-  });
-  ipcMain.handle(CHANNELS.answerPrompt, (_e, id: unknown, allow: unknown) => {
-    if (typeof id === "string" && typeof allow === "boolean") service?.answerPrompt(id, allow);
-  });
-  ipcMain.on(CHANNELS.setVisible, (_e, targets: unknown) => {
+  ipcMain.handle(
+    CHANNELS.answerPrompt,
+    (_e, conversation: unknown, id: unknown, allow: unknown) => {
+      if (str(conversation) && str(id) && typeof allow === "boolean")
+        running?.workspace.conversation(conversation).answerPrompt(id, allow);
+    },
+  );
+  ipcMain.on(CHANNELS.setVisible, (e, targets: unknown) => {
     if (!Array.isArray(targets)) return;
-    service?.setVisible(
+    visible.set(
+      e.sender.id,
       targets
         .filter(
           (t): t is { type: string; id: string } =>
@@ -158,55 +250,74 @@ function registerIpc(): void {
         )
         .slice(0, 200),
     );
+    running?.workspace.setVisible([...visible.values()].flat());
   });
   ipcMain.on(CHANNELS.invalidView, (_e, reason: unknown) => {
-    if (reason === "not-json" || reason === "schema") service?.reportInvalidView(reason);
+    if (reason === "not-json" || reason === "schema")
+      running?.workspace.main.reportInvalidView(reason);
   });
-  ipcMain.handle(CHANNELS.placements, () => viewState?.all() ?? {});
-  ipcMain.handle(CHANNELS.setPlacement, (_e, key: unknown, placement: unknown) => {
-    if (typeof key === "string" && (placement === "inline" || placement === "minimized")) {
-      viewState?.set(key, placement as Placement);
-    }
+  ipcMain.handle(CHANNELS.ensureBlocks, (_e, blocks: unknown) => {
+    const parsed = RegistrationsSchema.safeParse(blocks);
+    if (parsed.success) running?.layout.ensure(parsed.data);
+  });
+  ipcMain.handle(CHANNELS.move, (_e, m: unknown) => {
+    const parsed = MoveSchema.safeParse(m);
+    if (!parsed.success || running === null) return { ok: false, reason: "not-available" };
+    return running.layout.move(parsed.data);
+  });
+  ipcMain.handle(CHANNELS.focus, (_e, target: unknown) => {
+    const parsed = FocusSchema.safeParse(target);
+    if (parsed.success) running?.layout.focus(parsed.data);
+  });
+  ipcMain.handle(CHANNELS.branch, async (_e, parentMessage: unknown, agent: unknown) => {
+    if (!str(parentMessage) || running === null) return;
+    const r = running;
+    const conversation = await r.workspace.branch(parentMessage, r.user, {
+      ...(str(agent) ? { agent } : {}),
+    });
+    const t = r.workspace.threads().find((x) => x.conversation === conversation);
+    if (t === undefined) return;
+    // The thread opens in the panel, and the main conversation keeps its stub at the branch.
+    r.layout.openThread({
+      address: conversation,
+      kind: "thread",
+      home: t.parentConversation,
+      depth: t.depth - 1,
+      opens: conversation,
+      title: t.title,
+    });
+  });
+  ipcMain.handle(CHANNELS.previewSwitch, (_e, conversation: unknown, agent: unknown) => {
+    if (!str(conversation) || !str(agent)) throw new Error("bad request");
+    return requireRunning().workspace.previewSwitch(conversation, agent);
+  });
+  ipcMain.handle(CHANNELS.switchAgent, async (_e, conversation: unknown, agent: unknown) => {
+    if (!str(conversation) || !str(agent)) throw new Error("bad request");
+    const r = requireRunning();
+    await r.workspace.switchAgent(conversation, agent, r.user);
   });
 }
 
-function createWindow(): void {
-  window = new BrowserWindow({
-    width: 1120,
-    height: 840,
-    minWidth: 560,
-    minHeight: 480,
-    title: "draft",
-    backgroundColor: "#f9f1e1",
-    titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
-    show: false,
-    webPreferences: {
-      preload: join(import.meta.dirname, "../preload/index.cjs"),
-      contextIsolation: true,
-      sandbox: true,
-      nodeIntegration: false,
-    },
-  });
-  window.once("ready-to-show", () => window?.show());
-  // Links never navigate the window: http(s) links open in the system browser for now.
-  window.webContents.setWindowOpenHandler(({ url }) => {
-    if (/^https?:\/\//.test(url)) void shell.openExternal(url);
-    return { action: "deny" };
-  });
-  window.webContents.on("will-navigate", (e) => e.preventDefault());
-  const devUrl = process.env.ELECTRON_RENDERER_URL;
-  if (!app.isPackaged && devUrl !== undefined) void window.loadURL(devUrl);
-  else void window.loadFile(join(import.meta.dirname, "../renderer/index.html"));
-  window.on("closed", () => {
-    window = null;
-  });
+/** What a block's window is titled: what it is, and where it came from. */
+function titleOf(block: string): string {
+  const r = running;
+  const entry = r?.layout.view().layout.blocks[block];
+  if (r === null || entry === undefined) return "draft";
+  return windowTitle(entry.info, originOf(r, entry.info.home));
 }
 
 app.whenReady().then(() => {
+  windows = new WindowManager({
+    preload: join(import.meta.dirname, "../preload/index.cjs"),
+    store: () => viewState,
+    titleOf,
+    // Closing a window returns its block to the place it came from.
+    onClosedByPerson: (block) => running?.layout.move({ type: "close", block }),
+  });
   registerIpc();
-  createWindow();
+  windows.openMain();
   app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    if (!windows?.hasMain()) windows?.openMain();
   });
 });
 
@@ -216,6 +327,7 @@ app.on("window-all-closed", () => {
 
 let quitting = false;
 app.on("before-quit", (e) => {
+  windows?.beginQuit();
   if (quitting) return;
   quitting = true;
   e.preventDefault();

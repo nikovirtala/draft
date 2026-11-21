@@ -454,3 +454,12 @@ export function attentionText(
     return count.inFocus === 0 ? "" : `${count.inFocus} need${count.inFocus === 1 ? "s" : ""} you`;
   return `${count.inFocus} in focus, ${count.elsewhere} elsewhere`;
 }
+
+/**
+ * The title of a block's window: what it is and where it came from. A block made in a thread
+ * names that thread; one made in the main conversation says so.
+ */
+export function windowTitle(info: Pick<BlockInfo, "title">, originThread: string | null): string {
+  const from = originThread === null ? "the main conversation" : `thread “${originThread}”`;
+  return `${info.title} · from ${from}`;
+}

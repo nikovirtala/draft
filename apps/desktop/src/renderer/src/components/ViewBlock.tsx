@@ -1,13 +1,14 @@
 import { checkView } from "@nikovirtala/draft-core/view";
 import { useEffect } from "react";
-import type { Placement, Stub } from "../../../shared/ipc.ts";
+import type { Stub } from "../../../shared/ipc.ts";
 import { StatusStub } from "./StatusStub.tsx";
 
 export interface ViewContext {
   stubs: Record<string, Stub>;
-  placements: Record<string, Placement>;
-  onPlace: (key: string, p: Placement) => void;
+  /** The message that shows the view. */
   from: string;
+  /** The conversation that message is in. */
+  conversation: string;
   snapshot?: Record<string, unknown>;
 }
 
@@ -43,19 +44,16 @@ export function ViewBlock({
   switch (view.component) {
     case "text":
       return <p className="view-text">{view.text}</p>;
-    case "status-stub": {
-      const key = `${view.target.type}:${view.target.id}`;
-      const placementKey = `${context.from}#${key}`;
+    case "status-stub":
       return (
         <StatusStub
+          from={context.from}
+          conversation={context.conversation}
           target={view.target}
-          stub={context.stubs[key]}
+          stub={context.stubs[`${view.target.type}:${view.target.id}`]}
           snapshot={context.snapshot}
-          placement={context.placements[placementKey] ?? "minimized"}
-          onPlace={(p) => context.onPlace(placementKey, p)}
         />
       );
-    }
   }
 }
 
