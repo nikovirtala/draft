@@ -161,6 +161,7 @@ describe("the Agent SDK runtime", () => {
       queryFn: q.fn,
     });
     const asked: string[] = [];
+    const begun: string[] = [];
     const events: AgentEvent[] = [];
     for await (const e of runtime.runTurn(
       { conversation: "local/c1", text: "hi", history: [] },
@@ -171,11 +172,17 @@ describe("the Agent SDK runtime", () => {
             ? { allow: false, message: "no" }
             : { allow: true };
         },
+        beginStep: async (c) => {
+          begun.push(c.name);
+          return { idempotencyKey: "k" };
+        },
       },
     )) {
       events.push(e);
     }
     expect(asked).toEqual([sdkToolName("kiro_launch_session"), sdkToolName("kiro_delete_session")]);
+    // The approved call that changes something begins its step before Claude Code runs it.
+    expect(begun).toEqual([sdkToolName("kiro_launch_session")]);
     expect(events.at(-1)).toMatchObject({
       type: "done",
       text: tools.map((t, i) => `${t}=${["allow", "allow", "deny", "deny"][i]}`).join(","),

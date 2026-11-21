@@ -407,3 +407,21 @@ textarea:focus-visible {
 .generic .secondary {
   margin: 0;
 }
+
+/* A step that started and never finished. */
+.interrupt {
+  font-family: var(--sans);
+  background: var(--waiting-bg);
+  border: 1px solid var(--waiting);
+  border-radius: 12px;
+  padding: 12px 14px;
+  color: var(--text);
+}
+
+.interrupt .prompt-title strong {
+  color: var(--waiting);
+}
+
+.interrupt .secondary {
+  margin: 0;
+}

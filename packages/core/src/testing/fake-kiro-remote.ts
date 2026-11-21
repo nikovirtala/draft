@@ -154,6 +154,11 @@ export class FakeKiroRemote {
   private readonly refreshTokens = new Set<string>();
   /** Fail the next n tool calls with a tool error, to test resolver failures. */
   failNext = 0;
+  /**
+   * Tools whose calls take effect but are never answered, as when the caller dies mid-call: for
+   * testing what happens to a step whose result never comes back.
+   */
+  readonly hang = new Set<string>();
   baseUrl = "";
 
   constructor(private readonly o: FakeKiroRemoteOptions = {}) {
@@ -402,6 +407,7 @@ export class FakeKiroRemote {
             `invalid input: ${checked.error.issues.map((i) => i.message).join("; ")}`,
           );
         const result = this.run(name, args);
+        if (this.hang.has(name)) await new Promise(() => {});
         return {
           content: [{ type: "text", text: JSON.stringify(result) }],
           structuredContent: result,

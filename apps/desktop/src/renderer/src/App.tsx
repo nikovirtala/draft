@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Boot, ConversationState, Placement } from "../../shared/ipc.ts";
 import { Composer } from "./components/Composer.tsx";
+import { InterruptBlock } from "./components/InterruptBlock.tsx";
 import { MessageView, StreamingMessage } from "./components/MessageView.tsx";
 import { PromptCard } from "./components/PromptCard.tsx";
 import { UnknownBlock } from "./components/UnknownBlock.tsx";
@@ -83,6 +84,7 @@ export function App() {
           )}
           {state?.timeline.map((b) => {
             if (b.kind === "unknown") return <UnknownBlock key={b.id} block={b} />;
+            if (b.kind === "interrupt") return <InterruptBlock key={b.id} block={b} />;
             const m = state.messages.find((x) => x.address === b.address);
             return m === undefined ? null : (
               <MessageView

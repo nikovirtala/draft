@@ -63,6 +63,18 @@ export type UiBlock =
       schema: number;
       reason: "unknown-type" | "newer-schema";
       at: string | null;
+    }
+  | {
+      /**
+       * A step that started but never finished: draft stopped (or lost the result) while it ran,
+       * so it may or may not have happened. It is never run again.
+       */
+      kind: "interrupt";
+      id: string;
+      tool: string;
+      input: unknown;
+      idempotencyKey: string;
+      at: string;
     };
 
 export interface UiState {
@@ -122,6 +134,8 @@ export class ConversationService {
   private busy = false;
   private error: string | null = null;
   private writes: Promise<unknown> = Promise.resolve();
+  /** Steps this process started and is waiting on, by tool use id. Every other open step is interrupted. */
+  private readonly stepsInFlight = new Map<string, { started: string; idempotencyKey: string }>();
   readonly poller: StubPoller;
 
   private constructor(o: ConversationOptions, conversation: string) {
@@ -163,6 +177,12 @@ export class ConversationService {
     for (const [reason, n] of unknown) {
       draftMetrics().unknownEvents.add(n, { "draft.log.unknown_reason": reason });
     }
+    // Steps left open by an earlier run: shown as interrupts, never run again.
+    const interrupted = o.projection
+      .conversations()
+      .flatMap((c) => o.projection.steps(c.conversation))
+      .filter((s) => s.outcome === null).length;
+    if (interrupted > 0) draftMetrics().interruptedSteps.add(interrupted);
     let conv = o.projection.conversations()[0]?.conversation;
     if (conv === undefined) {
       const ctx = o.context ?? "local";
@@ -260,6 +280,21 @@ export class ConversationService {
         },
       });
     }
+    const running = new Set([...this.stepsInFlight.values()].map((s) => s.started));
+    for (const s of this.projection.steps(this.conversation)) {
+      if (s.outcome !== null || running.has(s.started)) continue;
+      blocks.push({
+        seq: s.startedSeq,
+        block: {
+          kind: "interrupt",
+          id: s.started,
+          tool: s.name,
+          input: s.input,
+          idempotencyKey: s.idempotencyKey,
+          at: s.startedAt,
+        },
+      });
+    }
     return blocks.sort((a, b) => a.seq - b.seq).map((b) => b.block);
   }
 
@@ -337,6 +372,7 @@ export class ConversationService {
           { span: Span; t0: number; call: Extract<AgentEvent, { type: "tool-call" }> }
         >();
         const toolTexts: { text: string; source: "tool-result" }[] = [];
+        const turnSteps: string[] = [];
         let final = "";
         let failure: string | null = null;
         // Read when each event is written: a runtime may learn its version during the turn.
@@ -369,6 +405,34 @@ export class ConversationService {
                 ask.setAttribute("draft.permission.allowed", answer.allow);
                 ask.end();
                 return answer;
+              }),
+            beginStep: (call) =>
+              otelContext.with(agentCtx, async () => {
+                const started = itemAddress(this.conversation, newItemId(this.newId));
+                const idempotencyKey = newItemId(this.newId);
+                await this.append(
+                  [
+                    {
+                      type: "step.started",
+                      address: started,
+                      conversation: this.conversation,
+                      actor: agentActor(),
+                      traceId,
+                      data: {
+                        idempotencyKey,
+                        toolUseId: call.toolUseId,
+                        name: call.name,
+                        input: call.input,
+                        decision: "approved-by-user",
+                      },
+                    },
+                  ],
+                  "step.started",
+                );
+                this.stepsInFlight.set(call.toolUseId, { started, idempotencyKey });
+                turnSteps.push(call.toolUseId);
+                m.steps.add(1, { "draft.step.outcome": "started" });
+                return { idempotencyKey };
               }),
           },
         );
@@ -421,6 +485,56 @@ export class ConversationService {
                   : { ...t.call, decision: ev.decision ?? t.call.decision };
               toolSpans.delete(ev.toolUseId);
               toolCount++;
+              const step = this.stepsInFlight.get(ev.toolUseId);
+              if (step !== undefined) {
+                // The step's effect is done: complete it. Its result summary is the grounds of
+                // whatever comes next.
+                const outcome = ev.isError ? "failed" : "completed";
+                await otelContext.with(
+                  t === undefined ? agentCtx : trace.setSpan(agentCtx, t.span),
+                  () =>
+                    this.append(
+                      [
+                        {
+                          type: ev.isError ? "step.failed" : "step.completed",
+                          address: itemAddress(this.conversation, newItemId(this.newId)),
+                          conversation: this.conversation,
+                          actor: agentActor(),
+                          traceId,
+                          data: {
+                            started: step.started,
+                            idempotencyKey: step.idempotencyKey,
+                            resultSummary: summarizeResult({
+                              isError: ev.isError,
+                              text: ev.text,
+                              structured: ev.structured,
+                            }),
+                          },
+                        },
+                      ],
+                      `step.${outcome}`,
+                    ),
+                );
+                this.stepsInFlight.delete(ev.toolUseId);
+                m.steps.add(1, { "draft.step.outcome": outcome });
+                if (!ev.isError) {
+                  toolTexts.push({
+                    text: ev.text !== "" ? ev.text : JSON.stringify(ev.structured ?? null),
+                    source: "tool-result",
+                  });
+                }
+                m.toolCalls.add(1, {
+                  "draft.tool.name": call?.name ?? "unknown",
+                  "draft.tool.decision": "approved-by-user",
+                  "draft.tool.outcome": ev.isError ? "error" : "ok",
+                });
+                if (t !== undefined) {
+                  t.span.setAttribute("draft.tool.is_error", ev.isError);
+                  t.span.end();
+                  m.stepDuration.record(performance.now() - t.t0, { "draft.step": "tool.call" });
+                }
+                break;
+              }
               const ran =
                 call === undefined ||
                 call.decision === "allowed-read-only" ||
@@ -481,6 +595,12 @@ export class ConversationService {
               failure = ev.message;
               break;
           }
+        }
+        // A step whose result never came is not finished: it may or may not have happened, so it
+        // stays open in the log and shows as an interrupt. It is never run again.
+        for (const id of turnSteps) {
+          if (this.stepsInFlight.delete(id))
+            m.steps.add(1, { "draft.step.outcome": "interrupted" });
         }
         for (const s of modelSpans.values()) s.span.end();
         for (const t of toolSpans.values()) t.span.end();
@@ -546,6 +666,7 @@ export class ConversationService {
       });
       span.end();
       this.streaming = null;
+      this.stepsInFlight.clear();
       this.busy = false;
       this.emitState();
     }

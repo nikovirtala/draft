@@ -1,6 +1,7 @@
 import { join } from "node:path";
 import { FakeAgentRuntime, type FakeScript } from "../src/agent.ts";
 import { ConversationService } from "../src/conversation.ts";
+import type { KiroRemoteTools } from "../src/kiro.ts";
 import { FileLogStore } from "../src/log.ts";
 import { Projection } from "../src/projection.ts";
 import { KiroSessionResolver } from "../src/resolver.ts";
@@ -51,8 +52,12 @@ export function fakeKiro() {
   });
 }
 
-export async function openService(dir: string, kiro: FakeKiroRemote, script: FakeScript = SCRIPT) {
-  const tools = kiro.asTools();
+export async function openService(
+  dir: string,
+  kiro: FakeKiroRemote,
+  script: FakeScript = SCRIPT,
+  tools: KiroRemoteTools = kiro.asTools(),
+) {
   const log = FileLogStore.open(join(dir, "log.jsonl"));
   const projection = Projection.open(join(dir, "views.db"));
   const service = await ConversationService.open({

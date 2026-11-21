@@ -83,12 +83,17 @@ describe("the tool permission policy", () => {
 
   it("asks through the hook only for tools that change things", async () => {
     const asked: string[] = [];
+    const begun: string[] = [];
     const hooks = {
       confirmTool: async (c: { name: string }) => {
         asked.push(c.name);
         return c.name.endsWith("cancel_turn")
           ? ({ allow: false, message: "no" } as const)
           : ({ allow: true } as const);
+      },
+      beginStep: async (c: { name: string }) => {
+        begun.push(c.name);
+        return { idempotencyKey: `key-${begun.length}` };
       },
     };
     const get = await decideTool(sdkToolName("kiro_get_session"), {}, "t1", hooks);
@@ -102,5 +107,17 @@ describe("the tool permission policy", () => {
       "denied-by-policy",
     ]);
     expect(asked).toEqual([sdkToolName("kiro_launch_session"), sdkToolName("kiro_cancel_turn")]);
+    // Only the allowed call that changes something begins a step, and before it runs.
+    expect(begun).toEqual([sdkToolName("kiro_launch_session")]);
+  });
+
+  it("refuses a call whose step can't be recorded", async () => {
+    const r = await decideTool(sdkToolName("kiro_delete_session"), {}, "t5", {
+      confirmTool: async () => ({ allow: true }),
+      beginStep: async () => {
+        throw new Error("disk full");
+      },
+    });
+    expect(r).toMatchObject({ answer: { allow: false }, decision: "denied-by-policy" });
   });
 });
