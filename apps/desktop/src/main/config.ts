@@ -11,6 +11,8 @@ const FileConfigSchema = z
   .object({
     kiroRemoteUrl: z.url().optional(),
     model: z.string().min(1).optional(),
+    /** The local identity, written on the first run (see identity.ts). */
+    user: z.object({ id: z.string().min(1), name: z.string().min(1) }).optional(),
   })
   .strict();
 
