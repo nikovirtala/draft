@@ -1,14 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { decideTool } from "../src/agent.ts";
+import { decideTool, FakeAgentRuntime } from "../src/agent.ts";
 import {
   findSessionIds,
+  isPersonOnlyTool,
   KIRO_MUTATING_TOOLS,
   KIRO_PERSON_ONLY_TOOLS,
   KIRO_READ_ONLY_TOOLS,
   sdkToolName,
   toolPermission,
 } from "../src/kiro.ts";
-import { KIRO_REMOTE_TOOLS } from "../src/testing/index.ts";
+import { FakeKiroRemote, KIRO_REMOTE_TOOLS } from "../src/testing/index.ts";
 
 const ID_A = "01KAHX7Z1M2N3P4Q5R6S7T8V9W";
 const ID_B = "01M7X6ZFTZR6RBES9HBJ2ARW8R";
@@ -124,5 +125,85 @@ describe("the tool permission policy", () => {
       },
     });
     expect(r).toMatchObject({ answer: { allow: false }, decision: "denied-by-policy" });
+  });
+
+  describe("the person's acts: accepting, rejecting and merging", () => {
+    const hooks = (log: string[]) => ({
+      confirmTool: async (c: { name: string }) => {
+        log.push(`asked ${c.name}`);
+        return { allow: true } as const;
+      },
+      beginStep: async (c: { name: string }) => {
+        log.push(`began ${c.name}`);
+        return { idempotencyKey: "k" };
+      },
+    });
+
+    it.each([
+      // ark's adr and issues tools
+      "mcp__adr__adr_accept",
+      "mcp__adr__adr_reject",
+      "mcp__ark__adr_accept",
+      "adr_accept",
+      "mcp__adr__accept",
+      // GitHub servers
+      "mcp__github__merge_pull_request",
+      "mcp__github__mergePullRequest",
+      "mcp__github-mcp__enable_auto_merge",
+      "mcp__github__approve_pull_request",
+      "github/merge_pull_request",
+      "mcp__gh__pull_request_review_write_approve",
+      // Kiro Remote's person-only tool, and a hypothetical one
+      "mcp__kiro-remote__kiro_answer_permission",
+      "kiro_answer_permission",
+      "mcp__kiro-remote__kiro_merge_session",
+    ])("%s is refused without asking, whichever server it comes from", async (name) => {
+      expect(isPersonOnlyTool(name)).toBe(true);
+      expect(toolPermission(name)).toBe("deny");
+      const log: string[] = [];
+      const r = await decideTool(name, { id: "x" }, "t1", hooks(log));
+      expect(r).toMatchObject({ answer: { allow: false }, decision: "denied-by-policy" });
+      expect((r.answer as { message: string }).message).toMatch(/person's act/);
+      // Nothing was asked of the person and no step began.
+      expect(log).toEqual([]);
+    });
+
+    it.each([
+      "mcp__adr__adr_propose",
+      "mcp__adr__adr_withdraw",
+      "mcp__issues__issues_open",
+      "mcp__kiro-remote__kiro_launch_session",
+      "mcp__kiro-remote__kiro_get_session",
+      "mcp__github__get_pull_request",
+      "Bash",
+    ])("%s is not a person's act", (name) => {
+      expect(isPersonOnlyTool(name)).toBe(false);
+    });
+
+    it("is refused from the scripted agent as well, with the step never started", async () => {
+      const kiro = new FakeKiroRemote({ sessions: [] });
+      const events: string[] = [];
+      const agent = new FakeAgentRuntime(
+        {
+          turns: [{ match: "go", steps: [{ tool: "adr_accept", input: { id: "9p8jj6p5" } }] }],
+          fallback: "",
+        },
+        kiro.asTools(),
+      );
+      const log: string[] = [];
+      for await (const e of agent.runTurn(
+        {
+          conversation: "local/c1",
+          text: "go",
+          context: { messages: [], openItems: [], decisions: [], references: [] } as never,
+        },
+        hooks(log),
+      ))
+        if (e.type === "tool-call" || e.type === "tool-result")
+          events.push(`${e.type}:${e.type === "tool-call" ? e.decision : e.isError}`);
+      expect(events).toEqual(["tool-call:denied-by-policy", "tool-result:true"]);
+      expect(log).toEqual([]);
+      expect(kiro.calls).toEqual([]);
+    });
   });
 });
