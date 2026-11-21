@@ -222,9 +222,35 @@ export interface ToolCallResult {
   text: string;
 }
 
+export interface CallOptions {
+  /**
+   * The key of the step this call carries out. It is sent only to a tool whose input schema
+   * advertises `idempotencyKey`, so a retried call of the same step runs at most once. A deployed
+   * Kiro Remote that doesn't advertise it never receives one.
+   */
+  idempotencyKey?: string;
+}
+
 /** Calls Kiro Remote tools; the real one speaks MCP over HTTP, tests use a fake. */
 export interface KiroRemoteTools {
-  call(tool: string, args: Record<string, unknown>): Promise<ToolCallResult>;
+  call(tool: string, args: Record<string, unknown>, options?: CallOptions): Promise<ToolCallResult>;
+}
+
+/** Whether a tool's input schema (JSON Schema) has an `idempotencyKey` property. */
+export function advertisesIdempotencyKey(inputSchema: unknown): boolean {
+  const props = (inputSchema as { properties?: unknown } | null | undefined)?.properties;
+  return typeof props === "object" && props !== null && "idempotencyKey" in props;
+}
+
+/** The arguments to send: with the step's key when the schema advertises one, else as given. */
+export function withIdempotencyKey(
+  inputSchema: unknown,
+  args: Record<string, unknown>,
+  key: string | undefined,
+): Record<string, unknown> {
+  return key !== undefined && advertisesIdempotencyKey(inputSchema)
+    ? { ...args, idempotencyKey: key }
+    : args;
 }
 
 /** A bounded, single-line summary of a tool result, for the log. */
