@@ -1,0 +1,17 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M7ZG92TYD245FE1B56A1VPBH
+subject: 4hndt20b
+type: opened
+at: 2026-11-21T16:50:50Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: 244629292+kiro-agent@users.noreply.github.com
+data:
+  title: Show contexts as regions in the map's universe view
+  template: task
+  template_version: 1
