@@ -1,0 +1,15 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M7ZCXCEAAXH524AY0XVJRZDJ
+subject: wfbw9gks
+type: commented
+at: 2026-11-21T15:52:01Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: niko.virtala@hey.com
+data:
+  text: "Left open: 2.9.0 was published 21 Nov 2026 12:47 UTC, about 2.5 hours before this work, inside pnpm's minimum release age. 2.9.1 followed at 14:43 UTC."
