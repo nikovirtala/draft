@@ -6,6 +6,7 @@ import {
   type DraftEvent,
   type EdgeKind,
   type EventDraft,
+  isUnknown,
   type Target,
   targetKey,
 } from "./events.ts";
@@ -51,12 +52,26 @@ export interface UiPrompt {
   input: Record<string, unknown>;
 }
 
+/** One block of the conversation, in log order. Messages are looked up in `messages`. */
+export type UiBlock =
+  | { kind: "message"; address: string }
+  | {
+      /** An event this version of draft doesn't understand, kept in the log as received. */
+      kind: "unknown";
+      id: string;
+      type: string;
+      schema: number;
+      reason: "unknown-type" | "newer-schema";
+      at: string | null;
+    };
+
 export interface UiState {
   context: string;
   conversation: string;
   title: string;
   agent: { model: string; version: string };
   messages: UiMessage[];
+  timeline: UiBlock[];
   stubs: Record<string, UiStub>;
   streaming: { address: string; text: string } | null;
   prompts: UiPrompt[];
@@ -139,6 +154,13 @@ export class ConversationService {
    */
   static async open(o: ConversationOptions): Promise<ConversationService> {
     o.projection.sync(o.log.events());
+    const unknown = new Map<string, number>();
+    for (const r of o.log.events()) {
+      if (isUnknown(r)) unknown.set(r.reason, (unknown.get(r.reason) ?? 0) + 1);
+    }
+    for (const [reason, n] of unknown) {
+      draftMetrics().unknownEvents.add(n, { "draft.log.unknown_reason": reason });
+    }
     let conv = o.projection.conversations()[0]?.conversation;
     if (conv === undefined) {
       const ctx = o.context ?? "local";
@@ -194,12 +216,13 @@ export class ConversationService {
     const stubs: Record<string, UiStub> = {};
     for (const s of this.projection.stubs()) stubs[s.target] = s;
     const conv = this.projection.conversations().find((c) => c.conversation === this.conversation);
+    const messages = this.projection.messages(this.conversation);
     return {
       context: this.context,
       conversation: this.conversation,
       title: conv?.title ?? "Conversation",
       agent: { model: this.agent.model, version: this.agent.version },
-      messages: this.projection.messages(this.conversation).map((m) => ({
+      messages: messages.map((m) => ({
         address: m.address,
         role: m.role,
         at: m.at,
@@ -207,12 +230,35 @@ export class ConversationService {
         segments: segmentMessage(m.text),
         references: refsByMessage.get(m.address) ?? [],
       })),
+      timeline: this.timeline(messages),
       stubs,
       streaming: this.streaming,
       prompts: [...this.prompts.values()].map((p) => p.prompt),
       busy: this.busy,
       error: this.error,
     };
+  }
+
+  /** Messages and the blocks between them, in log order. */
+  private timeline(messages: readonly { address: string; seq: number }[]): UiBlock[] {
+    const blocks: { seq: number; block: UiBlock }[] = messages.map((m) => ({
+      seq: m.seq,
+      block: { kind: "message", address: m.address },
+    }));
+    for (const u of this.projection.unknownEvents(this.conversation)) {
+      blocks.push({
+        seq: u.seq,
+        block: {
+          kind: "unknown",
+          id: u.eventId,
+          type: u.type,
+          schema: u.schema,
+          reason: u.reason,
+          at: u.at,
+        },
+      });
+    }
+    return blocks.sort((a, b) => a.seq - b.seq).map((b) => b.block);
   }
 
   /** The stubs' targets on screen; only these are polled. */

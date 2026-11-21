@@ -1,9 +1,11 @@
 import { DatabaseSync } from "node:sqlite";
 import fc from "fast-check";
 import { describe, expect, it } from "vitest";
-import type { EventDraft } from "../src/events.ts";
+import { type EventDraft, isUnknown } from "../src/events.ts";
 import { MemoryLogStore } from "../src/log.ts";
 import { Projection } from "../src/projection.ts";
+import { sealRawRecord } from "../src/testing/index.ts";
+import { verifyChain } from "../src/verify.ts";
 import { AGENT, CONV, genesisDrafts, messageDraft, SYSTEM, TRACE, testClock } from "./helpers.ts";
 
 const SESSIONS = [
@@ -119,6 +121,91 @@ describe("projections", () => {
         },
       ),
       { numRuns: 150 },
+    );
+  });
+
+  it("rebuild equals incremental with events this build doesn't understand in the log", async () => {
+    // An unknown type at any schema version, or a known type at a newer one.
+    const arbUnknown = fc
+      .oneof(
+        fc.record({
+          type: fc.constantFrom("thread.summarized", "kind.extracted"),
+          schema: fc.integer({ min: 1, max: 4 }),
+        }),
+        fc.record({
+          type: fc.constantFrom("message.posted", "status.observed"),
+          schema: fc.integer({ min: 2, max: 4 }),
+        }),
+      )
+      .chain((t) =>
+        fc.record({
+          type: fc.constant(t.type),
+          schema: fc.constant(t.schema),
+          conversation: fc.constantFrom(CONV, "local/other", null),
+        }),
+      );
+    await fc.assert(
+      fc.asyncProperty(
+        fc.array(
+          fc.oneof(
+            arbDraft.map((d) => ({ d })),
+            arbUnknown.map((u) => ({ u })),
+          ),
+          { maxLength: 30 },
+        ),
+        fc.array(fc.nat(), { maxLength: 5 }),
+        async (steps, cuts) => {
+          // Seal this build's events, then re-chain them with the raw ones as another build would.
+          const sealed = new MemoryLogStore(testClock());
+          const known = await sealed.append([
+            ...genesisDrafts(),
+            ...steps.flatMap((x) => ("d" in x ? [x.d()] : [])),
+          ]);
+          let k = 2;
+          let n = 0;
+          let prev = "0".repeat(64);
+          const plain = (r: unknown) => {
+            const { prevHash: _p, hash: _h, ...rest } = JSON.parse(JSON.stringify(r));
+            return rest as Record<string, unknown>;
+          };
+          const fields = [
+            plain(known[0]),
+            plain(known[1]),
+            ...steps.map((x) =>
+              "d" in x
+                ? plain(known[k++])
+                : {
+                    id: `01M80000000000000000000${String(n++).padStart(3, "0")}`,
+                    at: "2027-01-01T00:00:00.000Z",
+                    data: { from: "a newer build" },
+                    ...x.u,
+                  },
+            ),
+          ];
+          const raw = fields.map((f) => {
+            const out = sealRawRecord(f, prev);
+            prev = out.hash as string;
+            return out;
+          });
+          const verified = verifyChain(raw);
+          expect(verified.ok).toBe(true);
+          if (!verified.ok) return;
+          const records = verified.events;
+          const db = new DatabaseSync(":memory:");
+          for (const c of [...cuts.map((x) => x % (records.length + 1))].sort((a, b) => a - b)) {
+            expect(new Projection(db).sync(records.slice(0, c))).not.toBe("rebuilt");
+          }
+          const incremental = new Projection(db);
+          incremental.sync(records);
+          const rebuilt = Projection.open();
+          rebuilt.rebuild(records);
+          expect(incremental.dump()).toEqual(rebuilt.dump());
+          expect(rebuilt.unknownCount()).toBe(records.filter(isUnknown).length);
+          rebuilt.close();
+          db.close();
+        },
+      ),
+      { numRuns: 100 },
     );
   });
 

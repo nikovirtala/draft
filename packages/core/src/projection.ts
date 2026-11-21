@@ -1,6 +1,12 @@
 import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 import { canonicalJson } from "./canonical.ts";
-import { type DraftEvent, targetKey } from "./events.ts";
+import {
+  type DraftEvent,
+  isUnknown,
+  type LogRecord,
+  targetKey,
+  type UnknownEvent,
+} from "./events.ts";
 
 /**
  * Views of the log in SQLite: conversations, messages, tool calls, reference edges and live
@@ -30,9 +36,20 @@ create table if not exists edges (
 create table if not exists stubs (
   target text primary key, type text not null, id text not null, state_json text not null,
   observed_at text not null, first_seq integer not null, last_seq integer not null);
+create table if not exists unknown_events (
+  event_id text primary key, type text not null, schema integer not null, reason text not null,
+  conversation text, at text, seq integer not null);
 `;
 
-const TABLES = ["meta", "conversations", "messages", "tool_calls", "edges", "stubs"] as const;
+const TABLES = [
+  "meta",
+  "conversations",
+  "messages",
+  "tool_calls",
+  "edges",
+  "stubs",
+  "unknown_events",
+] as const;
 
 export interface MessageRow {
   address: string;
@@ -75,6 +92,17 @@ export interface ToolCallRow {
   at: string;
 }
 
+/** An event this build doesn't understand, as the conversation shows it. */
+export interface UnknownRow {
+  eventId: string;
+  type: string;
+  schema: number;
+  reason: UnknownEvent["reason"];
+  conversation: string | null;
+  at: string | null;
+  seq: number;
+}
+
 export class ProjectionGapError extends Error {
   constructor(expected: number, got: number) {
     super(`projection expected event ${expected}, got ${got}`);
@@ -109,7 +137,7 @@ export class Projection {
   }
 
   /** Applies the event at position `seq` (zero-based); events must arrive in log order. */
-  apply(e: DraftEvent, seq: number = this.count()): void {
+  apply(e: LogRecord, seq: number = this.count()): void {
     if (seq !== this.count()) throw new ProjectionGapError(this.count(), seq);
     this.db.exec("begin");
     try {
@@ -123,12 +151,12 @@ export class Projection {
     }
   }
 
-  applyAll(events: readonly DraftEvent[]): void {
+  applyAll(events: readonly LogRecord[]): void {
     for (const e of events) this.apply(e);
   }
 
   /** Drops every view and builds it again from the log alone. */
-  rebuild(events: readonly DraftEvent[]): void {
+  rebuild(events: readonly LogRecord[]): void {
     for (const t of TABLES) this.db.exec(`drop table if exists ${t}`);
     this.db.exec(SCHEMA);
     this.setMeta("version", String(PROJECTION_VERSION));
@@ -139,7 +167,7 @@ export class Projection {
    * Brings the projection up to date with the log: applies the missing tail when the projection
    * is a prefix of the log, and rebuilds otherwise (another version, another log, a gap).
    */
-  sync(events: readonly DraftEvent[]): "current" | "incremental" | "rebuilt" {
+  sync(events: readonly LogRecord[]): "current" | "incremental" | "rebuilt" {
     const n = this.count();
     const prefixOk =
       this.meta("version") === String(PROJECTION_VERSION) &&
@@ -150,11 +178,26 @@ export class Projection {
       return "rebuilt";
     }
     if (n === events.length) return "current";
-    for (let i = n; i < events.length; i++) this.apply(events[i] as DraftEvent, i);
+    for (let i = n; i < events.length; i++) this.apply(events[i] as LogRecord, i);
     return "incremental";
   }
 
-  private applyOne(e: DraftEvent, seq: number): void {
+  private applyOne(r: LogRecord, seq: number): void {
+    if (isUnknown(r)) {
+      // Kept and counted, never interpreted: a later build may know what it means.
+      this.run(
+        "insert into unknown_events values (?, ?, ?, ?, ?, ?, ?)",
+        r.id,
+        r.type,
+        r.schema,
+        r.reason,
+        r.conversation,
+        r.at,
+        seq,
+      );
+      return;
+    }
+    const e: DraftEvent = r;
     switch (e.type) {
       case "context.created":
         return;
@@ -305,6 +348,35 @@ export class Projection {
       | Record<string, unknown>
       | undefined;
     return r === undefined ? null : toStub(r);
+  }
+
+  /**
+   * The events this build doesn't understand that belong to `conversation`, and those whose
+   * conversation can't be read (they might belong to it), in log order.
+   */
+  unknownEvents(conversation: string): UnknownRow[] {
+    return (
+      this.db
+        .prepare(
+          "select * from unknown_events where conversation = ? or conversation is null order by seq",
+        )
+        .all(conversation) as Record<string, unknown>[]
+    ).map((r) => ({
+      eventId: r.event_id as string,
+      type: r.type as string,
+      schema: Number(r.schema),
+      reason: r.reason as UnknownEvent["reason"],
+      conversation: (r.conversation as string | null) ?? null,
+      at: (r.at as string | null) ?? null,
+      seq: Number(r.seq),
+    }));
+  }
+
+  /** How many events the projection kept without understanding them. */
+  unknownCount(): number {
+    return Number(
+      (this.db.prepare("select count(*) as n from unknown_events").get() as { n: number }).n,
+    );
   }
 
   toolCalls(conversation: string): ToolCallRow[] {

@@ -1,7 +1,7 @@
-import { type DraftEvent, eventHash, GENESIS_HASH, parseEvent } from "./events.ts";
+import { eventHash, GENESIS_HASH, type LogRecord, readRecord } from "./events.ts";
 
 export type VerifyResult =
-  | { ok: true; events: DraftEvent[] }
+  | { ok: true; events: LogRecord[] }
   | {
       ok: false;
       /** Zero-based position of the first bad event. */
@@ -12,22 +12,24 @@ export type VerifyResult =
     };
 
 /**
- * Walks the chain from the start and names the first bad event: a line that isn't JSON, an
- * envelope or data that fails its schema, a previous hash that doesn't match the event before, or
- * a hash that doesn't match the event's own content.
+ * Walks the chain from the start and names the first bad event: a line that isn't JSON, a record
+ * without the chain fields, a previous hash that doesn't match the event before, a hash that
+ * doesn't match the record's own content, or an event of a known type whose envelope or data
+ * fails its schema. The chain is checked over every record whatever its type, so events this
+ * build doesn't understand are kept, not refused.
  */
 export function verifyChain(raw: readonly unknown[]): VerifyResult {
-  const events: DraftEvent[] = [];
+  const events: LogRecord[] = [];
   let prev = GENESIS_HASH;
   for (const [index, r] of raw.entries()) {
     const id =
       typeof r === "object" && r !== null && typeof (r as { id?: unknown }).id === "string"
         ? ((r as { id: string }).id as string)
         : null;
-    const parsed = parseEvent(r);
-    if (!parsed.ok) return { ok: false, index, id, reason: `is invalid: ${parsed.reason}` };
-    const e = parsed.event;
-    if (e.prevHash !== prev) {
+    const read = readRecord(r);
+    if (!read.ok) return { ok: false, index, id, reason: `is invalid: ${read.reason}` };
+    const rec = r as { prevHash: string; hash: string } & Record<string, unknown>;
+    if (rec.prevHash !== prev) {
       return {
         ok: false,
         index,
@@ -35,11 +37,11 @@ export function verifyChain(raw: readonly unknown[]): VerifyResult {
         reason: "does not chain to the event before it (previous hash mismatch)",
       };
     }
-    if (eventHash(e) !== e.hash) {
+    if (eventHash(rec) !== rec.hash) {
       return { ok: false, index, id, reason: "was changed after it was written (hash mismatch)" };
     }
-    events.push(e);
-    prev = e.hash;
+    events.push(read.record);
+    prev = rec.hash;
   }
   return { ok: true, events };
 }

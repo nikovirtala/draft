@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import type { UiPrompt } from "../src/conversation.ts";
+import { knownEvents } from "../src/events.ts";
 import { fakeKiro, openService, RUNNING, WAITING } from "./fixtures.ts";
 
 describe("a conversation", () => {
@@ -25,7 +26,7 @@ describe("a conversation", () => {
       pendingPermissions: 1,
     });
 
-    const events = log.events();
+    const events = knownEvents(log.events());
     expect(events.map((e) => e.type)).toEqual([
       "context.created",
       "conversation.created",
@@ -63,7 +64,7 @@ describe("a conversation", () => {
     await service.submit("launch one");
     expect(prompts[0]?.tool).toBe("mcp__kiro-remote__kiro_launch_session");
     expect(kiro.calls.some((c) => c.tool === "kiro_launch_session")).toBe(false);
-    const called = log.events().find((e) => e.type === "agent.tool_called");
+    const called = knownEvents(log.events()).find((e) => e.type === "agent.tool_called");
     expect(called?.data).toMatchObject({ decision: "denied-by-user", resultSummary: null });
     close();
   });
@@ -94,14 +95,14 @@ describe("a conversation", () => {
     await service.submit("Which sessions are open?");
     service.setVisible([{ type: "kiro-session", id: RUNNING }]);
     await service.tick();
-    expect(log.events().filter((e) => e.type === "status.observed")).toHaveLength(0);
+    expect(knownEvents(log.events()).filter((e) => e.type === "status.observed")).toHaveLength(0);
 
     kiro.update(RUNNING, { status: "awaiting_permission", pendingPermissions: 2 });
     await new Promise((r) => setTimeout(r, 5));
     await service.tick();
     await new Promise((r) => setTimeout(r, 5));
     await service.tick();
-    const statuses = log.events().filter((e) => e.type === "status.observed");
+    const statuses = knownEvents(log.events()).filter((e) => e.type === "status.observed");
     expect(statuses).toHaveLength(1);
     expect(statuses[0]?.actor).toEqual({ kind: "resolver", id: "kiro-session", version: "1" });
     expect(service.state().stubs[`kiro-session:${RUNNING}`]?.state).toMatchObject({
