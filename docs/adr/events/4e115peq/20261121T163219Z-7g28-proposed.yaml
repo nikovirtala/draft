@@ -1,0 +1,17 @@
+envelope: ledger/v1
+kind: decision
+schema: decision/v1
+id: 01M7ZF766YVMBXFA47D4F57G28
+subject: 4e115peq
+type: proposed
+at: 2026-11-21T16:32:19Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: 244629292+kiro-agent@users.noreply.github.com
+data:
+  title: Open one main window per context
+  template: nygard
+  template_version: 1
