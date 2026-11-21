@@ -1,0 +1,16 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M7ZCX62HGZMD9PW3PEQXJBJT
+subject: 15cxvdep
+type: closed
+at: 2026-11-21T15:51:54Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: niko.virtala@hey.com
+reason: PR, ark issue and artifact references show live stubs with a snapshot at mention (pull-request.ts, ark-issue.ts, artifact-page.ts; e2e attention.spec.ts). Each resolver polls only while its stubs are on screen, with doubling backoff that honours GitHub's retry-after (github-resolvers.test.ts). Failures are counted as draft.resolver.failures by the poller and by snapshots.
+data:
+  resolution: done
