@@ -1,0 +1,16 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M7Z3FD6AWJJ6H1VXX3FTB3YF
+subject: 0kd4s01d
+type: closed
+at: 2026-11-21T13:07:06Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: niko.virtala@hey.com
+reason: "message.posted schema 2 carries an audience ({people, agent}); agent.state_changed records active/paused, with a projection (agent_state, messages.audience_json). A paused conversation starts no turns and no steps; @agent reaches it for one message; Option+Enter sends an aside. Unit, integration and e2e tests cover it. Decision: ADR 2cmd6znf."
+data:
+  resolution: done
