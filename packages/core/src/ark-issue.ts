@@ -13,9 +13,8 @@ import type { Resolver } from "./resolver.ts";
  */
 
 /** Canonical issue ids: 8 lowercase Crockford base32 characters. */
-const ID = "[0-9a-hjkmnp-tv-z]{8}";
-const EVENT_FILE = /^(\d{8}T\d{6}Z)-([0-9a-z]{4})-([a-z][a-z-]*)\.ya?ml$/;
-
+export const ARK_ID = "[0-9a-hjkmnp-tv-z]{8}";
+const ID = ARK_ID;
 export type ArkIssueStatus = "open" | "in-progress" | "closed";
 
 export interface ArkIssueEvent {
@@ -52,6 +51,22 @@ export function arkIssueId(repo: string, id: string): string {
 export function parseArkIssueId(id: string): { repo: string; issue: string } | null {
   const m = new RegExp(`^([^/:]+/[^/:]+):(${ID})$`).exec(id);
   return m === null ? null : { repo: m[1] as string, issue: m[2] as string };
+}
+
+/** An event file's name: `20261121T155120Z-tk1h-proposed.yaml`. */
+export const EVENT_FILE = /^(\d{8}T\d{6}Z)-([0-9a-z]{4})-([a-z][a-z-]*)\.ya?ml$/;
+
+/** The events a directory listing names, oldest first, with the time each file name carries. */
+export function parseEventFiles(
+  listing: readonly { name: string; type: string }[],
+): ArkIssueEvent[] {
+  return listing
+    .filter((f) => f.type === "file" && EVENT_FILE.test(f.name))
+    .map((f) => {
+      const m = EVENT_FILE.exec(f.name) as RegExpExecArray;
+      return { type: m[3] as string, at: isoOf(m[1] as string), file: f.name };
+    })
+    .sort((a, b) => (a.file < b.file ? -1 : 1));
 }
 
 function isoOf(stamp: string): string {
@@ -119,13 +134,7 @@ export class ArkIssueResolver implements Resolver {
       `/repos/${p.repo}/contents/${dir}`,
     );
     if (listing === null || !Array.isArray(listing)) return null;
-    const events = listing
-      .filter((f) => f.type === "file" && EVENT_FILE.test(f.name))
-      .map((f) => {
-        const m = EVENT_FILE.exec(f.name) as RegExpExecArray;
-        return { type: m[3] as string, at: isoOf(m[1] as string), file: f.name };
-      })
-      .sort((a, b) => (a.file < b.file ? -1 : 1));
+    const events = parseEventFiles(listing);
     if (events.length === 0) return null;
     let status: ArkIssueStatus = "open";
     for (const e of events) {
@@ -158,6 +167,6 @@ export class ArkIssueResolver implements Resolver {
   }
 }
 
-function escapeRe(s: string): string {
+export function escapeRe(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

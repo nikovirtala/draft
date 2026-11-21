@@ -1,5 +1,6 @@
 export * from "./acceptance.ts";
 export * from "./address.ts";
+export * from "./adr.ts";
 export * from "./agent.ts";
 export * from "./agent-context.ts";
 export * from "./ark-issue.ts";
