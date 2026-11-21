@@ -1,15 +1,32 @@
 {
-  "agent": { "name": "fake-acp-agent", "version": "1.0.0", "model": "fake-model-1" },
+  "agent": {
+    "name": "fake-acp-agent",
+    "version": "1.0.0",
+    "model": "fake-model-1"
+  },
   "starts": "kiro",
   "style": "kiro",
-  "usage": { "inputTokens": 1200, "outputTokens": 85, "totalTokens": 1285 },
+  "usage": {
+    "inputTokens": 1200,
+    "outputTokens": 85,
+    "totalTokens": 1285
+  },
   "credits": 0.031,
   "turns": [
     {
       "match": "sessions",
       "steps": [
-        { "text": "Let me check Kiro Remote.", "chunk": 3, "delayMs": 30 },
-        { "tool": "kiro_list_sessions", "input": { "limit": 20 } },
+        {
+          "text": "Let me check Kiro Remote.",
+          "chunk": 3,
+          "delayMs": 30
+        },
+        {
+          "tool": "kiro_list_sessions",
+          "input": {
+            "limit": 20
+          }
+        },
         {
           "text": "Two sessions are open. 01KAHX7Z1M2N3P4Q5R6S7T8V9W is fixing the flaky end-to-end test and is still running. 01KAHX8A1B2C3D4E5F6G7H8J9K is writing the release notes and is waiting for your permission to run a command.",
           "chunk": 3,
@@ -36,16 +53,36 @@
     },
     {
       "match": "which one",
-      "steps": [{ "text": "The release notes session is the one waiting for you.", "delayMs": 10 }]
+      "steps": [
+        {
+          "text": "The release notes session is the one waiting for you.",
+          "delayMs": 10
+        }
+      ]
+    },
+    {
+      "match": "detail",
+      "steps": [
+        {
+          "text": "The running one is 01KAHX7Z1M2N3P4Q5R6S7T8V9W, fixing the flaky end-to-end test.",
+          "chunk": 4,
+          "delayMs": 10
+        }
+      ]
     },
     {
       "match": "clean up",
       "steps": [
         {
           "unasked": "kiro_delete_session",
-          "input": { "sessionId": "01KAHXZZZZZZZZZZZZZZZZZZZZ" }
+          "input": {
+            "sessionId": "01KAHXZZZZZZZZZZZZZZZZZZZZ"
+          }
         },
-        { "text": "I deleted the old session.", "delayMs": 0 }
+        {
+          "text": "I deleted the old session.",
+          "delayMs": 0
+        }
       ]
     },
     {
@@ -59,7 +96,10 @@
             "title": "Update the README"
           }
         },
-        { "text": "Launching again.", "delayMs": 0 }
+        {
+          "text": "Launching again.",
+          "delayMs": 0
+        }
       ]
     }
   ],

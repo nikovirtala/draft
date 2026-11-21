@@ -15,6 +15,7 @@ import type {
   Boot,
   ConversationState,
   Move,
+  Stub,
   Thread,
   View,
 } from "../../shared/ipc.ts";
@@ -39,6 +40,11 @@ export interface Workspace {
   threads: Thread[];
   attention: Attention[];
   view: View;
+  /**
+   * Every live status, newest known state. Statuses are polled once for the whole device, so the
+   * state a conversation carries can be older than another's: the newest observation wins.
+   */
+  stubs: Record<string, Stub>;
   agents: AgentOption[];
   defaultAgent: string;
   /** The block this window shows in full; null for the main window. */
@@ -125,6 +131,13 @@ export function WorkspaceProvider({ boot, children }: { boot: Ready; children: R
 
   const focus = view.layout.focus;
   const value = useMemo<Workspace>(() => {
+    const stubs: Record<string, Stub> = {};
+    for (const st of Object.values(states)) {
+      for (const [k, v] of Object.entries(st.stubs)) {
+        const known = stubs[k];
+        if (known === undefined || known.observedAt < v.observedAt) stubs[k] = v;
+      }
+    }
     const depths = new Map(threads.map((t) => [t.conversation, t.depth]));
     const count = splitAttention(attention, focus);
     const toggle = () => {
@@ -141,6 +154,7 @@ export function WorkspaceProvider({ boot, children }: { boot: Ready; children: R
       threads,
       attention,
       view,
+      stubs,
       agents: boot.agents,
       defaultAgent: boot.defaultAgent,
       windowBlock: boot.block,
