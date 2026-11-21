@@ -1,0 +1,17 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M7YZVN020MDNA3NV49EDSGAF
+subject: pay7gfmz
+type: opened
+at: 2026-11-21T12:03:52Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: niko.virtala@hey.com
+data:
+  title: Record deploy provenance for the products draft builds
+  template: task
+  template_version: 1

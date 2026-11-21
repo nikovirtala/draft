@@ -1,0 +1,16 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M7YZVN03THMVRZQ0Q4SAHAJ7
+subject: pay7gfmz
+type: labeled
+at: 2026-11-21T12:03:52Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: niko.virtala@hey.com
+data:
+  set:
+    - type:feature
