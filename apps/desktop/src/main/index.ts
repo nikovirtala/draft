@@ -20,6 +20,7 @@ import { type Boot, CHANNELS, type Change, type Placement } from "../shared/ipc.
 import { ClaudeAgentRuntime, packagedClaudeExecutable } from "./agent-sdk.ts";
 import { loadConfig } from "./config.ts";
 import { ensureIdentity, userActor } from "./identity.ts";
+import { provenance } from "./provenance.ts";
 import { SafeStorageSecretStore } from "./secrets.ts";
 import { JsonFileSpanExporter, startTelemetry } from "./telemetry.ts";
 import { ViewStateStore } from "./view-state.ts";
@@ -31,6 +32,7 @@ if (process.env.DRAFT_DATA_DIR !== undefined) app.setPath("userData", process.en
 if (!app.requestSingleInstanceLock()) app.quit();
 
 const telemetry = startTelemetry({
+  provenance: provenance(process.env, app.isPackaged),
   spanExporters:
     process.env.DRAFT_SPAN_FILE === undefined
       ? []
