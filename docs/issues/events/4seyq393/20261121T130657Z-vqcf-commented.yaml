@@ -1,0 +1,15 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M7Z3F4KA9NYFSAV99HS1VQCF
+subject: 4seyq393
+type: commented
+at: 2026-11-21T13:06:57Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: niko.virtala@hey.com
+data:
+  text: Slice 2 put the audience on `message.posted` (schema 2, `{people, agent}`) and the agent state in `agent.state_changed` (ADR 2cmd6znf). A listening/scribe state adds a value to `AgentStateSchema` whose default audience is people and agent, and kinds read `audience` from the projection's `messages.audience_json`.
