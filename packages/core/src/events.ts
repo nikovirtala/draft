@@ -99,6 +99,27 @@ export const EventData = {
     /** The call's status when draft saw it run. */
     status: z.string().min(1),
   }),
+  /**
+   * Which agent runs a conversation, chosen by a person: when a thread starts, or later as an
+   * explicit switch. The new agent's session starts from the log's projection, the same path as
+   * recovering from a crash (ADR h89hcrk6). A conversation with none runs on the default agent.
+   */
+  "agent.selected": z.object({
+    agent: z.string().min(1),
+    /** The agent it ran on until now; `null` when a thread starts. */
+    previous: z.string().min(1).nullable(),
+    reason: z.enum(["thread-start", "switch"]),
+    /** What the new session starts from, as shown to the person before they chose. */
+    context: z
+      .object({
+        messages: z.number().int().min(0),
+        openItems: z.number().int().min(0),
+        decisions: z.number().int().min(0),
+        references: z.number().int().min(0),
+        characters: z.number().int().min(0),
+      })
+      .nullable(),
+  }),
   /** An agent session began for the conversation, from this context and no memory of the agent's own. */
   "agent.session_started": z.object({
     agent: z.string().min(1),
@@ -197,6 +218,7 @@ export const SCHEMA_VERSIONS: Record<EventType, number> = {
   "agent.state_changed": 1,
   "agent.anomaly": 1,
   "agent.session_started": 1,
+  "agent.selected": 1,
   "agent.tool_called": 1,
   "step.started": 1,
   "step.completed": 1,

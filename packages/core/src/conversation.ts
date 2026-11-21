@@ -1,6 +1,13 @@
 import { context as otelContext, ROOT_CONTEXT, type Span, trace } from "@opentelemetry/api";
 import { conversationKey, itemAddress } from "./address.ts";
-import type { AgentEvent, AgentRuntime, AgentUsage, PermissionAnswer } from "./agent.ts";
+import {
+  type AgentDirectory,
+  type AgentEvent,
+  type AgentRuntime,
+  type AgentUsage,
+  type PermissionAnswer,
+  singleAgent,
+} from "./agent.ts";
 import { buildAgentContext, contextDigest } from "./agent-context.ts";
 import {
   type Actor,
@@ -99,6 +106,8 @@ export type UiBlock =
 export interface UiState {
   context: string;
   conversation: string;
+  /** The message this conversation branched off, or null for the main conversation. */
+  parent: string | null;
   title: string;
   agent: { id: string; model: string; version: string; state: AgentState };
   messages: UiMessage[];
@@ -112,7 +121,7 @@ export interface UiState {
 
 export type UiChange =
   | { type: "state"; state: UiState }
-  | { type: "delta"; address: string; text: string };
+  | { type: "delta"; conversation: string; address: string; text: string };
 
 /**
  * Span and log attributes for what an agent reported about a turn's use. Nothing is filled in for
@@ -145,7 +154,12 @@ export const AGENT_MENTION = /(?:^|[^\w@])@agent\b/i;
 export interface ConversationOptions {
   log: LogStore;
   projection: Projection;
+  /** The agent every conversation runs on, unless a person chose another one for a thread. */
   agent: AgentRuntime;
+  /** The agents a thread can run on. Without it, every conversation runs on `agent`. */
+  agents?: AgentDirectory;
+  /** Shared by every conversation of one log, so the log and the projection advance in step. */
+  writer?: SerialWriter;
   resolvers: readonly Resolver[];
   /** The person at this device. The agent and resolvers have their own actors. */
   user: UserActor;
@@ -156,6 +170,34 @@ export interface ConversationOptions {
 }
 
 export type UserActor = Extract<Actor, { kind: "user" }>;
+
+/**
+ * Runs writes one after the other. Every conversation of a log shares one, so an event reaches the
+ * log and the projection in the same order.
+ */
+export class SerialWriter {
+  private chain: Promise<unknown> = Promise.resolve();
+
+  run<T>(f: () => Promise<T>): Promise<T> {
+    const run = this.chain.then(f);
+    this.chain = run.catch(() => {});
+    return run;
+  }
+}
+
+/** Something that needs a person in one conversation: one count, in one order, across all of them. */
+export interface AttentionItem {
+  id: string;
+  conversation: string;
+  cause: "permission" | "unfinished-step" | "unasked-call";
+  at: string;
+}
+
+/**
+ * A thread's own state. Only `open` exists so far; what closes a thread (a measurable sign of use
+ * in production, a conclusion that returns to the main conversation) adds states here.
+ */
+export type ThreadState = "open";
 
 const SYSTEM: Actor = { kind: "system", id: "draft", version: DRAFT_VERSION };
 
@@ -168,21 +210,21 @@ export class ConversationService {
   readonly conversation: string;
   private readonly log: LogStore;
   private readonly projection: Projection;
-  private readonly agent: AgentRuntime;
+  private readonly agents: AgentDirectory;
+  private readonly writer: SerialWriter;
   private readonly resolvers: Map<string, Resolver>;
   private readonly user: UserActor;
   private readonly newId: (() => string) | undefined;
   private readonly listeners = new Set<(c: UiChange) => void>();
   private readonly prompts = new Map<
     string,
-    { prompt: UiPrompt; resolve: (a: PermissionAnswer) => void }
+    { prompt: UiPrompt; at: string; resolve: (a: PermissionAnswer) => void }
   >();
   private streaming: { address: string; text: string } | null = null;
   private busy = false;
   /** The turn in progress, for pausing it. `addressed` means @agent started it in a paused conversation. */
   private turn: { abort: AbortController; addressed: boolean } | null = null;
   private error: string | null = null;
-  private writes: Promise<unknown> = Promise.resolve();
   /** Steps this process started and is waiting on, by tool use id. Every other open step is interrupted. */
   private readonly stepsInFlight = new Map<string, { started: string; idempotencyKey: string }>();
   readonly poller: StubPoller;
@@ -190,7 +232,8 @@ export class ConversationService {
   private constructor(o: ConversationOptions, conversation: string) {
     this.log = o.log;
     this.projection = o.projection;
-    this.agent = o.agent;
+    this.agents = o.agents ?? singleAgent(o.agent);
+    this.writer = o.writer ?? new SerialWriter();
     this.resolvers = new Map(o.resolvers.map((r) => [r.type, r]));
     this.user = o.user;
     this.newId = o.newId;
@@ -261,6 +304,52 @@ export class ConversationService {
     return new ConversationService(o, conv);
   }
 
+  /** A service for a conversation that exists already, such as a thread. */
+  static attach(o: ConversationOptions, conversation: string): ConversationService {
+    if (!o.projection.conversations().some((c) => c.conversation === conversation))
+      throw new Error(`no such conversation: ${conversation}`);
+    return new ConversationService(o, conversation);
+  }
+
+  /** The agent this conversation runs on: the one a person chose for it, else the default. */
+  runtime(): AgentRuntime {
+    return this.agents.get(this.projection.agentOf(this.conversation) ?? this.agents.defaultId);
+  }
+
+  /** Whether this conversation is a thread: it branched off a message. */
+  private isThread(): boolean {
+    return (
+      this.projection.conversations().find((c) => c.conversation === this.conversation)?.parent !==
+      null
+    );
+  }
+
+  /**
+   * What needs a person here, computed from the log (steps that never finished, calls that ran
+   * without asking) and from the permission requests waiting now. The workspace puts every
+   * conversation's items in one order.
+   */
+  attention(): AttentionItem[] {
+    const items: AttentionItem[] = [];
+    for (const b of this.timeline(this.projection.messages(this.conversation))) {
+      if (b.kind !== "interrupt") continue;
+      items.push({
+        id: b.id,
+        conversation: this.conversation,
+        cause: b.cause === "unasked-call" ? "unasked-call" : "unfinished-step",
+        at: b.at,
+      });
+    }
+    for (const p of this.prompts.values())
+      items.push({
+        id: p.prompt.id,
+        conversation: this.conversation,
+        cause: "permission",
+        at: p.at,
+      });
+    return items.sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
+  }
+
   onChange(cb: (c: UiChange) => void): () => void {
     this.listeners.add(cb);
     return () => this.listeners.delete(cb);
@@ -288,14 +377,21 @@ export class ConversationService {
     for (const s of this.projection.stubs()) stubs[s.target] = s;
     const conv = this.projection.conversations().find((c) => c.conversation === this.conversation);
     const messages = this.projection.messages(this.conversation);
+    let runtime: AgentRuntime | null = null;
+    try {
+      runtime = this.runtime();
+    } catch {
+      // The agent chosen for this thread is no longer configured; the turn says so.
+    }
     return {
       context: this.context,
       conversation: this.conversation,
+      parent: conv?.parent ?? null,
       title: conv?.title ?? "Conversation",
       agent: {
-        id: this.agent.id,
-        model: this.agent.model,
-        version: this.agent.version,
+        id: runtime?.id ?? this.projection.agentOf(this.conversation) ?? this.agents.defaultId,
+        model: runtime?.model ?? "unavailable",
+        version: runtime?.version ?? "not configured",
         state: this.projection.agentState(this.conversation),
       },
       messages: messages.map((m) => ({
@@ -322,7 +418,10 @@ export class ConversationService {
       seq: m.seq,
       block: { kind: "message", address: m.address },
     }));
+    const thread = this.isThread();
     for (const u of this.projection.unknownEvents(this.conversation)) {
+      // An event of no known conversation might belong anywhere: the main conversation shows it.
+      if (thread && u.conversation === null) continue;
       blocks.push({
         seq: u.seq,
         block: {
@@ -365,7 +464,7 @@ export class ConversationService {
         },
       });
     }
-    for (const r of this.projection.recoveries()) {
+    for (const r of thread ? [] : this.projection.recoveries()) {
       blocks.push({
         seq: r.seq,
         block: {
@@ -495,6 +594,7 @@ export class ConversationService {
     const toAgent = options.aside !== true && (state === "active" || addressed);
     if (!toAgent) return this.postPeopleOnly(text);
     if (this.busy) throw new Error("a turn is already running");
+    const agent = this.runtime();
     this.busy = true;
     this.error = null;
     const m = draftMetrics();
@@ -553,16 +653,16 @@ export class ConversationService {
         // Read when each event is written: a runtime may learn its model and version during the turn.
         const agentActor = (): Actor => ({
           kind: "agent",
-          id: this.agent.id,
-          model: this.agent.model,
-          version: this.agent.version,
+          id: agent.id,
+          model: agent.model,
+          version: agent.version,
         });
 
         const agentSpan = tracer().startSpan("draft.agent.turn", {
-          attributes: { "gen_ai.request.model": this.agent.model, "draft.agent": this.agent.id },
+          attributes: { "gen_ai.request.model": agent.model, "draft.agent": agent.id },
         });
         const agentCtx = trace.setSpan(ctx, agentSpan);
-        const events = this.agent.runTurn(
+        const events = agent.runTurn(
           { conversation: this.conversation, text, context, signal: abort.signal },
           {
             confirmTool: (call) =>
@@ -575,6 +675,7 @@ export class ConversationService {
                 const answer = await new Promise<PermissionAnswer>((resolve) => {
                   this.prompts.set(call.toolUseId, {
                     prompt: { id: call.toolUseId, tool: call.name, input: call.input },
+                    at: new Date().toISOString(),
                     resolve,
                   });
                   this.emitState();
@@ -627,9 +728,9 @@ export class ConversationService {
                     actor: agentActor(),
                     traceId,
                     data: {
-                      agent: this.agent.id,
-                      agentVersion: this.agent.version,
-                      model: this.agent.model,
+                      agent: agent.id,
+                      agentVersion: agent.version,
+                      model: agent.model,
                       contextHash: contextDigest(context),
                       contextMessages: context.messages.length,
                       contextOpenItems: context.openItems.length,
@@ -683,7 +784,12 @@ export class ConversationService {
             case "text-delta":
               if (this.streaming !== null) {
                 this.streaming.text += ev.text;
-                this.emit({ type: "delta", address: agentAddress, text: ev.text });
+                this.emit({
+                  type: "delta",
+                  conversation: this.conversation,
+                  address: agentAddress,
+                  text: ev.text,
+                });
               }
               break;
             case "tool-call": {
@@ -831,8 +937,8 @@ export class ConversationService {
         agentSpan.setAttributes({
           ...usageAttributes(usage),
           // The model the agent reported, which a runtime may only learn once its session starts.
-          "gen_ai.response.model": this.agent.model,
-          "draft.agent.version": this.agent.version,
+          "gen_ai.response.model": agent.model,
+          "draft.agent.version": agent.version,
           "draft.tool_calls": toolCount,
         });
         if (failure !== null) failSpan(agentSpan, new Error("agent"));
@@ -1001,13 +1107,11 @@ export class ConversationService {
     const t0 = performance.now();
     try {
       // The log and the projection advance together, one batch at a time.
-      const run = this.writes.then(async () => {
+      const sealed = await this.writer.run(async () => {
         const sealed = await this.log.append(drafts);
         for (const e of sealed) this.projection.apply(e);
         return sealed;
       });
-      this.writes = run.catch(() => {});
-      const sealed = await run;
       span.setAttribute(
         "draft.event.ids",
         sealed.map((e) => e.id),
@@ -1036,6 +1140,10 @@ export class ConversationService {
     for (const p of this.prompts.values())
       p.resolve({ allow: false, message: "draft is closing." });
     this.prompts.clear();
-    this.agent.closeConversation(this.conversation);
+    try {
+      this.runtime().closeConversation(this.conversation);
+    } catch {
+      // Its agent is no longer configured: there is no session to end.
+    }
   }
 }

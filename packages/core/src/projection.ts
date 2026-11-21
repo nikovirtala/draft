@@ -18,7 +18,7 @@ import {
  */
 
 /** Bump when the tables change; a projection with another version is rebuilt. */
-export const PROJECTION_VERSION = 2;
+export const PROJECTION_VERSION = 3;
 
 const SCHEMA = `
 create table if not exists meta (key text primary key, value text not null);
@@ -31,6 +31,9 @@ create table if not exists messages (
   audience_json text not null);
 create table if not exists agent_state (
   conversation text primary key, state text not null, at text not null, seq integer not null);
+create table if not exists agent_selected (
+  address text primary key, conversation text not null, agent text not null, previous text,
+  reason text not null, at text not null, seq integer not null);
 create table if not exists anomalies (
   address text primary key, conversation text not null, kind text not null,
   tool_use_id text not null, name text not null, input_json text not null, status text not null,
@@ -64,6 +67,7 @@ const TABLES = [
   "conversations",
   "messages",
   "agent_state",
+  "agent_selected",
   "anomalies",
   "recoveries",
   "tool_calls",
@@ -82,6 +86,15 @@ export interface MessageRow {
   traceId: string | null;
   seq: number;
   audience: Audience;
+}
+
+export interface AgentSelectionRow {
+  address: string;
+  agent: string;
+  previous: string | null;
+  reason: "thread-start" | "switch";
+  at: string;
+  seq: number;
 }
 
 /** A call that ran without the agent asking first. */
@@ -312,6 +325,18 @@ export class Projection {
           seq,
         );
         return;
+      case "agent.selected":
+        this.run(
+          "insert or replace into agent_selected values (?, ?, ?, ?, ?, ?, ?)",
+          e.address,
+          e.conversation as string,
+          e.data.agent,
+          e.data.previous,
+          e.data.reason,
+          e.at,
+          seq,
+        );
+        return;
       case "agent.session_started":
         // Recorded for the audit; nothing on screen is computed from it.
         return;
@@ -444,6 +469,30 @@ export class Projection {
       .prepare("select state from agent_state where conversation = ?")
       .get(conversation) as { state: AgentState } | undefined;
     return r?.state ?? "active";
+  }
+
+  /** The agent a person chose for `conversation`, or null: it runs on the default agent. */
+  agentOf(conversation: string): string | null {
+    const r = this.db
+      .prepare("select agent from agent_selected where conversation = ? order by seq desc limit 1")
+      .get(conversation) as { agent: string } | undefined;
+    return r?.agent ?? null;
+  }
+
+  /** Every choice of agent for `conversation`, oldest first: the audit of who acted from where. */
+  agentSelections(conversation: string): AgentSelectionRow[] {
+    return (
+      this.db
+        .prepare("select * from agent_selected where conversation = ? order by seq")
+        .all(conversation) as Record<string, unknown>[]
+    ).map((r) => ({
+      address: r.address as string,
+      agent: r.agent as string,
+      previous: (r.previous as string | null) ?? null,
+      reason: r.reason as "thread-start" | "switch",
+      at: r.at as string,
+      seq: Number(r.seq),
+    }));
   }
 
   /** Calls that ran without asking, in the order draft saw them. */

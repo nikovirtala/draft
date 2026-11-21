@@ -15,3 +15,4 @@ export * from "./telemetry.ts";
 export * from "./verify.ts";
 export * from "./version.ts";
 export * from "./view.ts";
+export * from "./workspace.ts";
