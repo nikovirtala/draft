@@ -6,3 +6,5 @@ packages:
 # day this workspace was set up, so younger than pnpm's minimum release age.
 minimumReleaseAgeExclude:
   - "@hono/node-server@2.1.11"
+allowBuilds:
+  electron: true
