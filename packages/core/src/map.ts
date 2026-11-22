@@ -89,7 +89,11 @@ export interface KindDecl {
   derivation: string;
   /** Start to end: the order of the columns. */
   states: readonly StateDecl[];
-  /** Shown even with no items, so the map says what it will show. */
+  /**
+   * Shown even with no items. Only for a kind whose zero tells the person something they need and
+   * the rest of the map doesn't say; any other kind appears when it has an item, and the empty
+   * state names every kind.
+   */
   alwaysShown?: boolean;
   items(input: KindInput): readonly ItemDraft[];
   /** The reference target type (a resolver's type) whose items are this kind's: "pull-request". */
@@ -407,6 +411,7 @@ export function foldMap(
     at: lastEvent?.at ?? null,
     grouping: { id: grouping.id, label: grouping.label },
     window,
+    kinds: registry.list().map((k) => ({ id: k.id, label: k.label })),
     rows,
     transitions,
     edges,

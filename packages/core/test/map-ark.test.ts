@@ -3,6 +3,7 @@ import { GithubClient } from "../src/github.ts";
 import { foldMap, KindRegistry, type MapSnapshot } from "../src/map.ts";
 import { ArkMap } from "../src/map-ark.ts";
 import { mapRegistry } from "../src/map-kinds.ts";
+import { problemLines } from "../src/map-types.ts";
 import {
   ADR_IDS,
   ARK_FIXTURE_START,
@@ -166,6 +167,90 @@ describe("the ark kinds on the map", () => {
     expect(mapRegistry.list().some((k) => k.id === "decision")).toBe(false);
   });
 
+  describe("a failed deployment", () => {
+    const T = (m: number) => new Date(Date.UTC(2026, 10, 22, 16, m)).toISOString();
+    const KIND = (env: string) => `deployment:${ARK_REPO}:${env}`;
+    /** A run of an environment that ended in `end`, created at minute `at`. */
+    function run(id: number, environment: string, at: number, end: string) {
+      github.addDeployment(ARK_REPO, {
+        id,
+        sha: String(id % 10).repeat(40),
+        ref: "main",
+        environment,
+        createdAt: T(at),
+        statuses: [
+          { state: "queued", at: T(at) },
+          { state: "in_progress", at: T(at + 1) },
+          { state: end, at: T(at + 2) },
+        ],
+      });
+    }
+    async function read() {
+      const o = open();
+      await o.ark.tick();
+      return o.map();
+    }
+
+    it("is settled when a later deployment of its environment succeeded, and no longer waits on the person", async () => {
+      run(1, "production", 39, "failure");
+      run(2, "production", 48, "success");
+      const m = await read();
+      expect(counts(m, KIND("production"))).toEqual({ recovered: 1, success: 1 });
+      expect(waiting(m, KIND("production"))).toEqual({});
+      expect(m.totals.waitingOnPerson).toBe(0);
+      const settled = row(m, KIND("production"))?.cells.find((c) => c.column === "recovered");
+      expect(settled?.items[0]?.stateLabel).toBe("Failed, then succeeded");
+      expect(settled?.items[0]?.class).toBe("terminal");
+      // It entered the settled state when the success did.
+      expect(settled?.items[0]?.since).toBe(T(50));
+      expect(m.transitions.filter((t) => t.item === "1").map((t) => `${t.from}>${t.to}`)).toEqual([
+        "null>queued",
+        "queued>in_progress",
+        "in_progress>failure",
+        "failure>recovered",
+      ]);
+    });
+
+    it("waits on the person while it is the newest of its environment", async () => {
+      run(1, "production", 30, "success");
+      run(2, "production", 39, "failure");
+      const m = await read();
+      expect(counts(m, KIND("production"))).toEqual({ success: 1, failure: 1 });
+      expect(waiting(m, KIND("production"))).toEqual({ failure: 1 });
+      expect(m.totals.waitingOnPerson).toBe(1);
+    });
+
+    it("still waits when the success was in another environment", async () => {
+      run(1, "production", 39, "failure");
+      run(2, "staging", 48, "success");
+      const m = await read();
+      expect(waiting(m, KIND("production"))).toEqual({ failure: 1 });
+      expect(counts(m, KIND("staging"))).toEqual({ success: 1 });
+    });
+
+    it("waits only as the newest when a newer one failed too", async () => {
+      run(1, "production", 39, "failure");
+      run(2, "production", 48, "error");
+      const m = await read();
+      expect(counts(m, KIND("production"))).toEqual({ replaced: 1, error: 1 });
+      expect(waiting(m, KIND("production"))).toEqual({ error: 1 });
+      expect(
+        row(m, KIND("production"))?.cells.find((c) => c.column === "replaced")?.items[0]
+          ?.stateLabel,
+      ).toBe("Failed, then replaced");
+    });
+
+    it("is ordered by when it was created, then by id, not by the order GitHub lists them", async () => {
+      // Same minute: the higher id is the newer, so the failure with the lower id is replaced.
+      run(7, "production", 39, "failure");
+      run(5, "production", 39, "failure");
+      const m = await read();
+      expect(counts(m, KIND("production"))).toEqual({ replaced: 1, failure: 1 });
+      const waits = row(m, KIND("production"))?.cells.find((c) => c.column === "failure");
+      expect(waits?.items.map((i) => i.id)).toEqual(["7"]);
+    });
+  });
+
   it("marks a deployment's moves as arrows: queued, in progress, succeeded, inactive", async () => {
     seedArk(github);
     const { ark, map } = open();
@@ -207,6 +292,23 @@ describe("the ark kinds on the map", () => {
         .sort(),
     ).toEqual(["decision", "issue"]);
     expect(map().problems[0]?.message).toContain("still reading");
+  });
+
+  it("says it is still reading once for the map, however many repositories and kinds read it", () => {
+    seedArk(github);
+    const { map } = open([ARK_REPO, "someone/else", "someone/more"]);
+    const m = map();
+    // Decisions and issues each report it, as each does for any source that is slow or gone.
+    expect(m.problems).toHaveLength(2);
+    expect(problemLines(m.problems)).toEqual([
+      `still reading ${ARK_REPO}, someone/else, someone/more from GitHub`,
+    ]);
+  });
+
+  it("says a repository that can't be read once too", async () => {
+    const { ark, map } = open(["someone/missing", "someone/gone"]);
+    await ark.tick();
+    expect(problemLines(map().problems)).toHaveLength(1);
   });
 
   it("reads nothing while no map is on screen", async () => {

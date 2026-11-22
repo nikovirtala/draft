@@ -118,11 +118,25 @@ test("an empty context says what will appear", async () => {
   const map = main.getByTestId("map");
   await expect(map).toBeVisible();
   await expect(map.getByTestId("map-summary")).toHaveText("0 open · 0 waiting on you");
-  await expect(map.getByTestId("map-empty")).toContainText("Nothing to show yet");
+  // The empty state names every kind the context has, the ark kinds too, and no row of zeros
+  // stands in for them.
+  const empty = map.getByTestId("map-empty");
+  await expect(empty).toContainText("Nothing to show yet");
+  for (const name of [
+    "Threads",
+    "Steps",
+    "Interrupts",
+    "Acceptance requests",
+    "Kiro sessions",
+    "Pull requests",
+    "Decisions",
+    "Issues",
+  ])
+    await expect(empty).toContainText(name);
   await showGrid(map);
-  // The kinds draft runs show as rows even with nothing in them, each cell disabled and zero.
-  await expect(map.getByTestId("map-row")).toHaveCount(8);
-  await expect(cell(map, "thread", "open")).toBeDisabled();
+  await expect(map.getByTestId("map-row")).toHaveCount(0);
+  // Reading the repositories says so once, if it says so at all.
+  await expect(map.getByTestId("map-problems")).toHaveCount(0);
   // The sentence was for draft: the agent never read it.
   await expect(main.getByTestId("message-user")).toHaveAttribute("data-audience", "people");
   await shot(page, "m01-empty");

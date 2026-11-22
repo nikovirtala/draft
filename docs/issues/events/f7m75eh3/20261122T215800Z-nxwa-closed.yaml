@@ -1,0 +1,16 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M82M87YVRQPYK3VWDFY2NXWA
+subject: f7m75eh3
+type: closed
+at: 2026-11-22T21:58:00Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: niko.virtala@hey.com
+reason: "A failed or errored deployment waits on the person only while it is the newest of its repository and environment; a later success settles it as 'Failed, then succeeded' (a later run that did not succeed, as 'Failed, then replaced'). The unfreeze mark in the second Done-when condition was dropped (ark PR #120 closed), so the map reads no mark. The reading line is shown once per map, the empty state is written from the registry's kinds, and no kind shows with only zeros (alwaysShown is on no kind): tests in packages/core/test/map.test.ts and map-ark.test.ts."
+data:
+  resolution: done

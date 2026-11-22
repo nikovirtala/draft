@@ -205,7 +205,12 @@ export const ISSUE_KIND: KindDecl = {
 /* Deployments                                                                                      */
 /* ----------------------------------------------------------------------------------------------- */
 
-/** GitHub's deployment statuses; a failed run freezes the pipeline until a person acts. */
+/**
+ * GitHub's deployment statuses, and two states a failed run reaches without GitHub saying so.
+ * @nikovirtala/deployment leaves a failure as `failure` for good, so whether it still needs a
+ * person is read from the runs after it: a failed or errored run waits on the person only while it
+ * is the newest deployment of its repository and environment.
+ */
 export const DEPLOYMENT_STATES: readonly StateDecl[] = [
   { id: "queued", label: "Queued", class: "active" },
   { id: "in_progress", label: "In progress", class: "active" },
@@ -213,6 +218,8 @@ export const DEPLOYMENT_STATES: readonly StateDecl[] = [
   { id: "error", label: "Error", class: "waiting", waitsOn: "user" },
   { id: "success", label: "Succeeded", class: "terminal" },
   { id: "inactive", label: "Inactive", class: "terminal" },
+  { id: "recovered", label: "Failed, then succeeded", class: "terminal" },
+  { id: "replaced", label: "Failed, then replaced", class: "terminal" },
 ];
 
 const DEPLOYMENT_STATE_IDS = new Set(DEPLOYMENT_STATES.map((s) => s.id));
@@ -222,11 +229,44 @@ function deploymentState(state: string): string {
   return DEPLOYMENT_STATE_IDS.has(state) ? state : "queued";
 }
 
-function deployment(d: DeploymentRecord): ItemDraft {
+const failed = (state: string | undefined): boolean => state === "failure" || state === "error";
+
+/** Which deployment came later: by when it was created, then by id. */
+const newer = (a: DeploymentRecord, b: DeploymentRecord): boolean => {
+  const at = Date.parse(a.createdAt);
+  const bt = Date.parse(b.createdAt);
+  return at !== bt ? at > bt : a.id > b.id;
+};
+
+/**
+ * What happened to a failed deployment after it, from the later deployments of its environment:
+ * the first success of any of them settles it as recovered; else any later deployment replaces it
+ * (the newer one is what waits, if it failed too); else it is the newest and still waits.
+ */
+function settlement(d: DeploymentRecord, all: readonly DeploymentRecord[]): PathEntry | null {
+  const later = all.filter((o) => newer(o, d));
+  let recovered: string | null = null;
+  for (const o of later)
+    for (const s of o.statuses)
+      if (s.state === "success" && (recovered === null || time(s.at) < recovered))
+        recovered = time(s.at);
+  if (recovered !== null) return { state: "recovered", at: recovered, seq };
+  const next = later.reduce<DeploymentRecord | null>(
+    (first, o) => (first === null || newer(first, o) ? o : first),
+    null,
+  );
+  return next === null ? null : { state: "replaced", at: time(next.createdAt), seq };
+}
+
+function deployment(d: DeploymentRecord, all: readonly DeploymentRecord[]): ItemDraft {
   const path: PathEntry[] = [{ state: "queued", at: time(d.createdAt), seq }];
   for (const s of d.statuses) {
     const state = deploymentState(s.state);
     if (path.at(-1)?.state !== state) path.push({ state, at: time(s.at), seq });
+  }
+  if (failed(path.at(-1)?.state)) {
+    const settled = settlement(d, all);
+    if (settled !== null) path.push(settled);
   }
   const run = [...d.statuses].reverse().find((s) => s.logUrl !== null || s.environmentUrl !== null);
   const url = run?.logUrl ?? run?.environmentUrl ?? null;
@@ -252,12 +292,15 @@ export function deploymentKind(repo: string, environment: string): KindDecl {
     label: `Deployments: ${short(repo)} · ${environment}`,
     source: "derived",
     derivation:
-      "the latest status of each GitHub Deployment of the repository and environment, which @nikovirtala/deployment records for every run",
+      "the latest status of each GitHub Deployment of the repository and environment, which @nikovirtala/deployment records for every run; a failed or errored run waits on the person only while it is the newest of its environment (by created_at, then id): a later success settles it as failed, then succeeded, and a later run that did not succeed as failed, then replaced",
     states: DEPLOYMENT_STATES,
-    items: (input) =>
-      snapshotOf(input)
-        ?.deployments.filter((d) => d.repo === repo && d.environment === environment)
-        .map(deployment) ?? [],
+    items: (input) => {
+      const all =
+        snapshotOf(input)?.deployments.filter(
+          (d) => d.repo === repo && d.environment === environment,
+        ) ?? [];
+      return all.map((d) => deployment(d, all));
+    },
     // A run deploys the pull request whose merge commit it deployed, when the log has that pull request.
     edges: (input) => {
       const pulls = input.kindOfTarget("pull-request");

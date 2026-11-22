@@ -135,6 +135,8 @@ export interface MapSnapshot {
   at: string | null;
   grouping: { id: string; label: string };
   window: MapWindow;
+  /** Every kind the registry has, drawn or not: what the empty state names. */
+  kinds: { id: string; label: string }[];
   rows: MapRow[];
   transitions: MapTransition[];
   /** The references between the items above, both ends present; see `KindDecl.edges`. */
@@ -142,4 +144,31 @@ export interface MapSnapshot {
   totals: { items: number; open: number; waitingOnPerson: number };
   /** Kinds that failed to list their items; the rest of the map is still drawn. */
   problems: MapProblem[];
+}
+
+/**
+ * What the problems say, each once. Every kind that reads a source reports the same words when the
+ * source is slow or gone, so a map would print "still reading … from GitHub" once for decisions
+ * and once for issues; the person needs it once. Each row still carries its own `stale`.
+ */
+export function problemLines(problems: readonly MapProblem[]): string[] {
+  return [...new Set(problems.map((p) => p.message))];
+}
+
+/** The names the empty state gives the kinds: "Interrupts: permission request" is "Interrupts". */
+function kindNames(kinds: readonly { label: string }[]): string[] {
+  return [...new Set(kinds.map((k) => k.label.split(":")[0]?.trim() ?? k.label))];
+}
+
+/**
+ * What an empty map says it will show, from the kinds the registry has, so a kind that registers
+ * later is named without anyone editing this sentence.
+ */
+export function emptyMapText(kinds: readonly { label: string }[]): string {
+  const names = kindNames(kinds);
+  const list =
+    names.length <= 1
+      ? (names[0] ?? "Items")
+      : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+  return `Nothing to show yet. ${list} appear here as they come up: a row for each kind, a column for each state, with what waits on you lit and the latest moves drawn as arrows.`;
 }
