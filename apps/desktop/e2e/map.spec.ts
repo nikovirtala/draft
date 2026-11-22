@@ -103,7 +103,8 @@ async function counts(scope: Locator | Page, kind: string, column: string) {
 
 /** The map opens as a graph; the grid is "By state". */
 async function showGrid(scope: Locator | Page): Promise<void> {
-  await scope.getByTestId("map-layout-state").check();
+  // The radio is visually hidden, as the range lenses are: a person clicks its label.
+  await scope.getByTestId("map-layout").getByText("By state").click();
   await expect(scope.getByTestId("map-graph")).toHaveCount(0);
 }
 
