@@ -1,0 +1,15 @@
+envelope: ledger/v1
+kind: decision
+schema: decision/v1
+id: 01M81MKQ96YZV5CVJPR7MHKKY7
+subject: 06wp7907
+type: noted
+at: 2026-11-22T12:45:02Z
+actor:
+  kind: agent
+  name: claude
+  email: null
+  agent: claude
+  on_behalf_of: niko.virtala@hey.com
+data:
+  text: "Checked on 2026-11-22 with kiro-cli 3.5.0 on macOS (?35): with a user-wide capability: all allow rule in ~/.kiro/settings/permissions.yaml, Kiro wrote a file without session/request_permission although draft had switched autopilot off, and draft logged it as a call without asking. This is the case the Context names (rules outside draft also apply), seen on a real machine. Separately, over ACP Kiro started the MCP server in an untrusted folder's .kiro/settings/mcp.json. mw44padb covers both."

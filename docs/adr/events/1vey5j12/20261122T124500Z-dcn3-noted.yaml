@@ -1,0 +1,15 @@
+envelope: ledger/v1
+kind: decision
+schema: decision/v1
+id: 01M81MKNXXTJHJZM3A7Z2FDCN3
+subject: 1vey5j12
+type: noted
+at: 2026-11-22T12:45:00Z
+actor:
+  kind: agent
+  name: claude
+  email: null
+  agent: claude
+  on_behalf_of: niko.virtala@hey.com
+data:
+  text: "Checked on 2026-11-22 with kiro-cli 3.5.0 on macOS (?35): in a folder Kiro had never opened, Kiro over ACP started the MCP server in the folder's .kiro/settings/mcp.json and listed its .kiro/skills. The documented trust gate guards interactive sessions only, so leaving trust to Kiro doesn't keep a folder's configuration out over ACP. mw44padb covers what draft does about it."
