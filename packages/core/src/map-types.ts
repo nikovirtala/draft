@@ -101,6 +101,27 @@ export interface MapTransition {
   seq: number;
 }
 
+/** An item of a kind: the pair every edge names its ends by. */
+export interface ItemRef {
+  kind: string;
+  id: string;
+}
+
+/**
+ * A reference between two items of a context, declared by the kind that owns it (docs/model.md,
+ * "References and the graph"). It reads `from` `rel` `to`: an issue implements a decision, a
+ * deployment deploys a pull request, a decision supersedes another.
+ */
+export interface MapEdge {
+  context: string;
+  from: ItemRef;
+  to: ItemRef;
+  /** What the reference says: "implements", "supersedes", "part-of", "mentions", "deploys". */
+  rel: string;
+  /** When the log or the source says it was made; null when it doesn't say. */
+  at: string | null;
+}
+
 export interface MapProblem {
   kind: string;
   message: string;
@@ -116,6 +137,8 @@ export interface MapSnapshot {
   window: MapWindow;
   rows: MapRow[];
   transitions: MapTransition[];
+  /** The references between the items above, both ends present; see `KindDecl.edges`. */
+  edges: MapEdge[];
   totals: { items: number; open: number; waitingOnPerson: number };
   /** Kinds that failed to list their items; the rest of the map is still drawn. */
   problems: MapProblem[];

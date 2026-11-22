@@ -1,5 +1,5 @@
 import { foldStatus } from "./adr.ts";
-import { type ArkIssueEvent, foldIssueStatus } from "./ark-issue.ts";
+import { ARK_ID, type ArkIssueEvent, foldIssueStatus } from "./ark-issue.ts";
 import {
   type AdrRecord,
   type ArkProblem,
@@ -9,8 +9,9 @@ import {
   type DeploymentRecord,
   type IssueRecord,
 } from "./ark-records.ts";
-import type { ItemDraft, KindDecl, KindInput, KindRegistry } from "./map.ts";
-import type { PathEntry, StateDecl } from "./map-types.ts";
+import type { EdgeDraft, ItemDraft, KindDecl, KindInput, KindRegistry } from "./map.ts";
+import { mergedPullRequests } from "./map-kinds.ts";
+import type { ItemRef, PathEntry, StateDecl } from "./map-types.ts";
 
 /**
  * The ark kinds as rows of the map: decisions, issues and the deployments of each repository and
@@ -59,6 +60,30 @@ function freshness(input: KindInput, wanted: (p: ArkProblem) => boolean): string
 
 const short = (repo: string) => repo.split("/").pop() ?? repo;
 
+/**
+ * The record a link names, as the event wrote it: a bare id, `adr:<id>`, or `<source>:<id>` or
+ * `<owner/repo>:<id>`. It is looked for in the repository of the record that made the link first,
+ * then anywhere the context covers; null when no such record is there to be drawn.
+ */
+function recordRef(
+  s: ArkSnapshot,
+  repo: string,
+  to: string,
+  fallback: "decision" | "issue",
+): ItemRef | null {
+  const m = new RegExp(`^(?:(.+):)?(${ARK_ID})$`).exec(to.trim());
+  if (m === null) return null;
+  const prefix = m[1] ?? null;
+  const id = m[2] as string;
+  const kind = prefix === "adr" ? "decision" : prefix === "issue" ? "issue" : fallback;
+  const records: { repo: string; id: string }[] = kind === "decision" ? s.adrs : s.issues;
+  const named = prefix?.includes("/") === true ? prefix : null;
+  const found =
+    records.find((r) => r.id === id && r.repo === (named ?? repo)) ??
+    (named === null ? records.find((r) => r.id === id) : undefined);
+  return found === undefined ? null : { kind, id: `${found.repo}:${found.id}` };
+}
+
 /* ----------------------------------------------------------------------------------------------- */
 /* Decisions                                                                                        */
 /* ----------------------------------------------------------------------------------------------- */
@@ -89,6 +114,28 @@ function decision(a: AdrRecord): ItemDraft {
   };
 }
 
+/** What a decision says it replaces, what replaced it, and what it is linked to. */
+function decisionEdges(input: KindInput): EdgeDraft[] {
+  const s = snapshotOf(input);
+  const out: EdgeDraft[] = [];
+  for (const a of s?.adrs ?? []) {
+    const self = { kind: "decision", id: `${a.repo}:${a.id}` };
+    for (const id of a.supersedes) {
+      const to = recordRef(s as ArkSnapshot, a.repo, id, "decision");
+      if (to !== null) out.push({ from: self, to, rel: "supersedes" });
+    }
+    for (const id of a.supersededBy) {
+      const from = recordRef(s as ArkSnapshot, a.repo, id, "decision");
+      if (from !== null) out.push({ from, to: self, rel: "supersedes" });
+    }
+    for (const l of a.links) {
+      const to = recordRef(s as ArkSnapshot, a.repo, l.to, "decision");
+      if (to !== null) out.push({ from: self, to, rel: l.rel });
+    }
+  }
+  return out;
+}
+
 export const DECISION_KIND: KindDecl = {
   id: "decision",
   label: "Decisions",
@@ -96,7 +143,9 @@ export const DECISION_KIND: KindDecl = {
   derivation:
     "the decision's event files, folded as adr folds them (foldStatus): the default branch, and the branch of an open pull request that proposes it",
   states: ADR_STATES,
+  targetType: "adr",
   items: (input) => snapshotOf(input)?.adrs.map(decision) ?? [],
+  edges: decisionEdges,
   freshness: (input) => freshness(input, (p) => p.source === "records"),
 };
 
@@ -121,6 +170,24 @@ function issue(i: IssueRecord): ItemDraft {
   };
 }
 
+/** The issue it is part of, and what it depends on, relates to or implements. */
+function issueEdges(input: KindInput): EdgeDraft[] {
+  const s = snapshotOf(input);
+  const out: EdgeDraft[] = [];
+  for (const i of s?.issues ?? []) {
+    const self = { kind: "issue", id: `${i.repo}:${i.id}` };
+    if (i.parent !== null) {
+      const to = recordRef(s as ArkSnapshot, i.repo, i.parent, "issue");
+      if (to !== null) out.push({ from: self, to, rel: "part-of" });
+    }
+    for (const l of i.links) {
+      const to = recordRef(s as ArkSnapshot, i.repo, l.to, "issue");
+      if (to !== null) out.push({ from: self, to, rel: l.rel });
+    }
+  }
+  return out;
+}
+
 export const ISSUE_KIND: KindDecl = {
   id: "issue",
   label: "Issues",
@@ -128,7 +195,9 @@ export const ISSUE_KIND: KindDecl = {
   derivation:
     "the issue's event files, folded as issues folds them (foldIssueStatus); how it was closed is a note on the cell",
   states: ISSUE_STATES,
+  targetType: "ark-issue",
   items: (input) => snapshotOf(input)?.issues.map(issue) ?? [],
+  edges: issueEdges,
   freshness: (input) => freshness(input, (p) => p.source === "records"),
 };
 
@@ -177,8 +246,9 @@ function deployment(d: DeploymentRecord): ItemDraft {
 
 /** The row of one environment of one repository. */
 export function deploymentKind(repo: string, environment: string): KindDecl {
+  const id = `deployment:${repo}:${environment}`;
   return {
-    id: `deployment:${repo}:${environment}`,
+    id,
     label: `Deployments: ${short(repo)} · ${environment}`,
     source: "derived",
     derivation:
@@ -188,6 +258,26 @@ export function deploymentKind(repo: string, environment: string): KindDecl {
       snapshotOf(input)
         ?.deployments.filter((d) => d.repo === repo && d.environment === environment)
         .map(deployment) ?? [],
+    // A run deploys the pull request whose merge commit it deployed, when the log has that pull request.
+    edges: (input) => {
+      const pulls = input.kindOfTarget("pull-request");
+      if (pulls === null) return [];
+      const merged = mergedPullRequests(input.events).filter((m) => m.repo === repo);
+      return (snapshotOf(input)?.deployments ?? []).flatMap((d) => {
+        if (d.repo !== repo || d.environment !== environment) return [];
+        const pr = merged.find((m) => m.sha === d.sha);
+        return pr === undefined
+          ? []
+          : [
+              {
+                from: { kind: id, id: String(d.id) },
+                to: { kind: pulls, id: pr.id },
+                rel: "deploys",
+                at: time(d.createdAt),
+              },
+            ];
+      });
+    },
     freshness: (input) => freshness(input, (p) => p.source === "deployments" && p.repo === repo),
   };
 }

@@ -1,8 +1,10 @@
 import { acceptanceSpec, evidenceGreen } from "./acceptance.ts";
+import { tryParseAddress } from "./address.ts";
 import { type DraftEvent, type LogRecord, type Target, targetKey } from "./events.ts";
 import { INTERRUPT_KINDS, type InterruptKind, interruptMachine } from "./interrupts.ts";
 import { bareToolName } from "./kiro.ts";
 import {
+  type EdgeDraft,
   foldMap,
   type ItemDraft,
   type KindDecl,
@@ -32,6 +34,18 @@ const entry = (state: string, e: Ev): PathEntry => ({ state, at: e.event.at, seq
 /** Moves a path to `state` unless it is there already. */
 function enter(path: PathEntry[], state: string, e: Ev): void {
   if (path.at(-1)?.state !== state) path.push(entry(state, e));
+}
+
+/** The conversation an address is in, as conversations are named: `context/conversation`. */
+function conversationOf(address: string): string | null {
+  const a = tryParseAddress(address);
+  return a === null || a.conversation === null ? null : `${a.context}/${a.conversation}`;
+}
+
+/** The item a reference target is, when its resolver's kind is on the map. */
+function targetItem(input: KindInput, t: Target): { kind: string; id: string } | null {
+  const kind = input.kindOfTarget(t.type);
+  return kind === null ? null : { kind, id: t.id };
 }
 
 const inConversation = (conversation: string, anchor: string | null = null) =>
@@ -74,6 +88,43 @@ function threadItems({ events }: KindInput): ItemDraft[] {
   }));
 }
 
+/**
+ * What a thread says it is joined to: the thread it branched from, what its messages mention
+ * (`reference.made`) and what its confirmed conclusion produced. A thread that branches off the
+ * main conversation has no parent item, so it has no such edge.
+ */
+function threadEdges(input: KindInput): EdgeDraft[] {
+  const threads = new Set<string>();
+  for (const { event: d } of input.events)
+    if (d.type === "conversation.created" && d.data.parent !== null)
+      threads.add(d.data.conversation);
+  const out: EdgeDraft[] = [];
+  for (const { event: d } of input.events) {
+    if (d.type === "conversation.created" && d.data.parent !== null) {
+      const parent = conversationOf(d.data.parent);
+      if (parent !== null && threads.has(parent))
+        out.push({
+          from: { kind: "thread", id: d.data.conversation },
+          to: { kind: "thread", id: parent },
+          rel: "part-of",
+          at: d.at,
+        });
+    } else if (d.type === "reference.made") {
+      const from = conversationOf(d.data.from);
+      const to = targetItem(input, d.data.target);
+      if (from !== null && threads.has(from) && to !== null)
+        out.push({ from: { kind: "thread", id: from }, to, rel: d.data.relation, at: d.at });
+    } else if (d.type === "thread.wrapped_up" && d.conversation !== null) {
+      for (const t of d.data.cites.produced) {
+        const to = targetItem(input, t);
+        if (to !== null)
+          out.push({ from: { kind: "thread", id: d.conversation }, to, rel: "produced", at: d.at });
+      }
+    }
+  }
+  return out;
+}
+
 export const THREAD_KIND: KindDecl = {
   id: "thread",
   label: "Threads",
@@ -82,6 +133,7 @@ export const THREAD_KIND: KindDecl = {
   states: statesOfMachine(threadMachine().spec),
   alwaysShown: true,
   items: threadItems,
+  edges: threadEdges,
 };
 
 /* ----------------------------------------------------------------------------------------------- */
@@ -356,6 +408,21 @@ function acceptanceItems({ events }: KindInput): ItemDraft[] {
   });
 }
 
+/** An acceptance request is about the thing it asks to accept. */
+function acceptanceEdges(input: KindInput): EdgeDraft[] {
+  const out: EdgeDraft[] = [];
+  const seen = new Set<string>();
+  for (const { event: d } of input.events) {
+    if (d.type !== "interrupt.raised" || d.data.kind !== "acceptance" || d.data.target === null)
+      continue;
+    const to = targetItem(input, d.data.target);
+    if (to === null || seen.has(d.data.key)) continue;
+    seen.add(d.data.key);
+    out.push({ from: { kind: "acceptance", id: d.data.key }, to, rel: "asks-about", at: d.at });
+  }
+  return out;
+}
+
 export const ACCEPTANCE_KIND: KindDecl = {
   id: "acceptance",
   label: "Acceptance requests",
@@ -364,6 +431,7 @@ export const ACCEPTANCE_KIND: KindDecl = {
   states: statesOfMachine(acceptanceSpec(pullRequestAcceptance)),
   alwaysShown: true,
   items: acceptanceItems,
+  edges: acceptanceEdges,
 };
 
 /* ----------------------------------------------------------------------------------------------- */
@@ -456,6 +524,7 @@ export const KIRO_SESSION_KIND: KindDecl = {
   source: "derived",
   derivation: "the status Kiro Remote reports for the session; a status it doesn't know is unknown",
   states: KIRO_SESSION_STATES,
+  targetType: "kiro-session",
   alwaysShown: true,
   items: stubItems(
     "kiro-session",
@@ -514,6 +583,7 @@ export const PULL_REQUEST_KIND: KindDecl = {
     { id: "merged", label: "Merged", class: "terminal" },
     { id: "closed", label: "Closed", class: "terminal" },
   ],
+  targetType: "pull-request",
   alwaysShown: true,
   items: stubItems("pull-request", pullRequestMapState, (id, s) => {
     const repo = str(s.repo);
@@ -522,6 +592,32 @@ export const PULL_REQUEST_KIND: KindDecl = {
     return title === null ? name : `${name}: ${title}`;
   }),
 };
+
+/**
+ * The merge commit of each merged pull request the log knows, by repository and commit: the last
+ * state the log holds of it. A pull request whose state predates the field has none.
+ */
+export function mergedPullRequests(
+  events: readonly Ev[],
+): { id: string; repo: string; sha: string }[] {
+  const latest = new Map<string, Record<string, unknown>>();
+  for (const { event: d } of events) {
+    if (
+      (d.type !== "reference.made" && d.type !== "status.observed") ||
+      d.data.target.type !== "pull-request"
+    )
+      continue;
+    const state = d.type === "reference.made" ? d.data.snapshot : d.data.state;
+    // A reference keeps the first snapshot as the stub's; a later observation is what is known now.
+    if (d.type === "reference.made" && latest.has(d.data.target.id)) continue;
+    latest.set(d.data.target.id, state);
+  }
+  return [...latest].flatMap(([id, s]) =>
+    s.state === "merged" && str(s.repo) !== null && str(s.mergeCommitSha) !== null
+      ? [{ id, repo: str(s.repo) as string, sha: str(s.mergeCommitSha) as string }]
+      : [],
+  );
+}
 
 /* ----------------------------------------------------------------------------------------------- */
 /* The registry                                                                                     */

@@ -84,6 +84,37 @@ export function dataField(yaml: string, key: string): string | null {
 }
 
 /**
+ * The values of a list under `data:`, in an event file: a block (`  key:` then `    - value` lines)
+ * or an inline `[a, b]`. Empty when the key is missing or has no values.
+ */
+export function dataList(yaml: string, key: string): string[] {
+  const unquote = (v: string): string => {
+    const t = v.trim();
+    return (t.startsWith('"') && t.endsWith('"')) || (t.startsWith("'") && t.endsWith("'"))
+      ? t.slice(1, -1)
+      : t;
+  };
+  const lines = yaml.split("\n");
+  const at = lines.findIndex((l) => new RegExp(`^ {2}${key}:`).test(l));
+  if (at < 0) return [];
+  const rest = (lines[at] as string).replace(new RegExp(`^ {2}${key}:`), "").trim();
+  if (rest.startsWith("["))
+    return rest
+      .replace(/^\[|\]$/g, "")
+      .split(",")
+      .map(unquote)
+      .filter((v) => v !== "");
+  const out: string[] = [];
+  for (const line of lines.slice(at + 1)) {
+    const m = /^ {2,4}- +(.*)$/.exec(line);
+    if (m === null) break;
+    const v = unquote(m[1] as string);
+    if (v !== "") out.push(v);
+  }
+  return out;
+}
+
+/**
  * An issue's status from its events, oldest first: `started` is in progress, `opened`, `stopped`
  * and `reopened` are open, `closed` is closed.
  */

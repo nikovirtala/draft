@@ -67,6 +67,8 @@ export interface PullRequestState {
   draft: boolean;
   author: string | null;
   headSha: string;
+  /** The commit a merge made on the base branch; null until it is merged. */
+  mergeCommitSha: string | null;
   /** The branch it is from, and the repository that has it (a fork's, when it is from one). */
   headRef: string;
   headRepo: string | null;
@@ -100,6 +102,7 @@ interface ApiPull {
   base: { ref: string };
   mergeable: boolean | null;
   mergeable_state?: string;
+  merge_commit_sha?: string | null;
   requested_reviewers?: { login: string }[];
   updated_at: string;
 }
@@ -407,6 +410,7 @@ function toState(
     draft: pull.draft === true,
     author: pull.user?.login ?? null,
     headSha: pull.head.sha,
+    mergeCommitSha: pull.merged === true ? (pull.merge_commit_sha ?? null) : null,
     headRef: pull.head.ref ?? "",
     headRepo: pull.head.repo?.full_name ?? null,
     baseRef: pull.base.ref,
