@@ -1,0 +1,17 @@
+envelope: ledger/v1
+kind: decision
+schema: decision/v1
+id: 01M82E2K2PJBH8H1206BMFWHM7
+subject: db8dwjne
+type: proposed
+at: 2026-11-22T20:10:03Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: niko.virtala@hey.com
+data:
+  title: Declare each kind's states in one registry and draw the map from a fold of the log
+  template: nygard
+  template_version: 1
