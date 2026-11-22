@@ -1,0 +1,16 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M82MV2YGB39ME4Z9D5SRY96S
+subject: cek21z1p
+type: closed
+at: 2026-11-22T22:08:17Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: niko.virtala@hey.com
+reason: "A call the person answers late runs once through the agent calling again, or is refused and the agent is told: tests in apps/desktop/test/draft-late-answer.test.ts run the fake ACP agent over stdio with an MCP client that times out early (a yes after three holds, a no, a client that cancelled first, a repeat while pending asking once). The choice is recorded in adr:8rhwhgbw, which refines adr:56v0mtga. Not shown on a real Kiro: the pull request lists the steps for Niko's Mac."
+data:
+  resolution: done
