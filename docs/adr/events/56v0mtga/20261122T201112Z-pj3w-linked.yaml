@@ -1,0 +1,16 @@
+envelope: ledger/v1
+kind: decision
+schema: decision/v1
+id: 01M82E4PG9NH5H9ST6Z300PJ3W
+subject: 56v0mtga
+type: linked
+at: 2026-11-22T20:11:12Z
+actor:
+  kind: human
+  name: Kiro Agent
+  email: 244629292+kiro-agent@users.noreply.github.com
+  agent: null
+  on_behalf_of: null
+data:
+  to: zan5vjwz
+  rel: depends-on

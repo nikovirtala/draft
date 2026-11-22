@@ -1,0 +1,15 @@
+envelope: ledger/v1
+kind: decision
+schema: decision/v1
+id: 01M82E4QNJSXKCW6XQ6HW73C50
+subject: 56v0mtga
+type: noted
+at: 2026-11-22T20:11:13Z
+actor:
+  kind: human
+  name: Kiro Agent
+  email: 244629292+kiro-agent@users.noreply.github.com
+  agent: null
+  on_behalf_of: null
+data:
+  text: Issues aefrmdf4 (file and shell tools in a trusted folder) and 562p472b (a stable identity for Kiro's own calls) motivate this decision.
