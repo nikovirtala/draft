@@ -1,0 +1,17 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M82M1JCN8T83YJNX5W46CCAT
+subject: wkk1pace
+type: opened
+at: 2026-11-22T21:54:21Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: 244629292+kiro-agent@users.noreply.github.com
+data:
+  title: "Draw the map as a graph: clusters by kind, edges from the registry, a layout that stays put"
+  template: task
+  template_version: 1
