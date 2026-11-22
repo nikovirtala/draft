@@ -1,0 +1,16 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M82C81P90JBRYP9PVC4B590E
+subject: xh46a2ks
+type: closed
+at: 2026-11-22T19:38:05Z
+actor:
+  kind: human
+  name: Niko Virtala
+  email: niko.virtala@hey.com
+  agent: null
+  on_behalf_of: null
+reason: "Checked on 2026-11-22 on Niko's Mac with kiro-cli 3.5.0, after #19: in a draft context the agent ran gh auth status (exit 1, the token in GH_TOKEN is invalid), git ls-remote against a private repository (exit 128, terminal prompts disabled), aws sts get-caller-identity (exit 253, unable to locate credentials) and ssh -T git@github.com (exit 255, permission denied (publickey)). The Kiro agent still signs in, the header names what was withheld, and this change was merged by accepting it in draft, as Niko."
+data:
+  resolution: done
