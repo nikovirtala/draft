@@ -1,0 +1,17 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M82E6F0VC92DEZ90HQRRZSW6
+subject: cek21z1p
+type: opened
+at: 2026-11-22T20:12:10Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: niko.virtala@hey.com
+data:
+  title: Keep a draft tool call alive while the person decides, past Kiro's MCP request timeout
+  template: task
+  template_version: 1

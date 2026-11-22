@@ -1,0 +1,15 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M82E6PEJ6PPVAH547WF41V9J
+subject: mw44padb
+type: commented
+at: 2026-11-22T20:12:18Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: niko.virtala@hey.com
+data:
+  text: "For this issue: draft's Kiro sessions now run with KIRO_HOME=<data>/kiro-home and draft's own agent (adr:56v0mtga), so the person's ~/.kiro/settings/permissions.yaml, MCP servers, steering and skills don't reach them, and a folder's own .kiro/agents are still read by Kiro over ACP but have other names than draft's (a random suffix). What to show about the person's rules is now a question of what draft would carry over into its own folder, not of what Kiro will do."
