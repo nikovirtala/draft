@@ -12,6 +12,7 @@ import {
   statesOfMachine,
 } from "../src/map.ts";
 import { mapOf, mapRegistry, pullRequestMapState } from "../src/map-kinds.ts";
+import { emptyMapText, problemLines } from "../src/map-types.ts";
 import { pullRequestAcceptance } from "../src/pull-request.ts";
 import {
   appendMapFixture,
@@ -263,7 +264,7 @@ describe("a past position", () => {
     expect(counts(then, "kiro-session")).toEqual({ awaiting_permission: 1 });
     expect(counts(then, "pull-request")).toEqual({ ready: 2, draft: 1 });
     // Nothing of what came later: no acceptance request yet, so its row is not there at all.
-    expect(row(then, "acceptance").total).toBe(0);
+    expect(then.rows.some((r) => r.kind === "acceptance")).toBe(false);
     expect(counts(then, "thread")).toEqual({ open: 1, concluding: 1, withdrawn: 1 });
     const before = records.findIndex((r) => r.at === at(18));
     expect(counts(mapOf(records, { position: before }), "kiro-session")).toEqual({ running: 1 });
@@ -436,23 +437,6 @@ describe("the registry", () => {
   });
 });
 
-describe("an empty log", () => {
-  it("shows the rows that always show, each with nothing in it", () => {
-    const m = mapOf([]);
-    expect(m.totals).toEqual({ items: 0, open: 0, waitingOnPerson: 0 });
-    expect(m.rows.map((r) => r.kind)).toEqual([
-      "thread",
-      "step",
-      "interrupt:permission",
-      "interrupt:unasked-call",
-      "interrupt:acceptance",
-      "acceptance",
-      "kiro-session",
-      "pull-request",
-    ]);
-  });
-});
-
 describe("the sentence that asks for the map", () => {
   it.each([
     "show the map",
@@ -469,4 +453,81 @@ describe("the sentence that asks for the map", () => {
     "the map is wrong",
     "",
   ])("leaves %s to the agent", (text) => expect(isMapRequest(text)).toBe(false));
+});
+
+describe("an empty map", () => {
+  it("shows no row of zeros: a kind appears when it has an item", () => {
+    const m = mapOf([]);
+    expect(m.totals).toEqual({ items: 0, open: 0, waitingOnPerson: 0 });
+    expect(m.rows.map((r) => r.kind)).toEqual([]);
+    expect(m.totals.items).toBe(0);
+    // Every kind is still known, so the empty state can name them.
+    expect(m.kinds.map((k) => k.id)).toEqual(mapRegistry.list().map((k) => k.id));
+  });
+
+  it("shows a row of zeros only for a kind that says it always shows", () => {
+    const registry = mapRegistry.fork();
+    registry.register({
+      id: "always",
+      label: "Always",
+      source: "derived",
+      derivation: "a test kind",
+      states: [{ id: "a", label: "A", class: "terminal" }],
+      alwaysShown: true,
+      items: () => [],
+    });
+    expect(foldMap([], registry).rows.map((r) => r.kind)).toEqual(["always"]);
+  });
+
+  it("shows the rows of the kinds that have items on a recorded log", async () => {
+    const m = mapOf(await fixtureLog());
+    expect(m.rows.map((r) => r.kind)).toEqual([
+      "thread",
+      "step",
+      "interrupt:permission",
+      "interrupt:unasked-call",
+      "interrupt:acceptance",
+      "acceptance",
+      "kiro-session",
+      "pull-request",
+    ]);
+    expect(m.rows.every((r) => r.total > 0)).toBe(true);
+  });
+
+  it("names every kind of the registry in its sentence, with a kind registered later", () => {
+    const registry = mapRegistry.fork();
+    registry.register({
+      id: "widget",
+      label: "Widgets",
+      source: "derived",
+      derivation: "a test kind",
+      states: [{ id: "a", label: "A", class: "terminal" }],
+      items: () => [],
+    });
+    const text = emptyMapText(foldMap([], registry).kinds);
+    for (const name of [
+      "Threads",
+      "Steps",
+      "Interrupts",
+      "Acceptance requests",
+      "Kiro sessions",
+      "Pull requests",
+      "Widgets",
+    ])
+      expect(text).toContain(name);
+    expect(text).toContain("Pull requests and Widgets appear here");
+    // Kinds that share a prefix are one name.
+    expect(text.match(/Interrupts/g)).toHaveLength(1);
+    expect(emptyMapText(mapRegistry.list())).not.toContain("Widgets");
+  });
+
+  it("says the same words once however many kinds report them", () => {
+    expect(
+      problemLines([
+        { kind: "decision", message: "still reading a, b, c from GitHub" },
+        { kind: "issue", message: "still reading a, b, c from GitHub" },
+        { kind: "deployment:a:production", message: "a is slow" },
+      ]),
+    ).toEqual(["still reading a, b, c from GitHub", "a is slow"]);
+  });
 });

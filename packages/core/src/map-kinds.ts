@@ -131,7 +131,6 @@ export const THREAD_KIND: KindDecl = {
   source: "machine",
   derivation: "the thread machine (thread.ts)",
   states: statesOfMachine(threadMachine().spec),
-  alwaysShown: true,
   items: threadItems,
   edges: threadEdges,
 };
@@ -195,7 +194,6 @@ export const STEP_KIND: KindDecl = {
     { id: "completed", label: "Completed", class: "terminal" },
     { id: "settled", label: "Settled", class: "terminal" },
   ],
-  alwaysShown: true,
   items: stepItems,
 };
 
@@ -314,31 +312,25 @@ const RAISED_KINDS: readonly InterruptKind[] = [
   "review-requested",
 ];
 
-function interruptKind(
-  kind: InterruptKind,
-  items: (i: KindInput) => ItemDraft[],
-  alwaysShown: boolean,
-): KindDecl {
+function interruptKind(kind: InterruptKind, items: (i: KindInput) => ItemDraft[]): KindDecl {
   return {
     id: `interrupt:${kind}`,
     label: `Interrupts: ${INTERRUPT_KINDS[kind].label.toLowerCase()}`,
     source: "machine",
     derivation: `the interrupt machine of ${kind} (interrupts.ts)`,
     states: statesOfMachine(interruptMachine(kind).spec),
-    alwaysShown,
     items,
   };
 }
 
 export const INTERRUPT_KIND_DECLS: readonly KindDecl[] = [
-  interruptKind(
-    "permission",
-    ({ events }) => [...raisedEpisodes(events, "permission"), ...localPermissions(events)],
-    true,
-  ),
-  interruptKind("unasked-call", ({ events }) => unaskedCalls(events), true),
-  interruptKind("acceptance", ({ events }) => raisedEpisodes(events, "acceptance"), true),
-  ...RAISED_KINDS.map((k) => interruptKind(k, ({ events }) => raisedEpisodes(events, k), false)),
+  interruptKind("permission", ({ events }) => [
+    ...raisedEpisodes(events, "permission"),
+    ...localPermissions(events),
+  ]),
+  interruptKind("unasked-call", ({ events }) => unaskedCalls(events)),
+  interruptKind("acceptance", ({ events }) => raisedEpisodes(events, "acceptance")),
+  ...RAISED_KINDS.map((k) => interruptKind(k, ({ events }) => raisedEpisodes(events, k))),
 ];
 
 /* ----------------------------------------------------------------------------------------------- */
@@ -429,7 +421,6 @@ export const ACCEPTANCE_KIND: KindDecl = {
   source: "machine",
   derivation: "the acceptance machine (acceptance.ts), the same for every kind of record",
   states: statesOfMachine(acceptanceSpec(pullRequestAcceptance)),
-  alwaysShown: true,
   items: acceptanceItems,
   edges: acceptanceEdges,
 };
@@ -525,7 +516,6 @@ export const KIRO_SESSION_KIND: KindDecl = {
   derivation: "the status Kiro Remote reports for the session; a status it doesn't know is unknown",
   states: KIRO_SESSION_STATES,
   targetType: "kiro-session",
-  alwaysShown: true,
   items: stubItems(
     "kiro-session",
     (_id, s) => {
@@ -584,7 +574,6 @@ export const PULL_REQUEST_KIND: KindDecl = {
     { id: "closed", label: "Closed", class: "terminal" },
   ],
   targetType: "pull-request",
-  alwaysShown: true,
   items: stubItems("pull-request", pullRequestMapState, (id, s) => {
     const repo = str(s.repo);
     const title = str(s.title);

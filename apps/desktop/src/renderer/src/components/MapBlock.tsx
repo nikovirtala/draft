@@ -1,3 +1,4 @@
+import { emptyMapText, problemLines } from "@nikovirtala/draft-core/map-types";
 import { useEffect, useMemo, useState } from "react";
 import { ageText } from "../../../shared/attention.ts";
 import type { MapItem, MapRequest, MapSnapshot } from "../../../shared/ipc.ts";
@@ -390,9 +391,7 @@ export function MapView({ address }: { address: string }) {
       </div>
       {empty && (
         <p className="empty-map" data-testid="map-empty">
-          Nothing to show yet. Threads, steps, interrupts, acceptance requests, Kiro sessions and
-          pull requests appear here as they come up: a row for each kind, a column for each state,
-          with what waits on you lit and the latest moves drawn as arrows.
+          {emptyMapText(map.kinds)}
         </p>
       )}
       {layout === "graph" && <MapGraph map={map} />}
@@ -421,7 +420,7 @@ export function MapView({ address }: { address: string }) {
       <Moves map={map} />
       {map.problems.length > 0 && (
         <p className="secondary" data-testid="map-problems">
-          {map.problems.map((p) => p.message).join(" · ")}
+          {problemLines(map.problems).join(" · ")}
         </p>
       )}
     </div>
