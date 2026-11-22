@@ -101,6 +101,12 @@ async function counts(scope: Locator | Page, kind: string, column: string) {
   };
 }
 
+/** The map opens as a graph; the grid is "By state". */
+async function showGrid(scope: Locator | Page): Promise<void> {
+  await scope.getByTestId("map-layout-state").check();
+  await expect(scope.getByTestId("map-graph")).toHaveCount(0);
+}
+
 test("an empty context says what will appear", async () => {
   const dataDir = mkdtempSync(join(tmpdir(), "draft-e2e-map-empty-"));
   const { electronApp, page } = await launch(dataDir, {});
@@ -112,6 +118,7 @@ test("an empty context says what will appear", async () => {
   await expect(map).toBeVisible();
   await expect(map.getByTestId("map-summary")).toHaveText("0 open · 0 waiting on you");
   await expect(map.getByTestId("map-empty")).toContainText("Nothing to show yet");
+  await showGrid(map);
   // The kinds draft runs show as rows even with nothing in them, each cell disabled and zero.
   await expect(map.getByTestId("map-row")).toHaveCount(8);
   await expect(cell(map, "thread", "open")).toBeDisabled();
@@ -139,6 +146,34 @@ test("show the map on a recorded log: counts, a cell, an item, live moves, and a
   const map = main.getByTestId("map");
   await expect(map).toBeVisible();
   await expect(main.getByTestId("map-block")).toHaveAttribute("data-placement", "inline");
+
+  // The graph is the default: a cluster for each kind with items, counted, and the references
+  // between them. A cluster zooms into its kind, the crumb and Escape go back out.
+  const graph = map.getByTestId("map-graph");
+  await expect(graph).toHaveAttribute("data-zoom", "context");
+  await expect(map.getByTestId("map-layout-graph")).toBeChecked();
+  const clusterOf = (kind: string) =>
+    graph.locator(`[data-testid="graph-cluster"][data-kind="${kind}"]`);
+  await expect(clusterOf("thread")).toHaveAttribute("data-count", "3");
+  await expect(clusterOf("pull-request")).toHaveAttribute("data-count", "3");
+  await expect(clusterOf("acceptance")).toHaveAttribute("data-count", "3");
+  await expect(graph.getByTestId("graph-edge").first()).toBeVisible();
+  await expect(graph.getByTestId("graph-legend")).toContainText("Open loop");
+  await shot(page, "m02-graph");
+  await clusterOf("pull-request").click();
+  await expect(graph).toHaveAttribute("data-zoom", "kind:pull-request");
+  await expect(graph.getByTestId("graph-item")).toHaveCount(3);
+  await shot(page, "m03-graph-kind");
+  await graph.getByTestId("graph-item").first().click();
+  await expect(graph).toHaveAttribute("data-zoom", /^item:pull-request:/);
+  await expect(graph.getByTestId("graph-refs")).toContainText("asks about");
+  await page.keyboard.press("Escape");
+  await expect(graph).toHaveAttribute("data-zoom", "kind:pull-request");
+  await graph.getByTestId("graph-crumb").first().click();
+  await expect(graph).toHaveAttribute("data-zoom", "context");
+
+  // The same nodes as a grid: one row for each kind.
+  await showGrid(map);
 
   // 2. Its counts are what the log holds.
   expect(await counts(map, "thread", "open")).toEqual({ count: 1, waiting: 0 });
@@ -264,6 +299,7 @@ test("show the map on a recorded log: counts, a cell, an item, live moves, and a
   ({ electronApp, page } = await launch(dataDir));
   main = page.locator('[data-testid="conversation"][data-main="true"]');
   await expect(main.getByTestId("map")).toBeVisible();
+  await showGrid(main);
   await expect(main.getByTestId("map-items")).toHaveAttribute("data-column", "concluding");
   expect(await counts(main, "interrupt:unasked-call", "settled")).toEqual({ count: 1, waiting: 0 });
 
@@ -272,6 +308,7 @@ test("show the map on a recorded log: counts, a cell, an item, live moves, and a
   await expect.poll(() => electronApp.windows().length).toBe(2);
   const popped = electronApp.windows().find((w) => w !== page) as Page;
   await expect(popped.getByTestId("map")).toBeVisible();
+  await showGrid(popped);
   await expect(main.getByTestId("map-block")).toHaveAttribute("data-placement", "window");
   expect(await counts(popped, "pull-request", "failing")).toEqual({ count: 1, waiting: 1 });
   await expect(popped.getByTestId("map-summary")).toHaveText(

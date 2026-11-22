@@ -15,6 +15,8 @@ const coreSource = (path: string) =>
 const alias = [
   { find: /^@nikovirtala\/draft-core$/, replacement: coreSource("index.ts") },
   { find: /^@nikovirtala\/draft-core\/view$/, replacement: coreSource("view.ts") },
+  { find: /^@nikovirtala\/draft-core\/map-graph$/, replacement: coreSource("map-graph.ts") },
+  { find: /^@nikovirtala\/draft-core\/map-layout$/, replacement: coreSource("map-layout.ts") },
 ];
 
 export default defineConfig({

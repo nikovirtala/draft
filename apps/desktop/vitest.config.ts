@@ -11,6 +11,8 @@ export default defineConfig({
     alias: [
       { find: /^@nikovirtala\/draft-core$/, replacement: core("index.ts") },
       { find: /^@nikovirtala\/draft-core\/view$/, replacement: core("view.ts") },
+      { find: /^@nikovirtala\/draft-core\/map-graph$/, replacement: core("map-graph.ts") },
+      { find: /^@nikovirtala\/draft-core\/map-layout$/, replacement: core("map-layout.ts") },
       { find: /^@nikovirtala\/draft-core\/testing$/, replacement: core("testing/index.ts") },
     ],
   },
