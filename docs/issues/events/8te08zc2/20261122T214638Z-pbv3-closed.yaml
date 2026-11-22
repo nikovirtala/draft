@@ -1,0 +1,16 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M82KKE91PDYQ1WEG6V5MPBV3
+subject: 8te08zc2
+type: closed
+at: 2026-11-22T21:46:38Z
+actor:
+  kind: agent
+  name: claude
+  email: null
+  agent: claude
+  on_behalf_of: niko.virtala@hey.com
+reason: "Built in PR #24 and checked by Niko on his Mac on 22 Nov, with main at #26: asked whether draft#26 was still open, then 'And now?', and the agent answered from draft's note that it was merged, without running a command."
+data:
+  resolution: done
