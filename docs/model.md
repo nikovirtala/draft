@@ -545,7 +545,7 @@ Rules that follow:
 
 1. **Every side effect is a step.** Writing a record, launching a Kiro session or merging a PR is logged as started and then completed, with an idempotency key, so a crash, a restart or a closed laptop never does it twice.
 2. **Every human gate is a callback.** It has an ID and an optional timeout. A suspended context runs no agent and spends no tokens, and can wait for weeks.
-3. **Resuming means rehydrating.** A new agent session gets a projection of the log, never a rerun of it.
+3. **Resuming means rehydrating.** A new agent session gets a projection of the log, never a rerun of it. Every turn after that carries a note of what changed since the agent's last turn that it could not see: your decisions and what draft resolved for the things referenced. The agent's last turn is a place in the log, so a restart sends it once.
 4. **Deploy provenance is the callback token for production.** A signal carrying it knows which context, and which thread, to wake. See [The process](#the-process).
 
 "Durable context" names the idea, not a type: `context` is already overloaded (see Open questions).
