@@ -41,6 +41,23 @@ const arbDraft: fc.Arbitrary<() => EventDraft> = fc.oneof(
       data: { state: state as "active" | "paused" },
     }),
   ),
+  fc.tuple(fc.constantFrom("kiro", "claude"), fc.option(fc.string(), { nil: null })).map(
+    ([agent, note]) =>
+      (): EventDraft => ({
+        type: "agent.turn_started",
+        address: `${CONV}/${next()}@1`,
+        conversation: CONV,
+        actor: { ...AGENT, id: agent },
+        traceId: TRACE,
+        data: {
+          message: `${CONV}/m1@1`,
+          agent,
+          note,
+          entries: note === null ? 0 : 1,
+          omitted: 0,
+        },
+      }),
+  ),
   fc.constantFrom("kiro_delete_session", "kiro_launch_session").map(
     (name) => (): EventDraft => ({
       type: "agent.anomaly",
