@@ -1,19 +1,25 @@
 import { type ChildProcess, spawn, spawnSync } from "node:child_process";
-import { appendFileSync, mkdirSync } from "node:fs";
+import { appendFileSync, mkdirSync, realpathSync } from "node:fs";
 import { Readable, Writable } from "node:stream";
 import * as acp from "@agentclientprotocol/sdk";
 import {
-  AGENT_BRIEFING,
   type AgentEnvironmentReport,
   type AgentEvent,
   type AgentRuntime,
   type AgentTurnHooks,
   type AgentTurnInput,
+  agentBriefing,
+  DRAFT_SERVER,
+  type DraftTool,
   KIRO_SERVER,
+  offeredTools,
   renderAgentContext,
 } from "@nikovirtala/draft-core";
 import { type AgentSpec, missingRequirement } from "./agents.ts";
+import { DraftToolServer } from "./draft-server.ts";
+import { DraftSession } from "./draft-session.ts";
 import { agentEnvironment, ensureAgentEnvironmentFiles } from "./environment.ts";
+import { kiroAgentName, sessionRunsDraftAgent } from "./kiro-agent.ts";
 import { AsyncQueue } from "./queue.ts";
 import { modelFromConfig, TurnMapper } from "./turn.ts";
 
@@ -26,8 +32,12 @@ import { modelFromConfig, TurnMapper } from "./turn.ts";
  *   crashed agent process all start the next turn the same way.
  * - Kiro Remote's MCP server reaches the agent in `session/new`: over HTTP with a bearer header
  *   when the agent advertises HTTP MCP, otherwise through the `kiro-remote` stdio client.
- * - The agent starts in a dedicated directory under draft's data, with no file system or
- *   terminal capability declared, so the only tools it is given are Kiro Remote's.
+ * - The agent starts in the folder the person trusted for the context, or in a dedicated directory
+ *   under draft's data, with no file system or terminal capability declared. draft takes the
+ *   agent's own tools that change things away (Kiro: draft's own agent configuration, selected
+ *   with `_meta.kiro.modeId` under a KIRO_HOME of draft's; Claude: `tools: []` and a deny list)
+ *   and, in a trusted folder, gives it draft's own file and shell tools through draft's MCP
+ *   server, which asks the person before any of them changes something (draft-server.ts).
  * - Every permission request goes through draft's tool policy (see turn.ts).
  * - draft stores no credential. Kiro keeps its own sign-in, and Claude's adapter reads its API key
  *   from the environment draft passes through.
@@ -54,6 +64,11 @@ export interface AcpRuntimeOptions {
   cwd: string | (() => string);
   /** What the agent is told about where it works, after the briefing; null for nothing. */
   placeNote?: () => string | null;
+  /**
+   * The folder the person trusted for the context, read each time a session starts; null when
+   * there is none. Only a trusted folder gets draft's file and shell tools.
+   */
+  folder?: () => string | null;
   /** The person's environment, filtered before it reaches the agent (environment.ts). */
   env: NodeJS.ProcessEnv;
   /** draft's data folder: where the files the agent's environment points at are kept. */
@@ -73,6 +88,10 @@ interface Session {
   token: string | null;
   primed: boolean;
   turn: TurnMapper | null;
+  /** draft's own tools this session offers; none in a context with no trusted folder. */
+  tools: readonly DraftTool[];
+  /** Ends the session's bearer token on draft's MCP server. */
+  release: () => void;
 }
 
 interface Connection {
@@ -82,6 +101,45 @@ interface Connection {
   init: acp.InitializeResponse;
   stderr: string[];
   alive: boolean;
+}
+
+/** Claude Code's own tools that change things or run programs; none should be there at all. */
+export const CLAUDE_DISALLOWED_TOOLS = [
+  "Bash",
+  "BashOutput",
+  "KillShell",
+  "Write",
+  "Edit",
+  "MultiEdit",
+  "NotebookEdit",
+  "Agent",
+  "Task",
+  "WebFetch",
+  "WebSearch",
+];
+
+/**
+ * What `session/new` carries for the agent kind, besides the folder and the MCP servers.
+ * - Kiro: `_meta.kiro.modeId` picks draft's own agent, which has no built-in tool (kiro-agent.ts).
+ * - Claude: no settings (the person's rules can allow tools), no built-in tools, and a deny list
+ *   as a second lock: a deny rule wins in every permission mode, and a bare tool name removes
+ *   the tool from the model's context
+ *   (https://code.claude.com/docs/en/agent-sdk/permissions#allow-and-deny-rules).
+ */
+export function sessionMeta(
+  kind: AgentSpec["kind"],
+  kiroAgent: string,
+): { _meta?: { [key: string]: unknown } } {
+  if (kind === "kiro") return { _meta: { kiro: { modeId: kiroAgent } } };
+  if (kind === "claude")
+    return {
+      _meta: {
+        claudeCode: {
+          options: { settingSources: [], tools: [], disallowedTools: CLAUDE_DISALLOWED_TOOLS },
+        },
+      },
+    };
+  return {};
 }
 
 /** An error whose message is meant for the person using draft. */
@@ -98,6 +156,8 @@ export class AcpRuntime implements AgentRuntime {
   /** Sessions by conversation address. */
   private readonly sessions = new Map<string, Session>();
   private closed = false;
+  private readonly draftServer = new DraftToolServer();
+  private sessionCount = 0;
 
   /** The session an ACP session id names; updates and requests are routed by it. */
   private bySessionId(sessionId: string): Session | undefined {
@@ -126,6 +186,7 @@ export class AcpRuntime implements AgentRuntime {
   closeConversation(conversation: string): void {
     const s = this.sessions.get(conversation);
     this.sessions.delete(conversation);
+    s?.release();
     const conn = this.conn;
     if (s === undefined || conn === null || !conn.alive) return;
     if (conn.init.agentCapabilities?.sessionCapabilities?.close != null) {
@@ -135,7 +196,9 @@ export class AcpRuntime implements AgentRuntime {
 
   async close(): Promise<void> {
     this.closed = true;
+    for (const s of this.sessions.values()) s.release();
     this.sessions.clear();
+    await this.draftServer.close();
     const conn = this.conn ?? (await this.connecting?.catch(() => null)) ?? null;
     this.conn = null;
     if (conn === null || !conn.alive) return;
@@ -164,7 +227,12 @@ export class AcpRuntime implements AgentRuntime {
 
     const conn = await this.connect();
     const session = await this.session(conn, input, queue);
-    const mapper = new TurnMapper(hooks, (e) => queue.push(e), spec.kind);
+    const mapper = new TurnMapper(
+      hooks,
+      (e) => queue.push(e),
+      spec.kind,
+      new Set(session.tools.map((t) => t.name)),
+    );
     mapper.onModel = (m) => {
       this.model = m;
     };
@@ -176,7 +244,7 @@ export class AcpRuntime implements AgentRuntime {
     if (input.signal?.aborted) cancel();
     input.signal?.addEventListener("abort", cancel, { once: true });
     try {
-      const preamble = session.primed ? [] : [this.preamble(input)];
+      const preamble = session.primed ? [] : [this.preamble(input, session.tools)];
       session.primed = true;
       let response: acp.PromptResponse;
       try {
@@ -210,12 +278,15 @@ export class AcpRuntime implements AgentRuntime {
   }
 
   /** What a new session is told before the first message: the briefing, then the log's projection. */
-  private preamble(input: AgentTurnInput): { type: "text"; text: string } {
+  private preamble(
+    input: AgentTurnInput,
+    tools: readonly DraftTool[],
+  ): { type: "text"; text: string } {
     const context = renderAgentContext(input.context);
     const place = this.o.placeNote?.() ?? null;
     return {
       type: "text",
-      text: `${AGENT_BRIEFING}${place === null ? "" : `\n${place}`}${context === "" ? "" : `\n\n${context}`}\n\nThe user's message follows.`,
+      text: `${agentBriefing(tools)}${place === null ? "" : `\n${place}`}${context === "" ? "" : `\n\n${context}`}\n\nThe user's message follows.`,
     };
   }
 
@@ -237,7 +308,7 @@ export class AcpRuntime implements AgentRuntime {
     const cwd = this.cwd();
     mkdirSync(cwd, { recursive: true });
     // The files the environment points at, written again if they are missing or were changed.
-    ensureAgentEnvironmentFiles(this.o.dataDir);
+    ensureAgentEnvironmentFiles(this.o.dataDir, spec);
     const { env } = agentEnvironment(spec, this.o.env, this.o.dataDir);
     const child = spawn(spec.command, spec.args, { cwd, env, stdio: ["pipe", "pipe", "pipe"] });
     const stderr: string[] = [];
@@ -307,6 +378,7 @@ export class AcpRuntime implements AgentRuntime {
       if (this.conn === conn) {
         this.conn = null;
         // The agent's sessions died with it; the next turn starts a new one from the log.
+        for (const s of this.sessions.values()) s.release();
         this.sessions.clear();
       }
     };
@@ -391,22 +463,62 @@ export class AcpRuntime implements AgentRuntime {
     if (existing !== undefined) this.closeConversation(input.conversation);
 
     const { spec } = this.o;
+    // draft's own file and shell tools, for an agent whose built-in ones draft takes away and
+    // only in a folder the person trusted. The instructions name exactly these.
+    const folder = this.trustedFolder();
+    const tools = offeredTools({
+      builtinsRemoved: spec.kind === "kiro" || spec.kind === "claude",
+      http: conn.init.agentCapabilities?.mcpCapabilities?.http === true,
+      folder,
+    });
+    const handle: { session: Session | null } = { session: null };
+    let draft: { token: string; release(): void } | null = null;
+    const mcpServers = this.mcpServers(conn.init, token);
+    if (tools.length > 0 && folder !== null) {
+      const url = await this.draftServer.url();
+      draft = this.draftServer.register(
+        new DraftSession({
+          id: `${++this.sessionCount}`,
+          tools,
+          ctx: { folder },
+          env: agentEnvironment(spec, this.o.env, this.o.dataDir).env,
+          turn: () => handle.session?.turn ?? null,
+        }),
+      );
+      mcpServers.push({
+        type: "http",
+        name: DRAFT_SERVER,
+        url,
+        headers: [{ name: "Authorization", value: `Bearer ${draft.token}` }],
+      });
+    }
+    const release = () => draft?.release();
     const request: acp.NewSessionRequest = {
       cwd: this.cwd(),
-      mcpServers: this.mcpServers(conn.init, token),
-      ...(spec.kind === "claude"
-        ? {
-            // The adapter reads the user's Claude settings by default, which can allow tools
-            // without asking. Neither those settings nor Claude Code's own tools are wanted here.
-            _meta: { claudeCode: { options: { settingSources: [], tools: [] } } },
-          }
-        : {}),
+      mcpServers,
+      ...sessionMeta(spec.kind, spec.kind === "kiro" ? kiroAgentName(this.o.dataDir) : ""),
     };
-    const created = await conn.agent.request(acp.methods.agent.session.new, request);
-    const session: Session = { id: created.sessionId, token, primed: false, turn: null };
+    let created: acp.NewSessionResponse;
     try {
+      created = await conn.agent.request(acp.methods.agent.session.new, request);
+    } catch (err) {
+      release();
+      throw err;
+    }
+    const session: Session = {
+      id: created.sessionId,
+      token,
+      primed: false,
+      turn: null,
+      tools,
+      release,
+    };
+    handle.session = session;
+    try {
+      this.removedBuiltins(created);
       await this.askFirst(conn, session.id, created);
     } catch (err) {
+      release();
       this.sessions.delete(input.conversation);
       void conn.agent
         .request(acp.methods.agent.session.close, { sessionId: session.id })
@@ -418,6 +530,32 @@ export class AcpRuntime implements AgentRuntime {
     this.sessions.set(input.conversation, session);
     queue.push({ type: "session-started" });
     return session;
+  }
+
+  /** The real path of the folder the person trusted for this context, or null. */
+  private trustedFolder(): string | null {
+    const folder = this.o.folder?.() ?? null;
+    if (folder === null) return null;
+    try {
+      return realpathSync(folder);
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Checks that the agent started without its own tools that change things. For Kiro that is
+   * draft's agent configuration, named in `session/new`: if the session doesn't report it as the
+   * agent in use, the session doesn't start, because Kiro's own write and shell tools might be
+   * there. Claude's are left out by the options draft sent (`tools: []` and a deny list).
+   */
+  private removedBuiltins(created: acp.NewSessionResponse): void {
+    const { spec } = this.o;
+    if (spec.kind !== "kiro" || sessionRunsDraftAgent(created, kiroAgentName(this.o.dataDir)))
+      return;
+    throw new UserFacingError(
+      `draft couldn't start ${spec.label} with draft's own agent configuration (the session didn't report it as the agent in use), so it did not start a session: ${spec.label}'s own tools that change things might be available. If agents.${spec.id}.env sets KIRO_HOME, draft's configuration isn't there.`,
+    );
   }
 
   /**
@@ -507,12 +645,23 @@ export class AcpRuntime implements AgentRuntime {
     ];
   }
 
+  /**
+   * How to sign in. draft runs Kiro with its own settings folder (KIRO_HOME), where Kiro's sign-in
+   * is kept too, so Kiro is signed in there once.
+   */
+  private signInHint(): string {
+    const { spec } = this.o;
+    const home = agentEnvironment(spec, this.o.env, this.o.dataDir).env.KIRO_HOME;
+    if (spec.kind !== "kiro" || home === undefined) return spec.signIn;
+    return `draft runs Kiro with its own settings folder, so sign in there: run \`KIRO_HOME="${home}" kiro-cli login\` in a terminal, then send your message again.`;
+  }
+
   /** A message for the person using draft, with no token or key in it. */
   private describe(err: unknown): string {
     const { spec } = this.o;
     if (err instanceof UserFacingError) return err.message;
     if (err instanceof acp.RequestError && err.code === acp.RequestError.authRequired().code)
-      return `${spec.label} isn't signed in. ${spec.signIn}`;
+      return `${spec.label} isn't signed in. ${this.signInHint()}`;
     const conn = this.conn;
     const tail = (conn?.stderr.join("") ?? "").trim().split("\n").slice(-3).join(" ").slice(0, 300);
     const base =

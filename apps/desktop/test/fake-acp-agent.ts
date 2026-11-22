@@ -22,11 +22,18 @@ import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/
 type Step =
   | { text: string; chunk?: number; delayMs?: number; messageId?: string }
   | {
-      /** A Kiro Remote tool to call through the MCP server given in session/new. */
+      /** A tool to call through an MCP server given in session/new (default: Kiro Remote's). */
       tool: string;
       input?: Record<string, unknown>;
+      /** Which server's tool it is. */
+      server?: string;
       /** Whether the agent asks first. Default: only for tools that aren't read-only. */
       ask?: boolean;
+      /**
+       * Send the call this many times with the same JSON-RPC id, one after the other, as a client
+       * that retries would. The results of all are recorded as "repeat" events.
+       */
+      repeat?: number;
     }
   | {
       /** A call that runs without asking, whatever the tool: the misbehaviour draft must catch. */
@@ -57,6 +64,15 @@ interface Script {
   credits?: number;
   /** Ignores requests to change its configuration or mode: it keeps running without asking. */
   stubborn?: boolean;
+  /**
+   * Never sends session/request_permission, whatever the tool: a Kiro whose person-level rules
+   * allow everything, which is how the person's Kiro runs today.
+   */
+  neverAsks?: boolean;
+  /** Takes no notice of the mode (agent configuration) a session asks for, as an old Kiro would. */
+  ignoreModeId?: boolean;
+  /** Reports the tools of these MCP servers (by name) when a session starts, as "tools" events. */
+  listTools?: string[];
   /** Exit the process during a prompt, after this many chunks of text. */
   crashAfterChunks?: number;
   /**
@@ -91,7 +107,8 @@ interface SessionState {
   /** The working directory the client gave in session/new; `{cwd}` in a reply says it. */
   cwd: string;
   mcp: acp.McpServer | undefined;
-  mcpClient: Client | null;
+  servers: acp.McpServer[];
+  mcpClients: Map<string, Client>;
   autopilot: "on" | "off";
   mode: string;
   cancelled: boolean;
@@ -149,17 +166,52 @@ function runsWithoutAsking(s: SessionState): boolean {
   return (startsKiro && s.autopilot === "on") || (startsClaude && s.mode === "auto");
 }
 
-async function mcp(s: SessionState): Promise<Client> {
-  if (s.mcpClient !== null) return s.mcpClient;
-  const server = s.mcp;
+function serverNamed(s: SessionState, name: string): acp.McpServer | undefined {
+  return s.servers.find((x) => x.name === name);
+}
+
+async function mcp(s: SessionState, name = "kiro-remote"): Promise<Client> {
+  const known = s.mcpClients.get(name);
+  if (known !== undefined) return known;
+  const server = name === "kiro-remote" ? (serverNamed(s, name) ?? s.mcp) : serverNamed(s, name);
   if (server === undefined || !("url" in server)) throw new Error("no HTTP MCP server was given");
   const headers = Object.fromEntries(server.headers.map((h) => [h.name, h.value]));
   const client = new Client({ name: "fake-acp-agent", version: "1" });
   await client.connect(
     new StreamableHTTPClientTransport(new URL(server.url), { requestInit: { headers } }),
   );
-  s.mcpClient = client;
+  s.mcpClients.set(name, client);
   return client;
+}
+
+/** One raw tools/call with a JSON-RPC id of the caller's choosing, as a retrying client sends. */
+async function rawCall(
+  s: SessionState,
+  name: string,
+  tool: string,
+  input: Record<string, unknown>,
+  id: number,
+): Promise<{ text: string; isError: boolean }> {
+  const server = serverNamed(s, name);
+  if (server === undefined || !("url" in server)) throw new Error("no HTTP MCP server was given");
+  const headers = Object.fromEntries(server.headers.map((h) => [h.name, h.value]));
+  const r = await fetch(server.url, {
+    method: "POST",
+    headers: { ...headers, "content-type": "application/json", accept: "application/json" },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id,
+      method: "tools/call",
+      params: { name: tool, arguments: input },
+    }),
+  });
+  const body = (await r.json()) as {
+    result?: { content?: { text?: string }[]; isError?: boolean };
+  };
+  return {
+    text: (body.result?.content ?? []).map((c) => c.text ?? "").join("\n"),
+    isError: body.result?.isError === true,
+  };
 }
 
 function identityMeta(name: string, server = "kiro-remote") {
@@ -200,15 +252,27 @@ const agentApp = acp
       id: `fake-session-${process.pid}-${++sessionCount}`,
       cwd: params.cwd,
       mcp: params.mcpServers[0],
-      mcpClient: null,
+      servers: params.mcpServers,
+      mcpClients: new Map(),
       autopilot: "on",
       mode: startsClaude ? "auto" : "default",
       cancelled: false,
       used: new Set(),
       calls: 0,
     };
+    // Kiro: the session runs the agent a client names with _meta.kiro.modeId.
+    const kiroMode = (params._meta as { kiro?: { modeId?: string } } | undefined)?.kiro?.modeId;
+    if (kiroMode !== undefined && script.ignoreModeId !== true) s.mode = kiroMode;
     sessions.set(s.id, s);
     record({ event: "session/new", sessionId: s.id, params });
+    for (const name of script.listTools ?? []) {
+      try {
+        const listed = await (await mcp(s, name)).listTools();
+        record({ event: "tools", server: name, names: listed.tools.map((t) => t.name) });
+      } catch (err) {
+        record({ event: "tools", server: name, error: String(err) });
+      }
+    }
     if (script.probe !== undefined) {
       record({ event: "environment", env: process.env });
       for (const p of script.probe) {
@@ -232,14 +296,14 @@ const agentApp = acp
     return {
       sessionId: s.id,
       configOptions: configOptions(s),
-      ...(startsClaude
+      ...(startsClaude || kiroMode !== undefined
         ? {
             modes: {
               currentModeId: s.mode,
-              availableModes: ["default", "acceptEdits", "plan", "auto"].map((id) => ({
-                id,
-                name: id,
-              })),
+              availableModes: (startsClaude
+                ? ["default", "acceptEdits", "plan", "auto"]
+                : ["default", ...(kiroMode === undefined ? [] : [kiroMode])]
+              ).map((id) => ({ id, name: id })),
             },
           }
         : {}),
@@ -263,7 +327,7 @@ const agentApp = acp
   .onRequest(acp.methods.agent.session.close, async ({ params }) => {
     record({ event: "session/close", sessionId: params.sessionId });
     const s = sessions.get(params.sessionId);
-    await s?.mcpClient?.close().catch(() => {});
+    for (const c of s?.mcpClients.values() ?? []) await c.close().catch(() => {});
     sessions.delete(params.sessionId);
   })
   .onNotification(acp.methods.agent.session.cancel, async ({ params }) => {
@@ -317,6 +381,7 @@ const agentApp = acp
       }
       const toolCallId = `call-${s.id}-${++s.calls}`;
       const isMcp = "tool" in step || "unasked" in step;
+      const server = "tool" in step ? (step.server ?? "kiro-remote") : "kiro-remote";
       const tool = "tool" in step ? step.tool : "unasked" in step ? step.unasked : step.builtin;
       const input = step.input ?? {};
       const kind =
@@ -330,18 +395,18 @@ const agentApp = acp
       await update({
         sessionUpdate: "tool_call",
         toolCallId,
-        title: isMcp ? `@kiro-remote/${tool}` : tool,
+        title: isMcp ? `@${server}/${tool}` : tool,
         kind,
         status: "pending",
         rawInput: input,
-        ...(isMcp ? { name: tool, _meta: identityMeta(tool) } : { name: tool }),
+        ...(isMcp ? { name: tool, _meta: identityMeta(tool, server) } : { name: tool }),
       });
 
       let asks: boolean;
-      if ("unasked" in step) asks = false;
+      if ("unasked" in step || script.neverAsks === true) asks = false;
       else if (runsWithoutAsking(s)) asks = false;
       else if (step.ask !== undefined) asks = step.ask;
-      else asks = !(isMcp && READ_ONLY.has(tool));
+      else asks = !(isMcp && server === "kiro-remote" && READ_ONLY.has(tool));
 
       if (asks) {
         const r: acp.RequestPermissionResponse = await client.request(
@@ -350,11 +415,11 @@ const agentApp = acp
             sessionId: s.id,
             toolCall: {
               toolCallId,
-              title: isMcp ? `@kiro-remote/${tool}` : tool,
+              title: isMcp ? `@${server}/${tool}` : tool,
               kind,
               status: "pending",
               rawInput: input,
-              ...(isMcp ? { _meta: identityMeta(tool) } : {}),
+              ...(isMcp ? { _meta: identityMeta(tool, server) } : {}),
             },
             options: [
               { optionId: "accept", name: "Allow", kind: "allow_once" },
@@ -396,8 +461,18 @@ const agentApp = acp
         continue;
       }
       try {
-        const client2 = await mcp(s);
-        const result = (await client2.callTool({ name: tool, arguments: input })) as {
+        if ("repeat" in step && step.repeat !== undefined) {
+          for (let i = 0; i < step.repeat; i++) {
+            const r = await rawCall(s, server, tool, input, 9001);
+            record({ event: "repeat", tool, attempt: i + 1, ...r });
+          }
+        }
+        const client2 = await mcp(s, server);
+        const result = (await ("repeat" in step && step.repeat !== undefined
+          ? Promise.resolve({
+              content: [{ type: "text", text: "(repeated with one id; see the repeat events)" }],
+            })
+          : client2.callTool({ name: tool, arguments: input }))) as {
           content?: { type: string; text?: string }[];
           isError?: boolean;
         };

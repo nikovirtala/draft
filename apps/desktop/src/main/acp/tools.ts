@@ -1,5 +1,8 @@
 import {
+  bareDraftToolName,
   bareToolName,
+  DRAFT_SERVER,
+  draftToolName,
   KIRO_READ_ONLY_TOOLS,
   KIRO_SERVER,
   sdkToolName,
@@ -20,6 +23,8 @@ export interface CallFields {
 
 export type ToolIdentity =
   | { source: "kiro-remote"; bare: string; name: string }
+  /** One of draft's own file and shell tools, which draft's MCP server serves and gates itself. */
+  | { source: "draft"; bare: string; name: string }
   | { source: "other"; name: string | null };
 
 const obj = (v: unknown): Record<string, unknown> | null =>
@@ -39,6 +44,10 @@ export function toolIdentity(...sources: (CallFields | null | undefined)[]): Too
         const bare = bareToolName(identity.toolName);
         if (bare !== null) return { source: "kiro-remote", bare, name: sdkToolName(bare) };
       }
+      if (identity.serverName === DRAFT_SERVER) {
+        const bare = bareDraftToolName(identity.toolName);
+        if (bare !== null) return { source: "draft", bare, name: draftToolName(bare) };
+      }
       return { source: "other", name: `mcp__${identity.serverName}__${identity.toolName}` };
     }
   }
@@ -51,6 +60,10 @@ export function toolIdentity(...sources: (CallFields | null | undefined)[]): Too
       if (candidate.startsWith(`mcp__${KIRO_SERVER}__`)) {
         const bare = bareToolName(candidate);
         if (bare !== null) return { source: "kiro-remote", bare, name: sdkToolName(bare) };
+      }
+      if (candidate.startsWith(`mcp__${DRAFT_SERVER}__`)) {
+        const bare = bareDraftToolName(candidate);
+        if (bare !== null) return { source: "draft", bare, name: draftToolName(bare) };
       }
       return { source: "other", name: candidate };
     }

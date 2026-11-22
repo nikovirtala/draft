@@ -33,7 +33,10 @@ export interface RuntimeDeps {
   /** What answering an acceptance request runs, as the person. */
   acceptance: AcceptanceActions;
   /** Makes the ACP runtime of one agent, working where `place` says. */
-  makeAgent(spec: AgentSpec, place: { cwd: () => string; note: () => string | null }): AcpRuntime;
+  makeAgent(
+    spec: AgentSpec,
+    place: { cwd: () => string; note: () => string | null; folder: () => string | null },
+  ): AcpRuntime;
   /** How draft reaches GitHub, for a note in the main conversation; null for nothing to say. */
   githubNote?: string | null;
   launcher(context: string): ContextLauncher;
@@ -73,6 +76,7 @@ export class ContextRuntime {
     const place = {
       cwd: () => currentPlace(deps, name).cwd,
       note: () => placeBriefing(currentPlace(deps, name)),
+      folder: () => currentPlace(deps, name).folder?.path ?? null,
     };
     const agents = new AgentRegistry(deps.config.agentConfig, (spec) =>
       deps.makeAgent(spec, place),

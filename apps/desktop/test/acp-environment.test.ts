@@ -103,7 +103,6 @@ describe("agentEnvironment: what is withheld", () => {
       SHELL: "/bin/zsh",
       XDG_DATA_HOME: "/Users/someone/.local/share",
       KIRO_API_KEY: "kiro-own-key",
-      KIRO_HOME: "/Users/someone/.kiro",
       AWS_REGION: "eu-west-1",
       AWS_DEFAULT_REGION: "eu-west-1",
       GH_HOST: "github.com",
@@ -114,6 +113,10 @@ describe("agentEnvironment: what is withheld", () => {
       expect(r.env[k], k).toBe(v);
     }
     expect(r.report.withheld).toEqual([]);
+    // KIRO_HOME is draft's own for Kiro (kiro-agent.ts), so the person's isn't kept.
+    expect(
+      agentEnvironment(spec(), { ...keep, KIRO_HOME: "/Users/someone/.kiro" }, DATA).env.KIRO_HOME,
+    ).toBe("/data/draft/kiro-home");
   });
 
   it("never changes HOME", () => {

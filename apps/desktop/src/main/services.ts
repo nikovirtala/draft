@@ -119,6 +119,7 @@ export async function createServices(o: {
         spec,
         cwd: place.cwd,
         placeNote: place.note,
+        folder: place.folder,
         env,
         dataDir: config.dataDir,
         clientInfo: { name: "draft", version: o.appVersion },

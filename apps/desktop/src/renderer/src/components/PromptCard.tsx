@@ -10,6 +10,10 @@ export const ACTIONS: Record<string, string> = {
   kiro_unlink_pull_request: "unlink a pull request from a session",
   kiro_cancel_turn: "cancel a session's running turn",
   kiro_delete_session: "delete a Kiro session",
+  // draft's own tools for the project folder (agent-tools.ts in core)
+  write_file: "write a file in the project folder",
+  edit_file: "edit a file in the project folder",
+  run_command: "run a command in the project folder",
 };
 
 /** The confirm prompt for a tool that changes things, inside the conversation. */
@@ -20,7 +24,7 @@ export function PromptCard({
   prompt: Prompt;
   onAnswer: (allow: boolean) => void;
 }) {
-  const bare = prompt.tool.replace(/^mcp__kiro-remote__/, "");
+  const bare = prompt.tool.replace(/^mcp__(kiro-remote|draft)__/, "");
   return (
     <section className="prompt" data-testid="prompt" aria-label="The agent asks for permission">
       <p className="prompt-title">
