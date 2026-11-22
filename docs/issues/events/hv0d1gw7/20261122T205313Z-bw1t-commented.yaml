@@ -1,0 +1,15 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M82GHM14SEHA2QKB0ME7BW1T
+subject: hv0d1gw7
+type: commented
+at: 2026-11-22T20:53:13Z
+actor:
+  kind: agent
+  name: claude
+  email: null
+  agent: claude
+  on_behalf_of: niko.virtala@hey.com
+data:
+  text: Measure language switches within a segment too. The doc gives each segment one language, but on the canvas (Voice, Juho at 12:05) one sentence goes from English into Finnish and the segment shows en | fi. Record how often that happens in a real mob, and decide whether a segment carries several languages or a language change splits it. The decision changes the segment contract in 877w9mgn.
