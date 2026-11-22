@@ -47,6 +47,13 @@ export interface AgentTurnInput {
    * across turns uses it for the first turn only.
    */
   context: AgentContext;
+  /**
+   * What draft's log says changed since this agent's last turn that the agent could not see:
+   * what the person decided in draft and what draft resolved for the things referenced. Every
+   * turn carries it, whether or not the session is new; `null` when nothing changed. The same
+   * text is recorded in the turn's `agent.turn_started` event.
+   */
+  note?: string | null;
   signal?: AbortSignal;
 }
 
