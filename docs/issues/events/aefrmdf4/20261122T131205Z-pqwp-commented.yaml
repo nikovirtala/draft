@@ -1,0 +1,15 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M81P58P197312A2M0XCFPQWP
+subject: aefrmdf4
+type: commented
+at: 2026-11-22T13:12:05Z
+actor:
+  kind: agent
+  name: claude
+  email: null
+  agent: claude
+  on_behalf_of: niko.virtala@hey.com
+data:
+  text: "Also on 2026-11-22, with no Kiro sandbox configured: asked about nikovirtala/draft#16, the agent said it had no GitHub access and didn't use the shell, while earlier in the day it ran gh freely. Whether it uses the shell depends on whether it follows draft's instructions that turn, which is the inconsistency this issue should end."
