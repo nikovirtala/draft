@@ -31,9 +31,15 @@ const USER: Actor = { kind: "user", id: "01kahx0000000000000000user", name: "Tes
 const AGENT: Actor = { kind: "agent", id: "draft-agent", model: "claude-opus-5-5", version: "1" };
 const RESOLVER: Actor = { kind: "resolver", id: "github", version: "1" };
 
-/** The time of minute `m` (and second `s`) of the fixture. */
+/** When the fixture starts, unless the caller says: its times are fixed so tests can name them. */
+export const MAP_FIXTURE_START = Date.UTC(2026, 10, 20, 12, 0, 0);
+
+const atFrom = (start: number, m: number, s = 0): string =>
+  new Date(start + (m * 60 + s) * 1000).toISOString();
+
+/** The time of minute `m` (and second `s`) of the fixture, at its fixed start. */
 export function at(m: number, s = 0): string {
-  return new Date(Date.UTC(2026, 10, 20, 12, m, s)).toISOString();
+  return atFrom(MAP_FIXTURE_START, m, s);
 }
 
 /** A pull request's state as the resolver reports it, with what a test varies. */
@@ -66,7 +72,15 @@ export function pullRequestState(
   };
 }
 
-export async function appendMapFixture(log: LogStore): Promise<void> {
+/**
+ * Writes the fixture through `log`. `start` moves its first minute, so an end-to-end run can put
+ * the whole story in the last hour.
+ */
+export async function appendMapFixture(
+  log: LogStore,
+  start: number = MAP_FIXTURE_START,
+): Promise<void> {
+  const at = (m: number, s = 0): string => atFrom(start, m, s);
   const out: EventDraft[] = [];
   const add = <T extends EventType>(
     type: T,

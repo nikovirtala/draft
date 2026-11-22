@@ -18,6 +18,11 @@
       "types": "./dist/view.d.ts",
       "default": "./dist/view.js"
     },
+    "./map-types": {
+      "source": "./src/map-types.ts",
+      "types": "./dist/map-types.d.ts",
+      "default": "./dist/map-types.js"
+    },
     "./testing": {
       "source": "./src/testing/index.ts",
       "types": "./dist/testing/index.d.ts",

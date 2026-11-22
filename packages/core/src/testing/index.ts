@@ -27,6 +27,7 @@ export {
   appendMapFixture,
   at as mapFixtureTime,
   MAP_CONTEXT,
+  MAP_FIXTURE_START,
   MAP_MAIN,
   MAP_PR_FAILING,
   MAP_PR_MERGED,
