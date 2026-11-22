@@ -1,6 +1,6 @@
 import { tryParseAddress } from "./address.ts";
 import { type DraftEvent, isUnknown, type LogRecord } from "./events.ts";
-import type { ActorKind, MachineSpec } from "./machine.ts";
+import type { MachineSpec } from "./machine.ts";
 import type {
   Column,
   MapCell,
@@ -41,6 +41,8 @@ export interface ItemDraft {
   id: string;
   label: string;
   open: OpenTarget;
+  /** What the cell counts it under besides its state; an issue closed as done says "done". */
+  note?: string | null;
   /** The states it was in, oldest first; at least one. */
   path: readonly PathEntry[];
 }
@@ -57,6 +59,12 @@ export interface KindInput {
   context: string;
   /** Null when folding the past: nothing is known of any process then. */
   live: LiveInfo | null;
+  /**
+   * What lives outside the log, by name, as plain data the host read: the records of the
+   * repositories a context covers. A kind that lists outside things reads its source here, so
+   * the fold stays a pure function of its inputs.
+   */
+  sources: Readonly<Record<string, unknown>>;
 }
 
 export interface KindDecl {
@@ -72,6 +80,12 @@ export interface KindDecl {
   /** Shown even with no items, so the map says what it will show. */
   alwaysShown?: boolean;
   items(input: KindInput): readonly ItemDraft[];
+  /**
+   * Why the counts may not be current, when the kind could not read its source the last time;
+   * null when they are. The row says so and the map's problems list it, so a stale count is never
+   * drawn as a current one.
+   */
+  freshness?(input: KindInput): string | null;
 }
 
 /** Which column each state of each kind belongs to. */
@@ -160,6 +174,13 @@ export class KindRegistry {
     return () => void this.kinds.delete(kind.id);
   }
 
+  /** A registry with the same kinds, to which others can be added without changing this one. */
+  fork(): KindRegistry {
+    const copy = new KindRegistry();
+    for (const k of this.kinds.values()) copy.register(k);
+    return copy;
+  }
+
   get(id: string): KindDecl | null {
     return this.kinds.get(id) ?? null;
   }
@@ -195,6 +216,8 @@ export interface MapQuery {
   /** The context's id, on every item. Default: the context the first event's address names. */
   context?: string;
   live?: LiveInfo | null;
+  /** What lives outside the log; see `KindInput.sources`. */
+  sources?: Readonly<Record<string, unknown>>;
 }
 
 function contextOf(events: readonly DraftEvent[]): string {
@@ -223,7 +246,12 @@ export function foldMap(
   const context = query.context ?? contextOf(events.map((e) => e.event));
   const grouping = query.grouping ?? BY_STATE;
   const window = query.window ?? {};
-  const input: KindInput = { events, context, live: query.live ?? null };
+  const input: KindInput = {
+    events,
+    context,
+    live: query.live ?? null,
+    sources: query.sources ?? {},
+  };
   const rows: MapRow[] = [];
   const transitions: MapTransition[] = [];
   const problems: MapProblem[] = [];
@@ -246,7 +274,10 @@ export function foldMap(
       if (!columns.some((x) => x.id === c.id)) columns.push({ ...c, class: s.class });
     }
     const cells = new Map<string, MapCell>(
-      columns.map((c) => [c.id, { column: c.id, count: 0, waitingOnPerson: 0, items: [] }]),
+      columns.map((c) => [
+        c.id,
+        { column: c.id, count: 0, waitingOnPerson: 0, notes: [], items: [] },
+      ]),
     );
     let total = 0;
     let waiting = 0;
@@ -277,6 +308,7 @@ export function foldMap(
         waitsOn: state.class === "waiting" ? (state.waitsOn ?? null) : null,
         column,
         since: last.at,
+        note: d.note ?? null,
         open: d.open,
       };
       const cell = cells.get(column) as MapCell;
@@ -306,11 +338,19 @@ export function foldMap(
         });
       });
     }
+    const stale = kind.freshness?.(input) ?? null;
+    if (stale !== null) problems.push({ kind: kind.id, message: stale });
     if (kind.alwaysShown !== true && total === 0) continue;
-    for (const c of cells.values())
+    for (const c of cells.values()) {
       c.items.sort((a, b) =>
         a.since < b.since ? -1 : a.since > b.since ? 1 : a.id < b.id ? -1 : 1,
       );
+      const noted = new Map<string, number>();
+      for (const i of c.items) if (i.note !== null) noted.set(i.note, (noted.get(i.note) ?? 0) + 1);
+      c.notes = [...noted]
+        .map(([note, count]) => ({ note, count }))
+        .sort((a, b) => b.count - a.count || (a.note < b.note ? -1 : 1));
+    }
     rows.push({
       kind: kind.id,
       label: kind.label,
@@ -320,9 +360,13 @@ export function foldMap(
       cells: columns.map((c) => cells.get(c.id) as MapCell),
       total,
       waitingOnPerson: waiting,
+      stale,
     });
   }
-  transitions.sort((a, b) => a.seq - b.seq || (a.item < b.item ? -1 : 1));
+  // By time, then by place in the log: things that live outside the log have no place in it.
+  transitions.sort(
+    (a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : a.seq - b.seq) || (a.item < b.item ? -1 : 1),
+  );
   const lastEvent = events.at(-1)?.event;
   return {
     context,

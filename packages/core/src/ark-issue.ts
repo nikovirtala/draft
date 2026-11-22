@@ -83,6 +83,20 @@ export function dataField(yaml: string, key: string): string | null {
   return v === "" || v === "null" ? null : v;
 }
 
+/**
+ * An issue's status from its events, oldest first: `started` is in progress, `opened`, `stopped`
+ * and `reopened` are open, `closed` is closed.
+ */
+export function foldIssueStatus(events: readonly ArkIssueEvent[]): ArkIssueStatus {
+  let status: ArkIssueStatus = "open";
+  for (const e of events) {
+    if (e.type === "started") status = "in-progress";
+    else if (e.type === "opened" || e.type === "stopped" || e.type === "reopened") status = "open";
+    else if (e.type === "closed") status = "closed";
+  }
+  return status;
+}
+
 export class ArkIssueResolver implements Resolver {
   readonly type = "ark-issue";
   readonly version = "1";
@@ -136,13 +150,7 @@ export class ArkIssueResolver implements Resolver {
     if (listing === null || !Array.isArray(listing)) return null;
     const events = parseEventFiles(listing);
     if (events.length === 0) return null;
-    let status: ArkIssueStatus = "open";
-    for (const e of events) {
-      if (e.type === "started") status = "in-progress";
-      else if (e.type === "opened" || e.type === "stopped" || e.type === "reopened")
-        status = "open";
-      else if (e.type === "closed") status = "closed";
-    }
+    const status = foldIssueStatus(events);
     const opened = events.find((e) => e.type === "opened");
     const closed = [...events].reverse().find((e) => e.type === "closed");
     const title =

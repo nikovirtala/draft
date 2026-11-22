@@ -58,6 +58,24 @@ export interface FakeIssueEvent {
   data?: Record<string, string>;
 }
 
+export interface FakeDeploymentStatus {
+  state: string;
+  /** ISO time. */
+  at: string;
+  logUrl?: string;
+  environmentUrl?: string;
+}
+
+export interface FakeDeployment {
+  id: number;
+  sha: string;
+  ref: string;
+  environment: string;
+  createdAt: string;
+  /** Oldest first. */
+  statuses: FakeDeploymentStatus[];
+}
+
 export interface RecordedRequest {
   method: string;
   path: string;
@@ -79,6 +97,10 @@ export class FakeGithub {
   readonly pulls = new Map<string, FakePull>();
   /** `owner/repo:id` to its event files, oldest first. */
   readonly issues = new Map<string, FakeIssueEvent[]>();
+  /** `owner/repo` to a ref (a branch or a commit sha) to the files it holds, by path. */
+  readonly files = new Map<string, Map<string, Map<string, string>>>();
+  /** `owner/repo` to its deployments, oldest first. */
+  readonly deployments = new Map<string, FakeDeployment[]>();
   /** `owner/repo` to the bare git repository behind it. */
   readonly gitRepos = new Map<string, string>();
   /** Take writes (merge, close, comment) from a person's tools. Off, anything but GET is refused. */
@@ -185,6 +207,34 @@ export class FakeGithub {
     if (p === undefined) throw new Error(`no fake pull request ${repo}#${n}`);
     Object.assign(p, patch, { updatedAt: new Date().toISOString() });
     return p;
+  }
+
+  /** Sets the files a ref (a branch name, or the sha of a pull request's head) holds. */
+  addFiles(repo: string, ref: string, files: Record<string, string>): void {
+    const refs = this.files.get(repo) ?? new Map<string, Map<string, string>>();
+    refs.set(ref, new Map(Object.entries(files)));
+    this.files.set(repo, refs);
+  }
+
+  addDeployment(repo: string, d: FakeDeployment): void {
+    this.deployments.set(repo, [...(this.deployments.get(repo) ?? []), d]);
+  }
+
+  addDeploymentStatus(repo: string, id: number, s: FakeDeploymentStatus): void {
+    const d = this.deployments.get(repo)?.find((x) => x.id === id);
+    if (d === undefined) throw new Error(`no fake deployment ${repo}#${id}`);
+    d.statuses.push(s);
+  }
+
+  /** What git calls the blob of a text: its sha. */
+  static blobSha(text: string): string {
+    const body = Buffer.from(text, "utf8");
+    return createHash("sha1").update(`blob ${body.length}\0`).update(body).digest("hex");
+  }
+
+  private treeOf(repo: string, ref: string): Map<string, string> | undefined {
+    const refs = this.files.get(repo);
+    return refs?.get(ref === "HEAD" ? "main" : ref);
   }
 
   addIssue(repo: string, id: string, events: FakeIssueEvent[]): void {
@@ -316,6 +366,54 @@ export class FakeGithub {
         updated_at: p.updatedAt,
       });
     }
+    const tree = /^\/repos\/([^/]+\/[^/]+)\/git\/trees\/([^/]+)$/.exec(path);
+    if (tree !== null) {
+      const files = this.treeOf(tree[1] as string, decodeURIComponent(tree[2] as string));
+      if (files === undefined) return send(404, { message: "Not Found" });
+      const entries = [...files]
+        .sort(([a], [b]) => (a < b ? -1 : 1))
+        .map(([p, text]) => ({ path: p, type: "blob", sha: FakeGithub.blobSha(text) }));
+      const sha = createHash("sha1")
+        .update(entries.map((e) => `${e.path}:${e.sha}`).join("\n"))
+        .digest("hex");
+      return send(200, { sha, truncated: false, tree: entries });
+    }
+    const blob = /^\/repos\/([^/]+\/[^/]+)\/git\/blobs\/([0-9a-f]+)$/.exec(path);
+    if (blob !== null) {
+      for (const text of [...(this.files.get(blob[1] as string)?.values() ?? [])].flatMap((f) => [
+        ...f.values(),
+      ]))
+        if (FakeGithub.blobSha(text) === blob[2]) return send(200, text, true);
+      return send(404, { message: "Not Found" });
+    }
+    const deployments = /^\/repos\/([^/]+\/[^/]+)\/deployments$/.exec(path);
+    if (deployments !== null)
+      return send(
+        200,
+        [...(this.deployments.get(deployments[1] as string) ?? [])].reverse().map((d) => ({
+          id: d.id,
+          sha: d.sha,
+          ref: d.ref,
+          environment: d.environment,
+          created_at: d.createdAt,
+        })),
+      );
+    const statuses = /^\/repos\/([^/]+\/[^/]+)\/deployments\/(\d+)\/statuses$/.exec(path);
+    if (statuses !== null) {
+      const d = this.deployments
+        .get(statuses[1] as string)
+        ?.find((x) => x.id === Number(statuses[2]));
+      if (d === undefined) return send(404, { message: "Not Found" });
+      return send(
+        200,
+        [...d.statuses].reverse().map((st) => ({
+          state: st.state,
+          created_at: st.at,
+          log_url: st.logUrl ?? null,
+          environment_url: st.environmentUrl ?? null,
+        })),
+      );
+    }
     const list = /^\/repos\/([^/]+\/[^/]+)\/pulls$/.exec(path);
     if (list !== null) {
       const open = [...this.pulls.entries()]
@@ -324,6 +422,12 @@ export class FakeGithub {
           number: Number(k.split("#")[1]),
           state: v.state,
           updated_at: v.updatedAt,
+          html_url: `https://github.com/${list[1]}/pull/${k.split("#")[1]}`,
+          head: {
+            sha: this.head(list[1] as string, v),
+            ref: v.headRef,
+            repo: { full_name: list[1] },
+          },
         }));
       return send(200, query.get("state") === "open" || query.get("state") === null ? open : []);
     }

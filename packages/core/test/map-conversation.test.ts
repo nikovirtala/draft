@@ -82,7 +82,7 @@ describe("the workspace's map", () => {
     expect(changes.some((c) => c.type === "map")).toBe(true);
     // The head is what a window compares: it names the log as it is.
     const last = changes.filter((c) => c.type === "map").at(-1);
-    expect(last).toMatchObject({ head: o.log.head() });
+    expect(last).toMatchObject({ head: `${o.log.head()}:0` });
     o.close();
   });
 });

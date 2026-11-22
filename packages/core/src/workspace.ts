@@ -11,8 +11,9 @@ import {
 import type { Actor, EventDraft, Target } from "./events.ts";
 import { newItemId } from "./ids.ts";
 import { type AttentionItem, orderAttention } from "./interrupts.ts";
-import type { MapQuery, MapSnapshot } from "./map.ts";
-import { mapOf } from "./map-kinds.ts";
+import { foldMap, type KindRegistry, type MapQuery, type MapSnapshot } from "./map.ts";
+import { ArkMap, type ArkMapOptions } from "./map-ark.ts";
+import { mapRegistry } from "./map-kinds.ts";
 import type { FolderDecisionRow } from "./projection.ts";
 import type { ThreadFold, ThreadState } from "./thread.ts";
 
@@ -67,6 +68,11 @@ export type WorkspaceChange =
 
 export interface WorkspaceOptions extends ConversationOptions {
   agents?: AgentDirectory;
+  /**
+   * The decisions, issues and deployments of the repositories this context covers, for the map.
+   * Without it the map has draft's own kinds only.
+   */
+  ark?: ArkMapOptions;
 }
 
 function firstLine(text: string, max: number): string {
@@ -85,12 +91,17 @@ export class Workspace {
   private readonly listeners = new Set<(c: WorkspaceChange) => void>();
   private lastThreads = "";
   private lastMapHead = "";
+  private readonly registry: KindRegistry;
+  private readonly ark: ArkMap | null;
 
   private constructor(
     private readonly o: WorkspaceOptions & { writer: SerialWriter; agents: AgentDirectory },
     main: ConversationService,
   ) {
     this.main = main;
+    // Each workspace has its own registry: the repositories of a context bring rows of its own.
+    this.registry = mapRegistry.fork();
+    this.ark = o.ark === undefined ? null : new ArkMap(this.registry, o.ark);
     this.watch(main);
     for (const c of o.projection.conversations()) {
       if (c.parent !== null) this.attach(c.conversation);
@@ -167,7 +178,7 @@ export class Workspace {
 
   /** Tells the windows that the log has moved since the map was last drawn. */
   private emitMap(): void {
-    const head = this.o.log.head();
+    const head = `${this.o.log.head()}:${this.ark?.version ?? 0}`;
     if (head === this.lastMapHead) return;
     this.lastMapHead = head;
     this.emit({ type: "map", head });
@@ -181,7 +192,16 @@ export class Workspace {
     const runningSteps = new Set<string>();
     for (const s of [this.main, ...this.services.values()])
       for (const a of s.runningSteps()) runningSteps.add(a);
-    return mapOf(this.o.log.events(), { live: { runningSteps }, ...query });
+    return foldMap(this.o.log.events(), this.registry, {
+      live: { runningSteps },
+      sources: this.ark?.sources() ?? {},
+      ...query,
+    });
+  }
+
+  /** A window has a map on screen, or no longer has. The repositories are read only while one is. */
+  setMapVisible(viewer: string, on: boolean): void {
+    this.ark?.setVisible(viewer, on);
   }
 
   /** Every conversation's state, the main one first. */
@@ -384,6 +404,7 @@ export class Workspace {
   /** Polls the visible stubs that are due. The host calls this on a timer. */
   async tick(): Promise<void> {
     await this.main.tick();
+    if (this.ark !== null && (await this.ark.tick())) this.emitMap();
   }
 
   async close(): Promise<void> {

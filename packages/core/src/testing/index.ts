@@ -6,7 +6,19 @@ export {
   type FixtureOptions,
 } from "./acceptance-fixture.ts";
 export {
+  ADR_IDS,
+  ARK_FIXTURE_START,
+  ARK_PULL,
+  ARK_PULL_HEAD,
+  ARK_REPO,
+  type ArkFixture,
+  ISSUE_IDS,
+  seedArk,
+} from "./ark-fixture.ts";
+export {
   type FakeCheck,
+  type FakeDeployment,
+  type FakeDeploymentStatus,
   FakeGithub,
   type FakeIssueEvent,
   type FakePull,

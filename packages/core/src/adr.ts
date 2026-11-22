@@ -116,7 +116,8 @@ export function parseAdrId(id: string): { repo: string; adr: string } | null {
 const OWNER = "[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})";
 const REPO = "[A-Za-z0-9._-]{1,100}";
 
-function foldStatus(events: readonly AdrEvent[]): AdrStatus {
+/** A decision's status from its events, oldest first: the last that settles it, else proposed. */
+export function foldStatus(events: readonly AdrEvent[]): AdrStatus {
   let status: AdrStatus = "proposed";
   for (const e of events) {
     if (
