@@ -3,7 +3,9 @@ import { type DraftEvent, isUnknown, type LogRecord } from "./events.ts";
 import type { MachineSpec } from "./machine.ts";
 import type {
   Column,
+  ItemRef,
   MapCell,
+  MapEdge,
   MapItem,
   MapProblem,
   MapRow,
@@ -35,6 +37,14 @@ export type * from "./map-types.ts";
  * - Every item carries its context, so projections of several contexts can be combined later.
  */
 
+/** A reference as a kind declares it; the fold adds the context and keeps it if both ends exist. */
+export interface EdgeDraft {
+  from: ItemRef;
+  to: ItemRef;
+  rel: string;
+  at?: string | null;
+}
+
 /** An item as a kind lists it: where it is now and how it got there. */
 export interface ItemDraft {
   /** Stable among the items of its kind. */
@@ -65,6 +75,8 @@ export interface KindInput {
    * the fold stays a pure function of its inputs.
    */
   sources: Readonly<Record<string, unknown>>;
+  /** The kind whose items a reference target of this resolver type is, or null when none is. */
+  kindOfTarget(type: string): string | null;
 }
 
 export interface KindDecl {
@@ -80,6 +92,15 @@ export interface KindDecl {
   /** Shown even with no items, so the map says what it will show. */
   alwaysShown?: boolean;
   items(input: KindInput): readonly ItemDraft[];
+  /** The reference target type (a resolver's type) whose items are this kind's: "pull-request". */
+  targetType?: string;
+  /**
+   * The references this kind owns, from its items to items of any kind, declared like states and
+   * never inferred: only what the log or the source says. An end that is not an item of the map is
+   * dropped, so a kind may name what may not be on the map. A kind whose `edges` throws is reported
+   * in `problems` and its items and everyone else's edges are still drawn.
+   */
+  edges?(input: KindInput): readonly EdgeDraft[];
   /**
    * Why the counts may not be current, when the kind could not read its source the last time;
    * null when they are. The row says so and the map's problems list it, so a stale count is never
@@ -181,6 +202,12 @@ export class KindRegistry {
     return copy;
   }
 
+  /** The kind whose items are the reference targets of a resolver type, or null. */
+  kindOfTarget(type: string): string | null {
+    for (const k of this.kinds.values()) if (k.targetType === type) return k.id;
+    return null;
+  }
+
   get(id: string): KindDecl | null {
     return this.kinds.get(id) ?? null;
   }
@@ -251,11 +278,14 @@ export function foldMap(
     context,
     live: query.live ?? null,
     sources: query.sources ?? {},
+    kindOfTarget: (type) => registry.kindOfTarget(type),
   };
   const rows: MapRow[] = [];
   const transitions: MapTransition[] = [];
   const problems: MapProblem[] = [];
   const totals = { items: 0, open: 0, waitingOnPerson: 0 };
+  const present = new Set<string>();
+  const listed: KindDecl[] = [];
 
   for (const kind of registry.list()) {
     let drafts: readonly ItemDraft[];
@@ -265,6 +295,7 @@ export function foldMap(
       problems.push({ kind: kind.id, message: err instanceof Error ? err.message : String(err) });
       continue;
     }
+    listed.push(kind);
     const byId = new Map(kind.states.map((s) => [s.id, s]));
     const columns: (Column & { class: StateClass })[] = [];
     const columnOf = new Map<string, Column>();
@@ -312,6 +343,7 @@ export function foldMap(
         open: d.open,
       };
       const cell = cells.get(column) as MapCell;
+      present.add(itemKey(kind.id, d.id));
       cell.items.push(item);
       cell.count++;
       if (onPerson) cell.waitingOnPerson++;
@@ -363,6 +395,7 @@ export function foldMap(
       stale,
     });
   }
+  const edges = foldEdges(listed, input, present, problems);
   // By time, then by place in the log: things that live outside the log have no place in it.
   transitions.sort(
     (a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : a.seq - b.seq) || (a.item < b.item ? -1 : 1),
@@ -376,9 +409,56 @@ export function foldMap(
     window,
     rows,
     transitions,
+    edges,
     totals,
     problems,
   };
+}
+
+const itemKey = (kind: string, id: string): string => `${kind}\u0000${id}`;
+
+/**
+ * The edges of the kinds that listed their items, those with both ends on the map, once each, in
+ * a fixed order. What a kind's `edges` throws is a problem of that kind; the rest stays.
+ */
+function foldEdges(
+  kinds: readonly KindDecl[],
+  input: KindInput,
+  present: ReadonlySet<string>,
+  problems: MapProblem[],
+): MapEdge[] {
+  const seen = new Map<string, MapEdge>();
+  for (const kind of kinds) {
+    if (kind.edges === undefined) continue;
+    let drafts: readonly EdgeDraft[];
+    try {
+      drafts = kind.edges(input);
+    } catch (err) {
+      problems.push({
+        kind: kind.id,
+        message: `${kind.id}'s references: ${err instanceof Error ? err.message : String(err)}`,
+      });
+      continue;
+    }
+    for (const d of drafts) {
+      const from = itemKey(d.from.kind, d.from.id);
+      const to = itemKey(d.to.kind, d.to.id);
+      if (from === to || !present.has(from) || !present.has(to)) continue;
+      const key = `${from}\u0001${to}\u0001${d.rel}`;
+      const known = seen.get(key);
+      // The same reference said twice is one; the earlier time is when it was first made.
+      if (known === undefined)
+        seen.set(key, {
+          context: input.context,
+          from: d.from,
+          to: d.to,
+          rel: d.rel,
+          at: d.at ?? null,
+        });
+      else if (d.at != null && (known.at === null || d.at < known.at)) known.at = d.at;
+    }
+  }
+  return [...seen.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).map(([, e]) => e);
 }
 
 /** Whether two maps say the same thing. */

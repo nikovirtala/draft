@@ -1,4 +1,4 @@
-import { ARK_ID, type ArkIssueEvent, dataField, parseEventFiles } from "./ark-issue.ts";
+import { ARK_ID, type ArkIssueEvent, dataField, dataList, parseEventFiles } from "./ark-issue.ts";
 import { canonicalJson } from "./canonical.ts";
 import { type GithubClient, GithubError } from "./github.ts";
 
@@ -38,6 +38,12 @@ export interface ArkRecordsOptions {
   now?: () => number;
 }
 
+/** A link one record makes to another, as the event says it: `to` as written, `rel` as written. */
+export interface ArkLink {
+  rel: string;
+  to: string;
+}
+
 /** A decision, as the default branch and the open pull requests that propose changes to it say. */
 export interface AdrRecord {
   repo: string;
@@ -47,6 +53,11 @@ export interface AdrRecord {
   events: ArkIssueEvent[];
   /** The open pull request whose branch the events were read from; null for the default branch. */
   proposal: { number: number; url: string; headRef: string; headSha: string } | null;
+  /** The decisions it says it supersedes (its proposal) and the ones that say they replaced it. */
+  supersedes: string[];
+  supersededBy: string[];
+  /** Its links to other records that are still in force (`linked`, less `unlinked`). */
+  links: ArkLink[];
   url: string;
 }
 
@@ -57,6 +68,10 @@ export interface IssueRecord {
   events: ArkIssueEvent[];
   /** How a closed issue was closed: done, wontfix, duplicate or obsolete. */
   resolution: string | null;
+  /** The issue it is part of, as written in the event that opened it. */
+  parent: string | null;
+  /** Its links to other issues and decisions that are still in force. */
+  links: ArkLink[];
   url: string;
 }
 
@@ -149,6 +164,12 @@ function eventsUnder(tree: readonly TreeEntry[], root: string): Map<string, Even
   return out;
 }
 
+function pick<T extends object, K extends keyof T>(o: T, keys: readonly K[]): Pick<T, K> {
+  const out = {} as Pick<T, K>;
+  for (const k of keys) out[k] = o[k];
+  return out;
+}
+
 const sameFiles = (a: readonly EventFile[], b: readonly EventFile[]): boolean =>
   a.length === b.length && a.every((e, i) => e.blob === b[i]?.blob);
 
@@ -181,6 +202,8 @@ export class ArkRecords {
   private nextAt = 0;
   private blocked = 0;
   private budget = 0;
+  /** How many files a refresh could not read for lack of budget, so far. */
+  private starved = 0;
 
   constructor(o: ArkRecordsOptions) {
     this.o = { ...o, now: o.now ?? Date.now };
@@ -230,6 +253,7 @@ export class ArkRecords {
   async refresh(intervalMs: number): Promise<boolean> {
     this.nextAt = this.o.now() + intervalMs;
     this.budget = this.o.maxBlobsPerRefresh ?? 100;
+    this.starved = 0;
     const wanted = new Set(this.o.repos());
     for (const r of this.repos.keys()) if (!wanted.has(r)) this.repos.delete(r);
     for (const repo of wanted) {
@@ -295,7 +319,10 @@ export class ArkRecords {
   /** A file's content by blob sha, once; null when the refresh's budget for files is spent. */
   private async blob(repo: string, sha: string): Promise<string | null> {
     if (this.blobs.has(sha)) return this.blobs.get(sha) ?? null;
-    if (this.budget <= 0) return null;
+    if (this.budget <= 0) {
+      this.starved++;
+      return null;
+    }
     this.budget--;
     const text = await this.o.github.getText(`/repos/${repo}/git/blobs/${sha}`);
     this.blobs.set(sha, text);
@@ -306,6 +333,38 @@ export class ArkRecords {
     const first = files.find((f) => f.type === type);
     if (first === undefined) return null;
     return dataField((await this.blob(repo, first.blob)) ?? "", "title");
+  }
+
+  /**
+   * What a record's events say about its relations: the supersessions of a decision's proposal and
+   * of its `superseded`, the parent an issue was opened with, and the links, less those removed.
+   * Reads only the files of those events; one it can't read yet is left for the next refresh.
+   */
+  private async relations(repo: string, files: readonly EventFile[]) {
+    const out = {
+      supersedes: [] as string[],
+      supersededBy: [] as string[],
+      parent: null as string | null,
+      links: [] as ArkLink[],
+    };
+    for (const f of files) {
+      if (!["proposed", "opened", "superseded", "linked", "unlinked"].includes(f.type)) continue;
+      const text = await this.blob(repo, f.blob);
+      if (text === null) continue;
+      if (f.type === "proposed") out.supersedes.push(...dataList(text, "supersedes"));
+      else if (f.type === "opened") out.parent = dataField(text, "parent");
+      else if (f.type === "superseded") {
+        const by = dataField(text, "by");
+        if (by !== null) out.supersededBy.push(by);
+      } else {
+        const to = dataField(text, "to");
+        const rel = dataField(text, "rel");
+        if (to === null) continue;
+        if (f.type === "linked") out.links.push({ rel: rel ?? "relates-to", to });
+        else out.links = out.links.filter((l) => l.to !== to || (rel !== null && l.rel !== rel));
+      }
+    }
+    return out;
   }
 
   private async records(repo: string, data: RepoData): Promise<void> {
@@ -353,6 +412,7 @@ export class ArkRecords {
     for (const sha of [...data.heads.keys()])
       if (!heads.some((h) => h.headSha === sha)) data.heads.delete(sha);
 
+    const starvedBefore = this.starved;
     const adrs: AdrRecord[] = [];
     for (const id of [...new Set([...base.adrs.keys(), ...proposed.keys()])].sort()) {
       const onBranch = proposed.get(id);
@@ -363,6 +423,7 @@ export class ArkRecords {
         title: await this.titleOf(repo, files, "proposed"),
         events: files.map(({ blob: _b, ...e }) => e),
         proposal: onBranch === undefined ? null : onBranch.head,
+        ...pick(await this.relations(repo, files), ["supersedes", "supersededBy", "links"]),
         url:
           onBranch === undefined
             ? `https://github.com/${repo}/tree/HEAD/${this.adrRoot}/events/${id}`
@@ -381,6 +442,7 @@ export class ArkRecords {
           closed === undefined || files.at(-1)?.type !== "closed"
             ? null
             : dataField((await this.blob(repo, closed.blob)) ?? "", "resolution"),
+        ...pick(await this.relations(repo, files), ["parent", "links"]),
         url: `https://github.com/${repo}/tree/HEAD/${this.issuesRoot}/events/${id}`,
       });
     }
@@ -390,6 +452,7 @@ export class ArkRecords {
     data.headKey = headKey;
     // A title the budget left out is read by the next refresh, which must not skip it.
     data.unread =
+      this.starved > starvedBefore ||
       adrs.some((a) => a.title === null && a.events.some((e) => e.type === "proposed")) ||
       issues.some((i) => i.title === null && i.events.some((e) => e.type === "opened"));
   }

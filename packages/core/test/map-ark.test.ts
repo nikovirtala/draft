@@ -231,11 +231,12 @@ describe("what a refresh costs", () => {
       `/repos/${ARK_REPO}/git/trees/HEAD`,
       `/repos/${ARK_REPO}/git/trees/${"9".repeat(40)}`,
     ]);
-    // 7 decisions + 6 issues to name, and 3 closed issues to say how.
-    expect(blobs(github.requests)).toBe(16);
+    // 7 decisions + 6 issues to name, 3 closed issues to say how, and the one decision that
+    // was superseded, whose event says by what.
+    expect(blobs(github.requests)).toBe(17);
     expect(first.filter((p) => p.endsWith("/statuses"))).toHaveLength(3);
-    expect(first).toHaveLength(23);
-    expect(client.requests).toBe(23);
+    expect(first).toHaveLength(24);
+    expect(client.requests).toBe(24);
     const before = github.requests.length;
 
     // Nothing moved: three conditional requests, all answered "not modified", no file fetched.
