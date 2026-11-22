@@ -1,0 +1,19 @@
+envelope: ledger/v1
+kind: decision
+schema: decision/v1
+id: 01M829WJ2DNAC0Q57FVGM81TKJ
+subject: 4gwyn86q
+type: scoped
+at: 2026-11-22T18:56:51Z
+actor:
+  kind: human
+  name: Niko Virtala
+  email: niko.virtala@hey.com
+  agent: null
+  on_behalf_of: null
+data:
+  set:
+    - packages/core/src/canonical.ts
+    - packages/core/src/events.ts
+    - packages/core/src/log.ts
+    - packages/core/src/verify.ts
