@@ -1,0 +1,17 @@
+envelope: ledger/v1
+kind: decision
+schema: decision/v1
+id: 01M82MX48HS9WZ7W7P2MRAMJKB
+subject: n9gtf7y3
+type: proposed
+at: 2026-11-22T22:09:24Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: 244629292+kiro-agent@users.noreply.github.com
+data:
+  title: Declare the map's edges in the registry and keep the graph layout incremental
+  template: nygard
+  template_version: 1
