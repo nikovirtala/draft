@@ -1,0 +1,15 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M822GWHDW1BZMSN34HPB383M
+subject: 18tas8hn
+type: commented
+at: 2026-11-22T16:48:09Z
+actor:
+  kind: agent
+  name: claude
+  email: null
+  agent: claude
+  on_behalf_of: niko.virtala@hey.com
+data:
+  text: "2026-11-22: kiro-remote 45cacbd, which includes 9be84d2, is deployed through its new pipeline (first run succeeded, provenance on all 8 functions, the failing-smoke-check drill done). Its tools advertise idempotencyKey on all nine state-changing tools, from the same TOOL_DEFS for /mcp and stdio; a chat that connected before 9be84d2 can show a cached tool list without the field. The kiro-remote side of this issue is done. What's left is the second point above: a real ACP agent builds its own Kiro Remote calls, so a step's key doesn't reach them. That needs its own slice (a proxy, or giving the agent the key before the call)."
