@@ -1,0 +1,15 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M82E656EEK0MK037GWHHYDWY
+subject: aefrmdf4
+type: commented
+at: 2026-11-22T20:12:00Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: niko.virtala@hey.com
+data:
+  text: 'Built in this branch, decided in adr:56v0mtga. In a trusted folder the agent has draft''s own read_file, list_files, search_files, write_file, edit_file and run_command, served by draft''s MCP server and gated there, so Kiro''s own rules (the user-wide allow-all included) can''t skip the ask. Kiro runs with draft''s own agent (tools: ["@mcp"], no built-in tool) under a KIRO_HOME of draft''s; Claude gets tools: [] plus a deny list. Tested against the fake ACP agent only. What only a real Kiro 3.5 shows is under After deploy in the pull request: that modeId selects the agent, that @mcp matches the session''s servers, that the session reports the agent, and Kiro''s 120 s MCP request timeout against a slow answer.'

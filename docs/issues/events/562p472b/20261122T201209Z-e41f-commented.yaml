@@ -1,0 +1,15 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M82E6E9Y66ZX7PN4AHSME41F
+subject: 562p472b
+type: commented
+at: 2026-11-22T20:12:09Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: niko.virtala@hey.com
+data:
+  text: 'Checked on 2026-11-22 against Kiro''s documentation: a structured identity exists only for MCP tools (_meta.kiro.mcpTool, version 1, identity and optional annotations), and Kiro''s own ACP migration guide says to render the standard kind and title for built-in calls and never to derive a built-in identity from the title. kiro-cli 3.5.0''s own _meta.kiro.toolOrigin on "Tool Load" is not documented. draft''s sessions now have no built-in tool that changes things (adr:56v0mtga), but Tool Load still loads MCP tool definitions, so the shape rule in kiroUtilityCall stays. Left: ask Kiro (kirodotdev/Kiro) for a documented identity or read-only marker on built-in calls, or for the documentation of toolOrigin, and then remove the shape rule. Not closed.'

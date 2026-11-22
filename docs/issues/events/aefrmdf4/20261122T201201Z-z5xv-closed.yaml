@@ -1,0 +1,16 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M82E65WW33K3GXNR8RAVZ5XV
+subject: aefrmdf4
+type: closed
+at: 2026-11-22T20:12:01Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: niko.virtala@hey.com
+reason: A change or command asks, is a step before it runs and is refused outside the folder (packages/core/test/agent-tools.test.ts for the policy, apps/desktop/test/draft-tools.test.ts for the asking, the step order, the refused write and the symlink and .git cases). Reads inside the folder run without asking and are logged as agent.tool_called (same test file). A context with no trusted folder offers no tool, and says so (same test file). Proved with the fake ACP agent; the real Kiro 3.5 check is listed under After deploy.
+data:
+  resolution: done
