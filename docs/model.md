@@ -207,7 +207,7 @@ Versions and snapshots:
 
 Views of the graph are blocks too, so they follow the placement rules:
 
-- **Graph** shows the shape of things. By default it shows the neighbourhood of the focused item, not the whole tangle.
+- **Graph** shows the shape of things. By default it shows the neighbourhood of the focused item, not the whole tangle. Zoomed out, it becomes the map.
 - **Linear** shows the log in order, with references as arcs and thread items indented. The arcs may later live in the conversation's own left margin.
 - **Backlinks** on every block list what references it and what it references.
 
@@ -657,19 +657,21 @@ Testable: for a reversible change, applying it and then reverting it must give t
 
 ## The map
 
-The big picture is every state machine drawn at once, with its items in it: everything that exists, and everything moving. It is the map the name promises, drawn as the work goes.
+The big picture is the graph seen from further away: one view at every distance, not a second view beside it. Zoomed out, items gather into clusters by kind; zoomed in, a cluster opens into its items, their states and their references. It is the map the name promises, drawn as the work goes.
 
-- **A grid.** One row per kind, one column per state from start to terminal, items as dots in their cells. A crowded cell collapses to a count.
-- **Movement.** A transition slides its dot to the new cell and leaves a fading trail, so the last hour reads as motion.
-- **Waits age.** A waiting dot warms from neutral to amber to red as it nears its timeout. Stuck things stand out without anyone writing a rule for them.
-- **Cascades.** When one kind's transition triggers another's, the map draws an arc between the rows: a signal contradicts an assumption, the decision resting on it goes under review, an issue opens.
-- **Open loops.** An item with no path to an answer is marked as an open end.
+- **Nodes and edges.** An item is a node, coloured by its state, and a reference is a typed edge: implements, supersedes, closes, deployed by, cites. A cluster is a node too, sized by its count, and the edges between clusters are bundled and weighted by the references they carry.
+- **Movement.** A transition recolours its node, and a pulse runs along the edge that caused it, leaving a fading trail, so the last hour reads as motion.
+- **Waits age.** A waiting node warms from neutral to amber to red as it nears its timeout. Stuck things stand out without anyone writing a rule for them.
+- **Cascades.** When one kind's transition triggers another's, the edges between them light up in turn: a signal contradicts an assumption, the decision resting on it goes under review, an issue opens.
+- **Open loops.** A path that stops before an answer is marked as an open end.
+- **A layout that stays put.** Positions are seeded by ids and change a little at a time, so when the log moves, a node stays where you last saw it. A layout is never recomputed from scratch, or nobody could learn their own map.
+- **The grid is a layout.** The same nodes arranged with one row per kind and one column per state, from start to terminal, and a crowded cell collapses to a count. It shows where things pile up. Switching to it moves the nodes; it doesn't open another view.
 
-Zoom levels: the process (the seven steps as stations with live counts), the universe (contexts as regions with their boundaries), a context (the grid), a kind (its full state machine with items), an item (its graph neighbourhood and audit record).
+Zoom levels: the process (the seven steps as stations with live counts), the universe (contexts as regions with their boundaries), a context (its kinds as clusters, with bundled references between them), a kind (its items, laid out along its state machine), an item (its neighbourhood and audit record). Zooming is semantic: a cluster opens into its items when there is room for them, so zooming in never shows a hairball.
 
 Time: live by default. A scrubber replays the log; because a [durable context](#durable-context) rehydrates from its log, the map can be rebuilt at any moment, and a week can be watched as it happened.
 
-Lenses: only what is moving, waiting on me, open loops, broken invariants, one person's view.
+Lenses: by state (the grid), only what is moving, waiting on me, open loops, broken invariants, one person's view.
 
 Flow is measured, not targeted: how long things take from talk to hearing back, and where they pile up.
 
@@ -685,3 +687,4 @@ Like everything else, the map is a block. "Show me everything that's moving" bri
 - [ ] Which rules are bootstrap axioms? Whether "agents read, people act" is an axiom or ordinary standing is a real choice.
 - [ ] Which way should intake err when unsure? Something filed as standing that is really a kind never closes, while a kind with a timeout fails loudly, which argues for erring toward kind.
 - [ ] Standing has no states to plot on the map. Does it need its own view, such as the ladder by scope with orphaned, blind, stale and contradicted items lit?
+- [ ] When does a cluster open into its items: at a count, when there is room on screen, or when something in it waits on you?
