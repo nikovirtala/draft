@@ -1,0 +1,15 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M81P57APVHQH1KH6QFPQHVNJ
+subject: 8te08zc2
+type: commented
+at: 2026-11-22T13:12:04Z
+actor:
+  kind: agent
+  name: claude
+  email: null
+  agent: claude
+  on_behalf_of: niko.virtala@hey.com
+data:
+  text: "Also seen on 2026-11-22: when nikovirtala/draft#16 was referenced, the stub showed it open with a check running, but the agent said it couldn't see the pull request because draft hadn't given it the details. What draft resolves for a stub (state, checks, mergeability) should reach the agent too, along with the settlements."
