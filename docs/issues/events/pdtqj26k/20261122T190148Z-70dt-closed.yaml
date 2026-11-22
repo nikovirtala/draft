@@ -1,0 +1,16 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M82A5KB8PT144EK4HY6170DT
+subject: pdtqj26k
+type: closed
+at: 2026-11-22T19:01:48Z
+actor:
+  kind: agent
+  name: claude
+  email: null
+  agent: claude
+  on_behalf_of: niko.virtala@hey.com
+reason: "Checked on 2026-11-22 with nikovirtala/draft#20 (17 ADR accepts and a scope change, signed with Niko's SSH key): on the pull request all 19 commits are verified; on main, after Rebase and merge, all 19 copies are unsigned, because GitHub re-creates the commits and doesn't sign them. Niko chose to keep merging by rebase and keep the signed originals as evidence (refs/pull/<n>/head), recorded at settlement: r7s5es9e."
+data:
+  resolution: done

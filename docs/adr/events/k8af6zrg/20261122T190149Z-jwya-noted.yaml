@@ -1,0 +1,15 @@
+envelope: ledger/v1
+kind: decision
+schema: decision/v1
+id: 01M82A5MJE21JQ64455479JWYA
+subject: k8af6zrg
+type: noted
+at: 2026-11-22T19:01:49Z
+actor:
+  kind: agent
+  name: claude
+  email: null
+  agent: claude
+  on_behalf_of: niko.virtala@hey.com
+data:
+  text: "2026-11-22 (?42): Rebase and merge leaves the accepted commits unsigned on main; the signed originals stay under refs/pull/<n>/head. Merging by rebase stays; r7s5es9e records the signed originals at settlement so the proof stays one hop away."
