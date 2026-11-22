@@ -1,0 +1,15 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M82DR3PWXJXD855TCHG416ZW
+subject: 8te08zc2
+type: commented
+at: 2026-11-22T20:04:20Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: niko.virtala@hey.com
+data:
+  text: "Built in the PR on feat/tell-the-agent-what-changed: every turn's prompt now starts with a note, marked as draft's record, of what changed since that agent's last turn: the outcome of each person-only settlement (accepted with the commit and result, rejected with the reason, changes requested with the text, any other settled kind) and the latest resolved state of each stub a message the agent may read referenced (pull request: state, head, checks, mergeability, review; session: status; issue, ADR, artifact: state and title). The same text is recorded in a new agent.turn_started event, whose place in the log is the next note's 'since'. First Done-when condition is met by tests (core and a scripted ACP agent over stdio: accept, reject, request changes). The second (a real turn after an accept reports the pull request as merged) is Niko's check after deploy, so this stays open."
