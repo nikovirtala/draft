@@ -1,0 +1,16 @@
+envelope: ledger/v1
+kind: decision
+schema: decision/v1
+id: 01M826P5N77PVNA16KQNNRG8T8
+subject: zan5vjwz
+type: linked
+at: 2026-11-22T18:00:56Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: nikovirtala@users.noreply.github.com
+data:
+  to: wkcnp3zr
+  rel: refines

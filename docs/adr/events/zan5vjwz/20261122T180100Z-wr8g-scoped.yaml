@@ -1,0 +1,18 @@
+envelope: ledger/v1
+kind: decision
+schema: decision/v1
+id: 01M826P9DT2SZ3BM8SZW4EWR8G
+subject: zan5vjwz
+type: scoped
+at: 2026-11-22T18:01:00Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: nikovirtala@users.noreply.github.com
+data:
+  set:
+    - apps/desktop/src/main/acp/agents.ts
+    - apps/desktop/src/main/acp/environment.ts
+    - apps/desktop/src/main/acp/runtime.ts
