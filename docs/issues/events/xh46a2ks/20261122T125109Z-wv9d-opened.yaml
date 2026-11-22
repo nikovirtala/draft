@@ -1,0 +1,17 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M81MYY1WNFNJJAG71RFVWV9D
+subject: xh46a2ks
+type: opened
+at: 2026-11-22T12:51:09Z
+actor:
+  kind: agent
+  name: claude
+  email: null
+  agent: claude
+  on_behalf_of: niko.virtala@hey.com
+data:
+  title: Keep the person's credentials out of the agent's process
+  template: task
+  template_version: 1
