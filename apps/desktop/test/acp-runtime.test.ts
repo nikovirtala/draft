@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type DraftEvent, knownEvents } from "@nikovirtala/draft-core";
 import { describe, expect, it } from "vitest";
+import { CLAUDE_DISALLOWED_TOOLS } from "../src/main/acp/runtime.ts";
 import {
   autoAnswer,
   fakeKiro,
@@ -353,7 +354,9 @@ describe("the ACP runtime, against a scripted agent over real stdio", () => {
         await o.service.submit("launch");
         const log = recorded(o.logPath);
         expect(log.find((e) => e.event === "session/new")?.params._meta).toEqual({
-          claudeCode: { options: { settingSources: [], tools: [] } },
+          claudeCode: {
+            options: { settingSources: [], tools: [], disallowedTools: CLAUDE_DISALLOWED_TOOLS },
+          },
         });
         expect(log.find((e) => e.event === "session/set_config_option")).toMatchObject({
           configId: "mode",

@@ -9,11 +9,13 @@ import {
   type AgentEvent,
   type AgentTurnHooks,
   type AgentUsage,
+  askAndBegin,
   decideTool,
   isPersonOnlyTool,
   type PermissionAnswer,
   personOnlyMessage,
 } from "@nikovirtala/draft-core";
+import type { ToolOutcome } from "./folder-tools.ts";
 import { isKnownReadOnly, kiroUtilityCall, type ToolIdentity, toolIdentity } from "./tools.ts";
 
 /**
@@ -70,6 +72,8 @@ export class TurnMapper {
     private readonly push: Sink,
     /** Which agent this is ("kiro", "claude", "generic"), for its known utility calls. */
     private readonly agentKind = "generic",
+    /** The bare names of draft's own tools this session offers; none when it offers none. */
+    private readonly draftTools: ReadonlySet<string> = new Set(),
   ) {}
 
   get fullText(): string {
@@ -199,6 +203,16 @@ export class TurnMapper {
       // and its step is already in the log.
       answer = { allow: true };
       decision = "approved-by-user";
+    } else if (identity.source === "draft" && this.draftTools.has(identity.bare)) {
+      // draft's own tool: draft's MCP server applies the policy and asks the person when the call
+      // reaches it, whatever the agent's rules say. The agent's own request is answered yes, so
+      // the person is asked once and by draft. The call's steps are reported by the server's side.
+      call.closed = true;
+      if (allowOnce === null)
+        return rejectOnce === null
+          ? { outcome: { outcome: "cancelled" } }
+          : { outcome: { outcome: "selected", optionId: rejectOnce.optionId } };
+      return { outcome: { outcome: "selected", optionId: allowOnce.optionId } };
     } else if (identity.source !== "kiro-remote") {
       // Only Kiro Remote's tools are available in draft: a built-in tool, or a tool of a server
       // draft didn't give the agent, is refused without asking the person. One that accepts,
@@ -239,6 +253,82 @@ export class TurnMapper {
     return rejectOnce === null
       ? { outcome: { outcome: "cancelled" } }
       : { outcome: { outcome: "selected", optionId: rejectOnce.optionId } };
+  }
+
+  /**
+   * A call to one of draft's own tools, reached through draft's MCP server. The policy has said
+   * what it is: a read runs and is logged, a change asks the person and begins a durable step
+   * before it runs, and a refused call never runs. The step's result is the tool's settlement.
+   * Returns what the agent is told.
+   */
+  async draftCall(c: {
+    id: string;
+    name: string;
+    /** The input as logged and shown to the person: a file's content is a preview and a digest. */
+    shown: Record<string, unknown>;
+    verdict: { class: "read" | "change" | "refused"; reason?: string };
+    run(o: { idempotencyKey?: string }): Promise<ToolOutcome>;
+    signal: AbortSignal;
+  }): Promise<{ text: string; isError: boolean }> {
+    const finish = (
+      decision: NonNullable<Call["decision"]>,
+      text: string,
+      structured: unknown = null,
+      isError = true,
+    ) => this.push({ type: "tool-result", toolUseId: c.id, isError, text, structured, decision });
+    const announce = (decision: NonNullable<Call["decision"]>) =>
+      this.push({
+        type: "tool-call",
+        toolUseId: c.id,
+        name: c.name,
+        input: c.shown,
+        decision,
+      });
+    if (c.verdict.class === "refused") {
+      const reason = c.verdict.reason ?? `${c.name} is not available in draft`;
+      announce("denied-by-policy");
+      finish("denied-by-policy", reason);
+      return { text: reason, isError: true };
+    }
+    if (this.cancelled)
+      return { text: "The turn was cancelled, so draft did not run it.", isError: true };
+    if (c.verdict.class === "read") {
+      announce("allowed-read-only");
+      const out = await runGuarded(c.run, {});
+      this.push({
+        type: "tool-result",
+        toolUseId: c.id,
+        isError: out.isError,
+        text: out.summary,
+        structured: out.structured,
+      });
+      return { text: out.text, isError: out.isError };
+    }
+    const r = await askAndBegin(c.name, c.shown, c.id, this.hooks);
+    announce(r.decision);
+    if (!r.answer.allow) {
+      const text =
+        r.decision === "denied-by-user"
+          ? "The user declined this call, so draft did not run it."
+          : r.answer.message;
+      finish(r.decision, text);
+      return { text, isError: true };
+    }
+    if (c.signal.aborted || this.cancelled) {
+      const text = "The agent stopped waiting for the answer, so draft did not run it.";
+      finish("approved-by-user", text);
+      return { text, isError: true };
+    }
+    const out = await runGuarded(c.run, { idempotencyKey: r.idempotencyKey });
+    this.push({
+      type: "tool-result",
+      toolUseId: c.id,
+      isError: out.isError,
+      text: out.summary,
+      structured: out.structured,
+      decision: "approved-by-user",
+    });
+    return { text: out.text, isError: out.isError };
   }
 
   private callFor(id: string): Call {
@@ -320,6 +410,11 @@ export class TurnMapper {
   private afterUpdate(call: Call): void {
     if (call.closed || call.status === null || !EXECUTING.has(call.status)) return;
     const identity = this.identityOf(call);
+    // draft's own tools are reported by the server that runs them, not by the agent's updates.
+    if (identity.source === "draft" && this.draftTools.has(identity.bare)) {
+      call.closed = true;
+      return;
+    }
     if (!call.asked && !call.announced) {
       const utility = kiroUtilityCall(this.agentKind, {
         kind: call.kind,
@@ -369,6 +464,18 @@ export class TurnMapper {
         ...(call.decision === null ? {} : { decision: call.decision }),
       });
     }
+  }
+}
+
+async function runGuarded(
+  run: (o: { idempotencyKey?: string | undefined }) => Promise<ToolOutcome>,
+  o: { idempotencyKey?: string | undefined },
+): Promise<ToolOutcome> {
+  try {
+    return await run(o);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { isError: true, text: message, summary: message, structured: null };
   }
 }
 

@@ -49,6 +49,9 @@ export interface Script {
   usage?: { inputTokens: number; outputTokens: number; totalTokens?: number } | null;
   credits?: number;
   stubborn?: boolean;
+  ignoreModeId?: boolean;
+  neverAsks?: boolean;
+  listTools?: string[];
   crashAfterChunks?: number;
   probe?: { name: string; command: string[]; input?: string }[];
 }
@@ -114,6 +117,8 @@ export async function openAcp(
     command?: string;
     env?: NodeJS.ProcessEnv;
     token?: () => Promise<string | null>;
+    /** The folder the person trusted for the context; draft's file and shell tools work in it. */
+    folder?: string;
   } = {},
 ): Promise<Opened> {
   const dir = o.dir ?? mkdtempSync(join(tmpdir(), "draft-acp-"));
@@ -123,7 +128,8 @@ export async function openAcp(
   const projection = Projection.open(join(dir, "views.db"));
   const runtime = new AcpRuntime({
     spec,
-    cwd: join(dir, "agent-workspace"),
+    cwd: o.folder ?? join(dir, "agent-workspace"),
+    ...(o.folder === undefined ? {} : { folder: () => o.folder as string }),
     env: o.env ?? { PATH: process.env.PATH ?? "" },
     dataDir: dir,
     clientInfo: { name: "draft", version: "0.0.0-test" },

@@ -2,6 +2,7 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSy
 import { delimiter, join } from "node:path";
 import type { AgentEnvironmentReport, AgentWithheldGroup } from "@nikovirtala/draft-core";
 import type { AgentSpec } from "./agents.ts";
+import { kiroAgentFile, kiroAgentName, kiroAgentPath, kiroHomePaths } from "./kiro-agent.ts";
 
 /**
  * The environment of an agent's process (ADR on keeping the person's credentials out of the
@@ -218,6 +219,9 @@ export function agentEnvironment(
     // https://docs.npmjs.com/cli/using-npm/config#userconfig
     NPM_CONFIG_USERCONFIG: paths.npmrc,
   };
+  // Kiro runs with draft's own settings folder, where draft's agent is the one its sessions use
+  // (kiro-agent.ts): the person's rules and MCP servers aren't there, and neither is their sign-in.
+  if (spec.kind === "kiro") overrides.KIRO_HOME = kiroHomePaths(dataDir).home;
   if (process.platform !== "win32") {
     overrides.PATH = [paths.binDir, ...(person.PATH === undefined ? [] : [person.PATH])].join(
       delimiter,
@@ -282,8 +286,17 @@ function writeAtomic(path: string, content: string, mode: number): void {
  * written again when it is missing or has changed, so what the agent may have put in them doesn't
  * outlive its process. Called each time an agent's process starts.
  */
-export function ensureAgentEnvironmentFiles(dataDir: string): AgentEnvPaths {
+export function ensureAgentEnvironmentFiles(
+  dataDir: string,
+  spec?: Pick<AgentSpec, "kind">,
+): AgentEnvPaths {
   const p = agentEnvPaths(dataDir);
+  if (spec?.kind === "kiro") {
+    const k = kiroHomePaths(dataDir);
+    mkdirSync(k.agents, { recursive: true, mode: 0o700 });
+    const name = kiroAgentName(dataDir);
+    writeAtomic(kiroAgentPath(dataDir, name), kiroAgentFile(name), 0o600);
+  }
   mkdirSync(p.ghConfigDir, { recursive: true, mode: 0o700 });
   mkdirSync(p.binDir, { recursive: true, mode: 0o700 });
   writeAtomic(p.gitConfig, AGENT_GITCONFIG, 0o600);

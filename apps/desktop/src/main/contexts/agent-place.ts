@@ -43,5 +43,5 @@ function isFolder(path: string): boolean {
 /** What the agent is told about where it is: the folder's name, never its path. */
 export function placeBriefing(place: AgentPlace): string | null {
   if (place.folder === null) return null;
-  return `Your working directory is the project folder "${place.folder.name}", which the user trusted for this context. The rules above still hold: anything that changes something asks the user first.`;
+  return `Your working directory is the project folder "${place.folder.name}", which the user trusted for this context. The tools named above are the only ones you have there, and anything that changes something asks the user first.`;
 }
