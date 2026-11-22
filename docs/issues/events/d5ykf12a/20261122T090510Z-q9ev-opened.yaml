@@ -1,0 +1,17 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M81814CYANXZ802JJV6YQ9EV
+subject: d5ykf12a
+type: opened
+at: 2026-11-22T09:05:10Z
+actor:
+  kind: agent
+  name: claude
+  email: null
+  agent: claude
+  on_behalf_of: niko.virtala@hey.com
+data:
+  title: Change settings in a settings view or by a sentence
+  template: task
+  template_version: 1
