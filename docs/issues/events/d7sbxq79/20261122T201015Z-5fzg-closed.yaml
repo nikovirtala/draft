@@ -1,0 +1,16 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M82E2YF5AQ6FBF4TZCR35FZG
+subject: d7sbxq79
+type: closed
+at: 2026-11-22T20:10:15Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: niko.virtala@hey.com
+reason: Fold and registry in packages/core with unit tests (kinds, waiting cells, window, past position, test kind registered with no map code). "Show the map" opens a placeable map block with live counts, cells and items opening threads and stubs; the open cell is in the device view-state store; docs/implementation.md describes the projection; the e2e map.spec.ts opens it by sentence, a cell and an item.
+data:
+  resolution: done
