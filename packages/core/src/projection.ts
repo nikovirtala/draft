@@ -1,4 +1,5 @@
 import { DatabaseSync, type SQLInputValue } from "node:sqlite";
+import type { AcceptanceEffect } from "./acceptance.ts";
 import { canonicalJson } from "./canonical.ts";
 import {
   type AgentState,
@@ -22,7 +23,7 @@ import { type Citations, foldThread, type ThreadEventRow, type ThreadFold } from
  */
 
 /** Bump when the tables change; a projection with another version is rebuilt. */
-export const PROJECTION_VERSION = 5;
+export const PROJECTION_VERSION = 6;
 
 const SCHEMA = `
 create table if not exists meta (key text primary key, value text not null);
@@ -61,7 +62,11 @@ create table if not exists steps (
   tool_use_id text not null, name text not null, input_json text not null,
   started_at text not null, started_seq integer not null,
   outcome text, result_summary text, finished_at text, finished_seq integer,
-  resolution text, resolved_at text, retry_of text);
+  resolution text, resolved_at text, retry_of text, effect_json text);
+create table if not exists agent_turns (
+  address text primary key, conversation text not null, message text not null,
+  agent text not null, note text, entries integer not null, omitted integer not null,
+  at text not null, seq integer not null);
 create table if not exists interrupts (
   event_id text primary key, key text not null, kind text not null, conversation text not null,
   target text, summary text not null, detail_json text not null, at text not null,
@@ -95,6 +100,7 @@ const TABLES = [
   "messages",
   "agent_state",
   "agent_selected",
+  "agent_turns",
   "anomalies",
   "recoveries",
   "tool_calls",
@@ -163,6 +169,7 @@ export interface EdgeRow {
   source: string;
   snapshot: Record<string, unknown>;
   at: string;
+  seq: number;
 }
 
 export interface StubRow {
@@ -171,6 +178,22 @@ export interface StubRow {
   id: string;
   state: Record<string, unknown>;
   observedAt: string;
+  /** Where in the log the target was first referenced, and last observed (or referenced first). */
+  firstSeq: number;
+  lastSeq: number;
+}
+
+/** A turn of the agent: where it began in the log, and what draft told the agent with it. */
+export interface AgentTurnRow {
+  address: string;
+  conversation: string;
+  message: string;
+  agent: string;
+  note: string | null;
+  entries: number;
+  omitted: number;
+  at: string;
+  seq: number;
 }
 
 export interface ToolCallRow {
@@ -207,6 +230,8 @@ export interface StepRow {
   resolvedAt: string | null;
   /** The step this one retries. */
   retryOf: string | null;
+  /** What a step that carried out a person's answer made: the commit or merge, the evidence, the inverse. */
+  effect: AcceptanceEffect | null;
 }
 
 /** A thing outside the log that needed a person, as one interrupt event raised it. */
@@ -270,6 +295,7 @@ export interface CrossingRow {
   snapshotHash: string | null;
   via: string | null;
   at: string;
+  seq: number;
 }
 
 /** An event this build doesn't understand, as the conversation shows it. */
@@ -443,6 +469,20 @@ export class Projection {
           seq,
         );
         return;
+      case "agent.turn_started":
+        this.run(
+          "insert or replace into agent_turns values (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+          e.address,
+          e.conversation as string,
+          e.data.message,
+          e.data.agent,
+          e.data.note,
+          e.data.entries,
+          e.data.omitted,
+          e.at,
+          seq,
+        );
+        return;
       case "agent.session_started":
       case "agent.permission_asked":
         // Recorded for the audit and for the age of a local prompt; no table needs it.
@@ -474,7 +514,7 @@ export class Projection {
         return;
       case "step.started":
         this.run(
-          "insert into steps values (?, ?, ?, ?, ?, ?, ?, ?, null, null, null, null, null, null, ?)",
+          "insert into steps values (?, ?, ?, ?, ?, ?, ?, ?, null, null, null, null, null, null, ?, null)",
           e.address,
           e.conversation as string,
           e.data.idempotencyKey,
@@ -576,12 +616,16 @@ export class Projection {
       case "step.failed":
         // The first completion of a step counts; a step completes once.
         this.run(
-          `update steps set outcome = ?, result_summary = ?, finished_at = ?, finished_seq = ?
+          `update steps set outcome = ?, result_summary = ?, finished_at = ?, finished_seq = ?,
+             effect_json = ?
            where started = ? and outcome is null`,
           e.type === "step.completed" ? "completed" : "failed",
           e.data.resultSummary,
           e.at,
           seq,
+          e.type === "step.completed" && e.data.effect !== undefined
+            ? canonicalJson(e.data.effect)
+            : null,
           e.data.started,
         );
         return;
@@ -763,6 +807,7 @@ export class Projection {
       source: r.source as string,
       snapshot: JSON.parse(r.snapshot_json as string) as Record<string, unknown>,
       at: r.at as string,
+      seq: Number(r.seq),
     }));
   }
 
@@ -801,6 +846,7 @@ export class Projection {
       snapshotHash: (r.snapshot_hash as string | null) ?? null,
       via: (r.via as string | null) ?? null,
       at: r.at as string,
+      seq: Number(r.seq),
     }));
   }
 
@@ -878,6 +924,10 @@ export class Projection {
       resolution: (r.resolution as string | null) ?? null,
       resolvedAt: (r.resolved_at as string | null) ?? null,
       retryOf: (r.retry_of as string | null) ?? null,
+      effect:
+        r.effect_json === null || r.effect_json === undefined
+          ? null
+          : (JSON.parse(r.effect_json as string) as AcceptanceEffect),
     }));
   }
 
@@ -951,6 +1001,36 @@ export class Projection {
       .prepare("select * from settlements where key = ? order by seq desc limit 1")
       .get(key) as Record<string, unknown> | undefined;
     return r === undefined ? null : toSettlement(r);
+  }
+
+  /**
+   * The latest turn of `agent` in `conversation` (any agent when none is named): the place in the
+   * log the next turn's note counts from. Null before the agent's first turn.
+   */
+  lastTurn(conversation: string, agent?: string): AgentTurnRow | null {
+    const r = (
+      agent === undefined
+        ? this.db
+            .prepare("select * from agent_turns where conversation = ? order by seq desc limit 1")
+            .get(conversation)
+        : this.db
+            .prepare(
+              "select * from agent_turns where conversation = ? and agent = ? order by seq desc limit 1",
+            )
+            .get(conversation, agent)
+    ) as Record<string, unknown> | undefined;
+    if (r === undefined) return null;
+    return {
+      address: r.address as string,
+      conversation: r.conversation as string,
+      message: r.message as string,
+      agent: r.agent as string,
+      note: (r.note as string | null) ?? null,
+      entries: Number(r.entries),
+      omitted: Number(r.omitted),
+      at: r.at as string,
+      seq: Number(r.seq),
+    };
   }
 
   /** The thread events of `conversation`, in order. */
@@ -1098,5 +1178,7 @@ function toStub(r: Record<string, unknown>): StubRow {
     id: r.id as string,
     state: JSON.parse(r.state_json as string) as Record<string, unknown>,
     observedAt: r.observed_at as string,
+    firstSeq: Number(r.first_seq),
+    lastSeq: Number(r.last_seq),
   };
 }

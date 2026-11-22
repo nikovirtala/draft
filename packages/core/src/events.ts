@@ -175,6 +175,22 @@ export const EventData = {
     environment: AgentEnvironmentReportSchema.optional(),
   }),
   /**
+   * A turn of the agent began: the message that began it, and what draft told the agent besides
+   * (the note of what changed since its last turn: person-only decisions and what draft resolved
+   * for the stubs referenced). It is written before the agent runs and after the references of the
+   * message are made, so its place in the log is the "since" of the agent's next note: what
+   * happens during the turn belongs to the next one. `note` is exactly the text the agent got,
+   * `null` when there was nothing to tell.
+   */
+  "agent.turn_started": z.object({
+    message: AddressString(true),
+    agent: z.string().min(1),
+    note: z.string().nullable(),
+    /** How many changes the note names, and how many were left out to keep it short. */
+    entries: z.number().int().min(0),
+    omitted: z.number().int().min(0),
+  }),
+  /**
    * The log's last line was never completed, so it was never confirmed: its bytes moved to a
    * sidecar file next to the log, and the log carries on from the line before.
    */
@@ -365,6 +381,7 @@ export const SCHEMA_VERSIONS: Record<EventType, number> = {
   "agent.anomaly": 1,
   "agent.session_started": 1,
   "agent.selected": 1,
+  "agent.turn_started": 1,
   "agent.tool_called": 1,
   "agent.permission_asked": 1,
   "step.started": 1,
