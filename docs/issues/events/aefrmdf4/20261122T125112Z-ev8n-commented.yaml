@@ -1,0 +1,15 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M81MZ12FTPMR1RTHNX92EV8N
+subject: aefrmdf4
+type: commented
+at: 2026-11-22T12:51:12Z
+actor:
+  kind: agent
+  name: claude
+  email: null
+  agent: claude
+  on_behalf_of: niko.virtala@hey.com
+data:
+  text: "Evidence from 2026-11-22, kiro-cli 3.5.0 with a user-wide capability: all allow rule (Niko's deliberate choice): draft's instructions tell the agent it has no shell access, but Kiro gives it one, and the agent said so and used it (gh auth status). Every shell command draft can't classify becomes a call without asking, including plain reads: one pull request review raised six (gh issue view, gh api, gh pr view, gh pr diff). This slice should make the instructions match the tools the agent actually has, and separate reads from changes so reads don't interrupt."
