@@ -82,14 +82,14 @@ What holds it together:
 Where it stands:
 
 - **Proven on draft itself.** The built-in feedback loop already closes: a papercut becomes an issue, the factory fixes it, and the fix is announced where it was reported.
-- **Deploy provenance.** Designed, not built: the commit SHA is the join key from a running version back to its conversation, and usage per version closes threads. A release kind and a signal kind carry it, with typed edges such as "regressed after".
+- **Deploy provenance.** Designed, not built: the commit SHA is the join key from a running version back to its conversation, and usage per version closes threads. A deployment kind and a signal kind carry it, with typed edges such as "regressed after".
 - **The claim.** Today: the delivery lifecycle, folded into one conversation. With the production half: a loop that closes where today's tools stop, at merge.
 
 ## From running code back to its thread
 
-The commit SHA is the join key. Running code only has to say which commit it was built from; draft resolves the rest from links it already holds: SHA → the PRs in the release → their issues → the ADRs → the conversation.
+The commit SHA is the join key. Running code only has to say which commit it was built from; draft resolves the rest from links it already holds: SHA → the PRs in the deployment → their issues → the ADRs → the conversation.
 
-- **Release.** The commits between the previously deployed SHA and this one give the PRs in the release, and the threads waiting in *shipped* link to it. The first telemetry carrying the new SHA confirms that the deploy happened.
+- **Deployment.** The commits between the previously deployed SHA and this one give the PRs in the deployment, and the threads waiting in *shipped* link to it. The first telemetry carrying the new SHA confirms that the deploy happened.
 - **Usage, per change.** Usage metrics carry the version as a dimension beside route, operation, event name and flag. A change's diff says what it touched, so use of those on the new version, after the deploy, is evidence that this change is used. That evidence closes its thread.
 - **Down to the line.** The ideal evidence is the changed lines themselves, executed on the new version after the deploy. Only executable lines count: types, comments and imports can't run, a deletion is judged by the code around it, and a type-only change closes on deploy. Paths that are rare by design, such as error handlers and retries, are marked as such and close at function level or by explicit acceptance.
 - **When the agent asks.** Inferring is the default. The agent asks only when, at the timeout, changed executable lines that aren't rare by design have never run. That is a finding in itself: the change isn't used, or the code is dead. "The branch you added in `applyDiscount` never ran in 14 days: keep waiting, close as unobservable, or is it dead code?"
@@ -304,7 +304,7 @@ contradicted  --emits-->                    Decision: accepted -> under review
 load-bearing  waits on evidence, timeout 90 days -> interrupt "still true?"
 ```
 
-Kinds talk to each other through transitions. A signal contradicts an assumption, the assumption puts the decision that rests on it under review, the review spawns an issue, and the release that carries the fix closes the signal.
+Kinds talk to each other through transitions. A signal contradicts an assumption, the assumption puts the decision that rests on it under review, the review spawns an issue, and the deployment that carries the fix closes the signal.
 
 ### Checks
 
@@ -343,15 +343,169 @@ A kind is a declarative, versioned file in the repo. Code is needed only for a k
 | Decision, task, design | Candidates for ADRs, issues and designs | The record is accepted, done or dismissed |
 | Open question | A question nobody answered | Answered, with the answer linked |
 | Papercut | Friction with draft itself | Fixed and announced where it was reported |
-| Release | A version, its tag and where it runs | Every PR it carries is linked: deploy provenance |
+| Deployment | A version reaching where it runs | Every PR it carries is linked: deploy provenance |
 | Signal | An alert, SLO burn or regression from production | Answered by a fix, or explained by a decision |
 | Feedback | "No, not like that", "don't do that again" | Handled on the ladder, with an answer |
 | Assumption | "Rebases stay rare" | Confirmed, or contradicted, which reopens the decisions that rest on it |
 | Commitment | "I'll ask Juho by Friday" | Done, or the deadline passes and it surfaces |
 | Experiment | A hypothesis, its measurement and result | A result with numbers |
-| Measurement | A number with unit, method and time | Never closes; cited as evidence |
-| Term | "A block is…" | An accepted definition |
-| Usage | A measurable sign that a shipped change is used: requests, a flag exposure, an event count | Never closes; it is the evidence that closes threads and issues |
+
+## Facts, kinds and standing
+
+draft remembers three different things: what happened, what it still owes, and what it has agreed not to ask about. Each has its own test, its own store and its own way of changing. The stores are categories in one log, not separate databases.
+
+| | What it is | Test | How it changes | Examples |
+| --- | --- | --- | --- | --- |
+| Fact | What happened | It happened, at a time, and has a source | Never. A correction is a new fact that supersedes it | A commit, a log line, a measurement, a test result, a usage count, a finding with its date |
+| Kind | What is still owed | It can be left undone, someone waits on it, and done can be measured | Moves through its states until it closes | A change, a deployment, an open question, an assumption, a follow-up, a waiver |
+| Standing | What holds now | It holds until revoked, and every thread should take it as given | Only through a decision | "We deploy to AWS", "our VCS is GitHub", a principle, a guideline, a check, a term |
+
+A kind also needs an actor who can close it and a timeout that says what happens when nobody does. Something nobody will ever close is not a kind: it is a wish, or a fact in disguise.
+
+Measurement and Usage are facts, since they never close, and Term is standing, so none of them is in the kinds table above.
+
+```mermaid
+flowchart LR
+    new["Anything new<br/>threads, files, imports"]
+    intake["Intake<br/>fact, kind or standing?<br/>declined, with a reason"]
+    facts[("Facts<br/>what happened")]
+    standing[("Standing<br/>what holds until decided<br/>accepted by a person")]
+    kinds[("Kinds<br/>what is still owed")]
+    fitness["Fitness checks<br/>pure functions over all three stores<br/>verdicts become facts"]
+    new --> intake
+    intake --> facts
+    intake --> standing
+    intake --> kinds
+    facts -. read .-> fitness
+    standing -. read .-> fitness
+    kinds -. read .-> fitness
+    fitness -- "a failure opens a kind" --> kinds
+    kinds -- "a decision closes" --> standing
+```
+
+Intake puts everything new into one of three stores. The fitness checks read all three, and a failed check opens a kind; a decision closing is the only way standing changes.
+
+### Standing
+
+Standing is valuable because nobody reopens it in every thread: an agent should no more ask "should we use GitLab?" than a carpenter asks whether to use wood today. Four things keep it honest.
+
+- **A decision behind it.** Every given is an accepted decision whose question has stopped being asked. "We deploy to AWS" points at the decision that made it so. A given with no decision behind it is folklore, or a decision nobody admitted to making.
+- **A tripwire instead of a timeout.** A kind needs a timeout because it must end. A given needs the condition that would reopen it: "if we need to run outside AWS". When work hits that condition, or contradicts the given, it opens a decision. A given never changes quietly.
+- **A scope.** Givens attach to contexts, which are already trust boundaries: universal ("everything as data, with contracts"), workspace (AWS, GitHub) or project (pnpm, CDK, Rebase and merge). Every thread in a context starts with its givens, as data with provenance, not prose.
+- **A rung on the ladder.** A principle says why ("agents never deploy"), a guideline says how to whoever reads it ("your AWS access is read-only; list it under After deploy"), and a check makes the machine enforce it (the read-only role, commitlint, a smoke check). A guideline broken again and again is asking to become a check. When a check is wrong, the check changes and the principle wins.
+
+Standing enters kinds through their guards. A transition guard is where a given is actually consulted: "deploy only to the project's target" reads "we deploy to AWS". A given no guard or check reads does no work.
+
+Research splits across two categories. The investigation is a kind that closes with a conclusion. Its findings are facts, each with a source and the date it was checked. A finding stays true as history, but relying on it runs out: standing that rests on a dated finding inherits its expiry as a tripwire. That is why an agent prompt says "checked on \<date>, look it up again before you start".
+
+### Intake
+
+Nothing lands in a store without going through intake: a sentence in a thread, a line in AGENTS.md, a "Next" item in a pull request, a research result. Intake is itself a kind: proposed → classified → accepted, merged or declined. The model proposes the classification and the machine checks its shape. The first yes wins:
+
+1. **Did it happen?** A fact. It needs a source and a time.
+2. **Does it end, and does someone wait on it?** An instance of an existing kind. If no kind fits, a proposal for a new kind, which goes through the kind's own lifecycle.
+3. **Does it hold until revoked?** Standing. It cannot land without its decision, tripwire, scope and rung.
+4. **None of these?** Declined, with the reason. Declining is a valid outcome: a wish is not stored as if it were a commitment.
+
+Before accepting, intake compares the candidate with what exists. One that restates something is merged into it. One that contradicts something opens a decision instead of quietly winning.
+
+Who may create what follows "the model proposes, the machine disposes":
+
+|  | An agent | A person |
+| --- | --- | --- |
+| Record a fact | Yes | Yes |
+| Open an instance of a kind | Yes | Yes |
+| Propose standing or a new kind | Yes | Yes |
+| Accept standing or a new kind | No | Yes, through acceptance |
+
+Standing needs a person because it is what every later thread will take for granted.
+
+### Fitness checks
+
+Fitness checks are pure functions from the graph to a verdict, in the evolutionary-architecture sense, so they can be property-tested like the state machines.
+
+| Applies to | Finding | Means |
+| --- | --- | --- |
+| Fact | unsourced | No source or no time |
+| Fact | edited | Changed in place instead of superseded |
+| Fact | dangling | Its evidence no longer resolves |
+| Kind definition | open end | A state with no exit, a wait with no timeout, or a transition no actor can make |
+| Kind definition | dead transition | No instance has ever taken it |
+| Kind instance | stuck | Past its timeout with nobody able to move it |
+| Standing | orphaned | No decision behind it |
+| Standing | blind | No tripwire |
+| Standing | stale | A dated finding it rests on has expired |
+| Standing | contradicted | Facts disagree with it: a deployment that went somewhere other than AWS |
+| Standing | unread | No guard or check reads it |
+| Ladder | decoration | A principle with no guideline or check under it |
+| Ladder | unenforced | A guideline broken repeatedly with no check |
+| Ladder | silent | A check that never fires: perfect or dead, worth asking which |
+
+Checks run in three places: as a gate at intake, on every change, and on a schedule, since expiry and timeouts only show with time. Every verdict is recorded as a fact, and every failure opens an instance of a kind, so a fitness check is feedback the moment it runs.
+
+### Feedback
+
+Every category has a way back in, on the same ladder as all other feedback, and with evidence.
+
+| Category | What arrives | What it opens |
+| --- | --- | --- |
+| Fact | A correction | A superseding fact, with its own evidence |
+| Kind instance | Its outcome | Statistics for its kind's definition |
+| Kind definition | Instances stalling in a state, transitions never used | A proposed revision of the kind |
+| Standing | A tripwire hit, a contradiction, repeated violations | A decision to reopen it, or to move it down the ladder |
+| Intake | Reclassifications, which are facts too | A revision of the intake guidelines |
+
+The last row closes the loop. Intake and the fitness checks are themselves standing, so they get their own fitness check and their own feedback.
+
+### Importing an existing project
+
+An existing project already holds most of its standing, scattered across files. The importer reads them and feeds candidates to intake, so a person still accepts everything that matters.
+
+| Source | Proposed as |
+| --- | --- |
+| AGENTS.md, CLAUDE.md, steering files, skills | Standing: principles and guidelines |
+| Lint, commitlint and CI configuration, policy simulations, smoke checks | Standing: checks |
+| ADRs | Decisions, and the standing they produced |
+| Open issues, unfinished "Next" and "After deploy" items in pull requests | Kind instances |
+| Git history, deployments, release ledgers | Facts |
+| Version pins | Standing resting on a dated finding, so each expires |
+
+Approval is a kind: scanned → proposed → reviewed → applied.
+
+- **Every candidate carries its evidence:** the source file and lines quoted, the proposed category, scope and rung, the decision behind it or "none found", a proposed tripwire, and how confident the classification is.
+- **Review happens in acceptance, grouped by category and scope,** so fifty lines of AGENTS.md are not fifty prompts. You accept, edit, reclassify, decline or defer one item or a whole group.
+- **What needs approval:** standing always, because importing it does not make it true. Kind instances too, so an import does not open two hundred items at once. Facts from git and ledgers do not: they happened, and they can be derived again.
+- **The ladder gets linked.** A guideline in AGENTS.md is matched to the check that already enforces it, such as the commit-message rule to `commitlint.config.mjs`. The first fitness report then shows which principles are decoration and which checks have no written reason.
+- **Contradictions open decisions.** When AGENTS.md says one thing and CI enforces another, the importer opens a decision instead of picking one.
+- **Running it again is safe.** Each candidate is keyed by a hash of its source span, and a declined candidate is recorded as a fact so it is not proposed again. A later import shows only what changed, which also catches AGENTS.md drifting from what was accepted.
+
+The acceptance test is longplay. It has dense agent rules, release tasks, `needs-niko` steps, commitlint, a pipeline and a ledger. Whatever does not classify cleanly shows where the model is still missing something.
+
+Once standing lives in the store, AGENTS.md could become an export of it, so import is a one-time migration rather than a sync. That fits "markdown at the edges", and is a decision for later.
+
+### Bootstrap axioms
+
+If the process governs itself, something has to stand outside it. A handful of axioms are hard-coded checks that intake cannot change, only a code pull request can, the way longplay's freeze fails closed whatever the data says:
+
+1. There are three categories: fact, kind and standing.
+2. A correction never edits a fact; it supersedes it.
+3. Standing changes only through an accepted decision.
+4. Every kind can be closed by some actor, and every wait has a timeout.
+
+Everything above the axioms is changeable through the process.
+
+### What ark already has
+
+ark covers more of this than draft needs to invent. draft adds intake, the ladder, tripwires and the fitness checks across the stores.
+
+| Here | In ark | Missing |
+| --- | --- | --- |
+| Fact store | `ledger`: append-only event logs, with a finding when an event is modified | Supersession of a fact by a correcting fact |
+| Kinds as state machines | `ledger` kinds: event types as data, each with the states it is allowed in and the state it leads to | Waits, timeouts, actors |
+| Fitness checks | `ledger` verify: findings with a severity and a `<area>/<name>` rule | Checks across logs, and scheduled runs |
+| Decisions behind standing | `adr`: proposed, accepted, rejected, withdrawn, deprecated, superseded | Tripwires, and the rung on the ladder |
+| Scope of standing | `adr for <path>`: the decisions that govern a path, matched by globs | Workspace and universal scope |
+| Kind instances | `issues`: open, in progress, closed | The other kinds |
 
 ## Durable context
 
@@ -507,6 +661,10 @@ Like everything else, the map is a block. "Show me everything that's moving" bri
 ## Open questions
 
 - [ ] Do arcs in the margin replace the linear view, or sit beside it?
-
-* [ ] Later, not for the first version: who can join a context in multiplayer, and in which roles? It needs identities and a shared log, neither of which the local, single-user first version has. Until then, every event's actor stays a real identity, never an assumed "me", so adding people later is cheap.
-* [ ] How long is the usage window after a deploy, and how much line-level evidence is enough to close a thread?
+- [ ] Later, not for the first version: who can join a context in multiplayer, and in which roles? It needs identities and a shared log, neither of which the local, single-user first version has. Until then, every event's actor stays a real identity, never an assumed "me", so adding people later is cheap.
+- [ ] How long is the usage window after a deploy, and how much line-level evidence is enough to close a thread?
+- [ ] How fine-grained is standing? "pnpm, CDK, Rebase and merge" as one stack given or three: finer gives better tripwires but more decisions.
+- [ ] How long do findings stay valid: a default shelf life by source (release notes, a spec), or a date on each finding?
+- [ ] Which rules are bootstrap axioms? Whether "agents read, people act" is an axiom or ordinary standing is a real choice.
+- [ ] Which way should intake err when unsure? Something filed as standing that is really a kind never closes, while a kind with a timeout fails loudly, which argues for erring toward kind.
+- [ ] Standing has no states to plot on the map. Does it need its own view, such as the ladder by scope with orphaned, blind, stale and contradicted items lit?

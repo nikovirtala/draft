@@ -195,6 +195,20 @@ Rich text inside a body is a document tree: paragraphs, headings, lists, and ref
 - **Unknown kinds are kept.** An item whose kind this build doesn't know is stored intact and shown as a generic block, so older clients and other contexts lose nothing.
 - **Plain SQL on top.** Items live in SQLite as JSONB, with generated columns and indexes on the envelope fields, so process invariants and the map stay plain SQL.
 
+### Facts, kinds and standing
+
+The three categories from [model.md](model.md#facts-kinds-and-standing) are an envelope field, so most checks are a query over the one log, not code that knows every kind.
+
+- **Category beside kind.** The envelope's `kind` names an item's schema; a new `category` field (fact, kind or standing) says which store it belongs to. The kind registry declares the category of each schema, so Measurement and Usage are facts with no states, and Term is standing.
+- **Standing fields.** A standing item carries `decision` (the accepted decision it came from), `tripwire` (the reopening condition, as text plus an optional predicate over facts), `scope` (universal, workspace, a context, or path globs as in `adr for <path>`), `rung` (principle, guideline or check) and `restsOn` (dated findings, each with `checkedAt` and `validUntil`).
+- **Guards name what they read.** A transition guard references standing by id, and the registry records which guards read which standing, so "unread" is a query, not a judgement.
+- **Fitness checks are a registry of pure functions** from a graph snapshot to findings, reusing ark's finding shape (severity, a `<area>/<name>` rule, a message, a subject): `fact/unsourced`, `standing/orphaned`, `kind/open-end` and so on. Every run appends its findings as facts. A failure with no open instance opens one, keyed by rule and subject, so a rerun never duplicates it; the instance closes when a later run shows the finding gone, with that run as evidence.
+- **Three triggers.** The intake gate checks the candidate and its neighbours synchronously. Every append rechecks the subjects it touched. A scheduled sweep, a durable timer, catches expiry, timeouts and evidence that no longer resolves.
+- **Acceptance is enforced in the machine.** Accepting standing or a new kind requires a person as the actor; an agent's attempt is refused by the transition, not hidden by the UI.
+- **The importer is source adapters plus a review.** Agent files are split by heading and bullet into candidates; lint, commitlint and CI configuration are parsed into checks; ADRs and issues come through the `adr` and `issues` JSON views; pull request sections come from GitHub; facts from git. A candidate's key is a hash of its path and canonicalized span, so reruns are idempotent. Links between a guideline and the check that enforces it are proposed edges, reviewed like anything else. A dry run reports counts by category and writes nothing; only applying a review writes.
+- **longplay is the golden test.** The classified candidates from a pinned longplay commit are a committed fixture; a change to intake shows up as a diff to it.
+- **Axioms live in code,** in one module outside the registry, each with a test, so changing one is a code review, not a decision in the log.
+
 ## Testing the process
 
 The invariants are in [model.md](model.md). This is how they run.
@@ -273,8 +287,8 @@ The pipeline stamps, draft reads. The model is in [model.md](model.md), under "F
 
 - **In the telemetry.** The deploy pipeline sets OpenTelemetry resource attributes: `service.version`, `vcs.ref.head.revision` (the commit SHA), `vcs.repository.url.full` and `deployment.environment.name`. The VCS attributes are still in Development status in OpenTelemetry's semantic conventions, so their names may change ([VCS attributes](https://opentelemetry.io/docs/specs/semconv/registry/attributes/vcs/)).
 - **On AWS.** CloudWatch Application Signals emits deployment events at startup and every 24 hours, enriched by `OTEL_AWS_SERVICE_EVENTS_GIT_COMMIT_SHA`, `OTEL_AWS_SERVICE_EVENTS_GIT_REPO_URL`, `OTEL_AWS_SERVICE_EVENTS_DEPLOYMENT_ID`, `OTEL_AWS_SERVICE_EVENTS_DEPLOYMENT_TIMESTAMP` and `OTEL_AWS_SERVICE_EVENTS_DEPLOYMENT_URL`. It supports Java, Python and Node.js and is disabled in Lambda, where the resource attributes do the job ([Application Signals service events](https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/CloudWatch-Application-Signals-ServiceEvents.html)).
-- **The deployment ledger.** CI creates a GitHub deployment for the SHA and environment and sets its status. draft's release kind reads deployments and deployment statuses through a resolver ([GitHub deployments API](https://docs.github.com/en/rest/deployments/deployments)).
-- **The release range.** The commits between the previously deployed SHA and the new one, and the PRs they belong to.
+- **The deployment ledger.** CI creates a GitHub deployment for the SHA and environment and sets its status. draft's deployment kind reads deployments and deployment statuses through a resolver ([GitHub deployments API](https://docs.github.com/en/rest/deployments/deployments)).
+- **The deployment range.** The commits between the previously deployed SHA and the new one, and the PRs they belong to.
 - **Diff to signal.** A kind maps a PR's changed files and functions to the routes, handlers, events and flags they affect, so the matching usage on the new SHA can be found. Where the diff maps to nothing observable, the agent proposes a named signal or "close on deploy".
 - **The factory needs nothing new.** It merges as it does today.
 
