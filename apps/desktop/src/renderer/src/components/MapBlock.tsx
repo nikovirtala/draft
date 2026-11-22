@@ -4,6 +4,7 @@ import type { MapItem, MapRequest, MapSnapshot } from "../../../shared/ipc.ts";
 import type { Entry, Placement } from "../../../shared/placement.ts";
 import { useWorkspace } from "../workspace.tsx";
 import { BlockControls } from "./Icons.tsx";
+import { LayoutSwitch, MapGraph, type MapLayout } from "./MapGraph.tsx";
 import { useSelectable } from "./selectable.ts";
 
 /**
@@ -354,9 +355,11 @@ function Moves({ map }: { map: MapSnapshot }) {
 export function MapView({ address }: { address: string }) {
   const ws = useWorkspace();
   const [range, setRange] = useState<RangeId>("hour");
+  const [layout, setLayout] = useState<MapLayout>("graph");
   useMapVisible();
   const map = useMap(range);
-  const cell = ws.mapCell(address);
+  // The grid's open cell belongs to the grid: the graph has none.
+  const cell = layout === "state" ? ws.mapCell(address) : null;
   if (map === null) return <p className="secondary">Reading the log…</p>;
   const empty = map.totals.items === 0;
   return (
@@ -383,6 +386,7 @@ export function MapView({ address }: { address: string }) {
             </label>
           ))}
         </fieldset>
+        <LayoutSwitch name={`layout-${address}`} value={layout} onChange={setLayout} />
       </div>
       {empty && (
         <p className="empty-map" data-testid="map-empty">
@@ -391,7 +395,8 @@ export function MapView({ address }: { address: string }) {
           with what waits on you lit and the latest moves drawn as arrows.
         </p>
       )}
-      {map.rows.map((row) => (
+      {layout === "graph" && <MapGraph map={map} />}
+      {(layout === "state" ? map.rows : []).map((row) => (
         <MapRowView
           key={row.kind}
           map={map}
