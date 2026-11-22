@@ -1,0 +1,16 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M82N00Y2BCXY76W6ECX9XPV2
+subject: wkk1pace
+type: closed
+at: 2026-11-22T22:10:59Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: 244629292+kiro-agent@users.noreply.github.com
+reason: "Kinds declare edges (KindDecl.edges) for thread mentions, produced and parent, acceptance targets, decision supersedes and links, issue parents and links, and deployments to merged pull requests; map-graph.ts projects clusters, stepped-out items, bundled edges and the three zoom levels; map-layout.ts keeps positions (tested: added item moves no node over MAX_SHIFT); MapGraph.tsx is the default with a Graph | By state switch, buttons and keyboard zoom; docs/implementation.md describes it. Unit tests pass; the e2e run is left to CI."
+data:
+  resolution: done
