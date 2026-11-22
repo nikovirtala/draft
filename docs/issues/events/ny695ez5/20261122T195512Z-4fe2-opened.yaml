@@ -1,0 +1,17 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M82D7CB6DKQ90TCJZG9V4FE2
+subject: ny695ez5
+type: opened
+at: 2026-11-22T19:55:12Z
+actor:
+  kind: agent
+  name: claude
+  email: null
+  agent: claude
+  on_behalf_of: niko.virtala@hey.com
+data:
+  title: Voice, everyone on their own draft
+  template: task
+  template_version: 1

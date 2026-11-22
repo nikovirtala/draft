@@ -1,0 +1,15 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M82D7KQB4FRWE1M01EFRF1H0
+subject: cwrr4ff1
+type: commented
+at: 2026-11-22T19:55:19Z
+actor:
+  kind: agent
+  name: claude
+  email: null
+  agent: claude
+  on_behalf_of: niko.virtala@hey.com
+data:
+  text: "Speech adds to packaging: the draft-speech helper ships inside Draft.app, signed with the same Team ID, outside the asar archive (electron-builder extraResources) so macOS attributes the mic to draft; NSMicrophoneUsageDescription in Info.plist; the com.apple.security.device.audio-input entitlement under the hardened runtime; and Parakeet's weights come under NVIDIA's open model licence, to check before shipping (877w9mgn)."

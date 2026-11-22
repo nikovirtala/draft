@@ -1,0 +1,17 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M82D7F5T8J0A5J8FGRR08BPB
+subject: 6e2d4tyv
+type: opened
+at: 2026-11-22T19:55:15Z
+actor:
+  kind: agent
+  name: claude
+  email: null
+  agent: claude
+  on_behalf_of: niko.virtala@hey.com
+data:
+  title: Suggest unasked from overheard speech
+  template: task
+  template_version: 1

@@ -1,0 +1,18 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M82D6YC1N3EZN4FP31BQAMN0
+subject: j5kx2tzt
+type: opened
+at: 2026-11-22T19:54:57Z
+actor:
+  kind: agent
+  name: claude
+  email: null
+  agent: claude
+  on_behalf_of: niko.virtala@hey.com
+data:
+  title: Let the room name its agent
+  template: task
+  template_version: 1
+  parent: eh3k8ape

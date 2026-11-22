@@ -1,0 +1,18 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M82D6JZ9EKQNPNFM63AS6DGF
+subject: 877w9mgn
+type: opened
+at: 2026-11-22T19:54:46Z
+actor:
+  kind: agent
+  name: claude
+  email: null
+  agent: claude
+  on_behalf_of: niko.virtala@hey.com
+data:
+  title: Build the draft-speech helper and its event contract
+  template: task
+  template_version: 1
+  parent: eh3k8ape

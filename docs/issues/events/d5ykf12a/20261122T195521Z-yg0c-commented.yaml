@@ -1,0 +1,15 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M82D7N692ETA0NX4PM4EYG0C
+subject: d5ykf12a
+type: commented
+at: 2026-11-22T19:55:21Z
+actor:
+  kind: agent
+  name: claude
+  email: null
+  agent: claude
+  on_behalf_of: niko.virtala@hey.com
+data:
+  text: "The room's agent name is a context setting too (j5kx2tzt): changed by a sentence the person confirms, logged, and shown to everyone in the room."

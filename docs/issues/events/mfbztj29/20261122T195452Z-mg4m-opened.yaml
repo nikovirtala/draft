@@ -1,0 +1,18 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M82D6RQVAYA3D058MWM3MG4M
+subject: mfbztj29
+type: opened
+at: 2026-11-22T19:54:52Z
+actor:
+  kind: agent
+  name: claude
+  email: null
+  agent: claude
+  on_behalf_of: niko.virtala@hey.com
+data:
+  title: Ask for consent, keep voice profiles opt-in, and let people delete their voice data
+  template: task
+  template_version: 1
+  parent: eh3k8ape
