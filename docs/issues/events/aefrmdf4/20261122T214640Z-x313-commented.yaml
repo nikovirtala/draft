@@ -1,0 +1,15 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M82KKFTB6E65P0C0CSPAX313
+subject: aefrmdf4
+type: commented
+at: 2026-11-22T21:46:40Z
+actor:
+  kind: agent
+  name: claude
+  email: null
+  agent: claude
+  on_behalf_of: niko.virtala@hey.com
+data:
+  text: "Checked by Niko on his Mac on 22 Nov with a real kiro-cli 3.5: the session started with draft's agent (modeId), a write and touch x asked first and ran only on Allow, Deny left nothing behind, git status ran without asking, and the agent had no built-in shell or write tool and raised no anomaly."
