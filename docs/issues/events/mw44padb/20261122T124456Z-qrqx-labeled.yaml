@@ -1,0 +1,16 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M81MKJ1WX26HMZCXVXBWQRQX
+subject: mw44padb
+type: labeled
+at: 2026-11-22T12:44:56Z
+actor:
+  kind: agent
+  name: claude
+  email: null
+  agent: claude
+  on_behalf_of: niko.virtala@hey.com
+data:
+  set:
+    - type:feature

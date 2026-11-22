@@ -1,0 +1,16 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M81MKMR4PVDWJ624KVX5NSCE
+subject: 4qgk0vfj
+type: closed
+at: 2026-11-22T12:44:59Z
+actor:
+  kind: agent
+  name: claude
+  email: null
+  agent: claude
+  on_behalf_of: niko.virtala@hey.com
+reason: "Checked on 2026-11-22 with kiro-cli 3.5.0 on macOS, in a folder Kiro had never opened (~/tmp/draft-trust, a fresh git repo whose .kiro/settings/mcp.json defined a probe server that touches /tmp/draft-probe-ran). Over ACP Kiro started the probe server (the file appeared) and listed the folder's .kiro/skills: the documented trust screen guards interactive sessions only. Kiro also wrote a file without session/request_permission although draft had switched autopilot off before the first prompt (session/new, set_config_option autopilot=off, session/prompt, from an ACP transcript); the cause is a user-wide capability: all allow rule in ~/.kiro/settings/permissions.yaml on this machine, not ACP. draft raised a call without asking. Written down in implementation.md (Where the agent runs) and as notes on ADRs 1vey5j12 and 06wp7907; mw44padb covers what draft does about both."
+data:
+  resolution: done
