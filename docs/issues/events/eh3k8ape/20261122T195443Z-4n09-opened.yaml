@@ -1,0 +1,17 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M82D6G5EMP0DR4PQ26614N09
+subject: eh3k8ape
+type: opened
+at: 2026-11-22T19:54:43Z
+actor:
+  kind: agent
+  name: claude
+  email: null
+  agent: claude
+  on_behalf_of: niko.virtala@hey.com
+data:
+  title: Voice, same room
+  template: task
+  template_version: 1

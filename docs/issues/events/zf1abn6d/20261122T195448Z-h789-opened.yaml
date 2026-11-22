@@ -1,0 +1,18 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M82D6NQSW3C004FPMATFH789
+subject: zf1abn6d
+type: opened
+at: 2026-11-22T19:54:48Z
+actor:
+  kind: agent
+  name: claude
+  email: null
+  agent: claude
+  on_behalf_of: niko.virtala@hey.com
+data:
+  title: Record into a thread, and let the thread's state decide what the agent hears
+  template: task
+  template_version: 1
+  parent: eh3k8ape
