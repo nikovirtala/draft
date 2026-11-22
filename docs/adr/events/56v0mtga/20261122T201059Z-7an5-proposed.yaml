@@ -1,0 +1,17 @@
+envelope: ledger/v1
+kind: decision
+schema: decision/v1
+id: 01M82E49Q5ZYWNY1FN1T3S7AN5
+subject: 56v0mtga
+type: proposed
+at: 2026-11-22T20:10:59Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: niko.virtala@hey.com
+data:
+  title: Run the agent without built-in tools that change things, and give it draft's own as steps
+  template: nygard
+  template_version: 1
