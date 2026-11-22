@@ -13,6 +13,12 @@ export const AgentSpecSchema = z
     args: z.array(z.string()).default([]),
     /** Extra environment for this agent's process. Never put secrets here: draft stores none. */
     env: z.record(z.string(), z.string()).default({}),
+    /**
+     * Variables of the person's own environment to hand this agent anyway, by name. draft withholds
+     * the person's GitHub, git, SSH, AWS and npm sign-ins from every agent (environment.ts); this
+     * is the deliberate exception, and the agent's status says when one is used.
+     */
+    passEnv: z.array(z.string().min(1)).default([]),
     /** For a custom agent: which built-in agent it is a build of, so draft configures it the same way. */
     kind: z.enum(["kiro", "claude", "generic"]).optional(),
   })
@@ -35,6 +41,8 @@ export interface AgentSpec {
   command: string;
   args: string[];
   env: Record<string, string>;
+  /** Names of the person's variables passed through on purpose (`passEnv` in config.json). */
+  passEnv: string[];
   /** Environment variables that must be set, passed through from draft's own environment. */
   requires: { name: string; howToSet: string }[];
   /** How to ask the command for its version, when the agent doesn't report one over ACP. */
@@ -53,6 +61,7 @@ const BUILTIN: Record<string, Omit<AgentSpec, "id">> = {
     // The v3 engine, and sign-in left to the CLI: draft never handles a Kiro credential.
     args: ["acp", "--agent-engine=v3", "--auth-method=cli"],
     env: {},
+    passEnv: [],
     requires: [],
     versionArgs: ["--version"],
     signIn: "Run `kiro-cli login` in a terminal, then send your message again.",
@@ -63,6 +72,7 @@ const BUILTIN: Record<string, Omit<AgentSpec, "id">> = {
     command: "claude-agent-acp",
     args: [],
     env: {},
+    passEnv: [],
     requires: [
       {
         name: "ANTHROPIC_API_KEY",
@@ -104,6 +114,7 @@ export function resolveAgent(config: AgentConfig): AgentSpec {
     command: "",
     args: [],
     env: {},
+    passEnv: [],
     requires: [],
     versionArgs: null,
     signIn:
@@ -118,28 +129,10 @@ export function resolveAgent(config: AgentConfig): AgentSpec {
           command: custom.command,
           args: custom.args,
           env: { ...base.env, ...custom.env },
+          passEnv: [...new Set([...base.passEnv, ...custom.passEnv])],
           ...(builtin === undefined && custom.kind !== undefined ? { kind: custom.kind } : {}),
         }),
   };
-}
-
-/** Variables that never reach an agent: draft's own settings and the Electron runtime's. */
-const WITHHELD = /^(DRAFT_|ELECTRON_|NODE_OPTIONS$|OTEL_)/;
-
-/**
- * The environment of an agent's process: draft's own environment without its settings, the agent's
- * own variables, and only the secrets the agent needs. draft stores no credential: Claude's
- * adapter reads `ANTHROPIC_API_KEY` from here, and Kiro keeps its own sign-in.
- */
-export function agentEnvironment(spec: AgentSpec, env: NodeJS.ProcessEnv): Record<string, string> {
-  const out: Record<string, string> = {};
-  for (const [k, v] of Object.entries(env)) {
-    if (v === undefined || WITHHELD.test(k)) continue;
-    // A key meant for one agent isn't handed to the others.
-    if (k === "ANTHROPIC_API_KEY" && !spec.requires.some((r) => r.name === k)) continue;
-    out[k] = v;
-  }
-  return { ...out, ...spec.env };
 }
 
 /** What a missing variable means for the user, or null when everything the agent needs is set. */

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { AgentContext } from "./agent-context.ts";
+import type { AgentEnvironmentReport } from "./events.ts";
 import {
   isPersonOnlyTool,
   type KiroRemoteTools,
@@ -21,6 +22,11 @@ export interface AgentIdentity {
   readonly model: string;
   /** The agent's own name and version, as far as it reports them. */
   readonly version: string;
+  /**
+   * What the agent's process was not given of the person's environment, by name; absent for an
+   * agent that has no process of its own.
+   */
+  readonly environment?: AgentEnvironmentReport;
 }
 
 export type PermissionAnswer = { allow: true } | { allow: false; message: string };

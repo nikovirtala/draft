@@ -4,6 +4,7 @@ import { Readable, Writable } from "node:stream";
 import * as acp from "@agentclientprotocol/sdk";
 import {
   AGENT_BRIEFING,
+  type AgentEnvironmentReport,
   type AgentEvent,
   type AgentRuntime,
   type AgentTurnHooks,
@@ -11,7 +12,8 @@ import {
   KIRO_SERVER,
   renderAgentContext,
 } from "@nikovirtala/draft-core";
-import { type AgentSpec, agentEnvironment, missingRequirement } from "./agents.ts";
+import { type AgentSpec, missingRequirement } from "./agents.ts";
+import { agentEnvironment, ensureAgentEnvironmentFiles } from "./environment.ts";
 import { AsyncQueue } from "./queue.ts";
 import { modelFromConfig, TurnMapper } from "./turn.ts";
 
@@ -29,6 +31,8 @@ import { modelFromConfig, TurnMapper } from "./turn.ts";
  * - Every permission request goes through draft's tool policy (see turn.ts).
  * - draft stores no credential. Kiro keeps its own sign-in, and Claude's adapter reads its API key
  *   from the environment draft passes through.
+ * - The agent's process doesn't get the person's GitHub, git, SSH, AWS or npm sign-ins
+ *   (environment.ts): acting as the person goes through draft's own steps only.
  */
 
 export interface KiroMcp {
@@ -50,8 +54,10 @@ export interface AcpRuntimeOptions {
   cwd: string | (() => string);
   /** What the agent is told about where it works, after the briefing; null for nothing. */
   placeNote?: () => string | null;
-  /** draft's own environment, filtered before it reaches the agent. */
+  /** The person's environment, filtered before it reaches the agent (environment.ts). */
   env: NodeJS.ProcessEnv;
+  /** draft's data folder: where the files the agent's environment points at are kept. */
+  dataDir: string;
   kiro: KiroMcp | null;
   clientInfo: { name: string; version: string };
   /**
@@ -85,6 +91,8 @@ export class AcpRuntime implements AgentRuntime {
   readonly id: string;
   model = "unreported";
   version: string;
+  /** What the agent's process doesn't get of the person's environment, by name. */
+  readonly environment: AgentEnvironmentReport;
   private conn: Connection | null = null;
   private connecting: Promise<Connection> | null = null;
   /** Sessions by conversation address. */
@@ -100,6 +108,7 @@ export class AcpRuntime implements AgentRuntime {
   constructor(private readonly o: AcpRuntimeOptions) {
     this.id = o.spec.id;
     this.version = `${o.spec.label} (not started)`;
+    this.environment = agentEnvironment(o.spec, o.env, o.dataDir).report;
   }
 
   async *runTurn(input: AgentTurnInput, hooks: AgentTurnHooks): AsyncIterable<AgentEvent> {
@@ -227,7 +236,9 @@ export class AcpRuntime implements AgentRuntime {
     const { spec } = this.o;
     const cwd = this.cwd();
     mkdirSync(cwd, { recursive: true });
-    const env = agentEnvironment(spec, this.o.env);
+    // The files the environment points at, written again if they are missing or were changed.
+    ensureAgentEnvironmentFiles(this.o.dataDir);
+    const { env } = agentEnvironment(spec, this.o.env, this.o.dataDir);
     const child = spawn(spec.command, spec.args, { cwd, env, stdio: ["pipe", "pipe", "pipe"] });
     const stderr: string[] = [];
     child.stderr.setEncoding("utf8");

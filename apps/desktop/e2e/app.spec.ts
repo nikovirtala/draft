@@ -156,6 +156,17 @@ test("one conversation with live Kiro session stubs, restored from the log", asy
   await expect(agentState).toHaveAttribute("data-state", "active");
   await expect(agentState).toContainText("fake-model-1");
 
+  // The status says the person's sign-ins are withheld from the agent, and names what was on demand.
+  const environment = page.getByTestId("agent-environment");
+  await expect(page.getByTestId("agent-environment-summary")).toHaveText(
+    "Your GitHub, git, SSH, AWS and npm sign-ins are withheld from the agent",
+  );
+  await expect(page.getByTestId("agent-environment-list")).toBeHidden();
+  await environment.getByText("Your GitHub, git, SSH").click();
+  await expect(page.getByTestId("agent-environment-list")).toContainText("draft's own settings");
+  await shot(page, "05c-agent-environment-withheld");
+  await environment.getByText("Your GitHub, git, SSH").click();
+
   // 6. An aside (⌥↵) is for people only: no turn starts, and the agent never reads it.
   const promptsBefore = agentRecords().filter((e) => e.event === "session/prompt").length;
   await page.getByLabel("Message").fill(`${MARKER}: should we ask about the README first?`);

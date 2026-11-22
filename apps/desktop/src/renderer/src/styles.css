@@ -456,6 +456,23 @@ textarea:focus-visible {
   font-size: 13px;
 }
 
+/* The line that says which sign-ins are withheld from the agent, with the names on demand. */
+.agent-environment {
+  font-size: 12px;
+  color: var(--secondary);
+  padding: 2px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.agent-environment summary {
+  cursor: pointer;
+}
+
+.agent-environment-list p {
+  margin: 4px 0;
+  overflow-wrap: anywhere;
+}
+
 .agent-model {
   color: var(--secondary);
 }

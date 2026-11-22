@@ -40,7 +40,7 @@ async function openThreads(scripts: Record<string, Script>) {
       agents: Object.fromEntries(
         Object.entries(specs).map(([id, s]) => [
           id,
-          { command: s.command, args: s.args, env: s.env },
+          { command: s.command, args: s.args, env: s.env, passEnv: [] },
         ]),
       ),
     },
@@ -49,6 +49,7 @@ async function openThreads(scripts: Record<string, Script>) {
         spec,
         cwd: join(dir, "agent-workspace"),
         env: { PATH: process.env.PATH ?? "" },
+        dataDir: dir,
         clientInfo: { name: "draft", version: "0.0.0-test" },
         kiro: { url: kiro.mcpUrl, baseUrl: kiro.baseUrl, token: async () => "test-token-1" },
       }),

@@ -22,6 +22,7 @@ import { buildAgentContext, contextDigest } from "./agent-context.ts";
 import { CONTEXT_ITEM, type ContextItemSnapshot, contextItemKey } from "./cross-context.ts";
 import {
   type Actor,
+  type AgentEnvironmentReport,
   type AgentState,
   type Audience,
   type DraftEvent,
@@ -204,7 +205,14 @@ export interface UiState {
   /** The message this conversation branched off, or null for the main conversation. */
   parent: string | null;
   title: string;
-  agent: { id: string; model: string; version: string; state: AgentState };
+  agent: {
+    id: string;
+    model: string;
+    version: string;
+    state: AgentState;
+    /** What the agent's process doesn't get of the person's environment; null when it has none. */
+    environment: AgentEnvironmentReport | null;
+  };
   messages: UiMessage[];
   timeline: UiBlock[];
   stubs: Record<string, UiStub>;
@@ -657,6 +665,7 @@ export class ConversationService {
         model: runtime?.model ?? "unavailable",
         version: runtime?.version ?? "not configured",
         state: this.projection.agentState(this.conversation),
+        environment: runtime?.environment ?? null,
       },
       messages: messages.map((m) => ({
         address: m.address,
@@ -1656,6 +1665,9 @@ export class ConversationService {
                       contextHash: contextDigest(context),
                       contextMessages: context.messages.length,
                       contextOpenItems: context.openItems.length,
+                      ...(agent.environment === undefined
+                        ? {}
+                        : { environment: agent.environment }),
                     },
                   },
                 ],
