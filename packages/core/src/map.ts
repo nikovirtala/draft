@@ -1,6 +1,22 @@
 import { tryParseAddress } from "./address.ts";
 import { type DraftEvent, isUnknown, type LogRecord } from "./events.ts";
 import type { ActorKind, MachineSpec } from "./machine.ts";
+import type {
+  Column,
+  MapCell,
+  MapItem,
+  MapProblem,
+  MapRow,
+  MapSnapshot,
+  MapTransition,
+  MapWindow,
+  OpenTarget,
+  PathEntry,
+  StateClass,
+  StateDecl,
+} from "./map-types.ts";
+
+export type * from "./map-types.ts";
 
 /**
  * The map's projection (docs/model.md, "The map"): every kind a context has, its items by state,
@@ -18,32 +34,6 @@ import type { ActorKind, MachineSpec } from "./machine.ts";
  *   state at the position.
  * - Every item carries its context, so projections of several contexts can be combined later.
  */
-
-export type StateClass = "active" | "waiting" | "terminal";
-
-/** One state of a kind, as a column of its row. */
-export interface StateDecl {
-  id: string;
-  label: string;
-  class: StateClass;
-  /** For a waiting state: whom it waits on. A wait on `user` is what the map highlights. */
-  waitsOn?: ActorKind;
-}
-
-/** Where an item lives, so a person can go there. */
-export type OpenTarget =
-  /** A conversation (the main one or a thread), optionally at one of its blocks. */
-  | { kind: "conversation"; conversation: string; anchor: string | null }
-  /** A live status stub: the message that first mentioned it, and the conversation that is in. */
-  | { kind: "stub"; target: string; from: string; conversation: string };
-
-/** The state an item entered, and when. The last entry of a path is the item's state. */
-export interface PathEntry {
-  state: string;
-  at: string;
-  /** The position in the log of the event that moved it. */
-  seq: number;
-}
 
 /** An item as a kind lists it: where it is now and how it got there. */
 export interface ItemDraft {
@@ -82,12 +72,6 @@ export interface KindDecl {
   /** Shown even with no items, so the map says what it will show. */
   alwaysShown?: boolean;
   items(input: KindInput): readonly ItemDraft[];
-}
-
-/** One state's place in a grouping. */
-export interface Column {
-  id: string;
-  label: string;
 }
 
 /** Which column each state of each kind belongs to. */
@@ -203,13 +187,6 @@ function checkKind(kind: KindDecl): string | null {
 /* The fold                                                                                          */
 /* ----------------------------------------------------------------------------------------------- */
 
-export interface MapWindow {
-  /** Transitions at or after this time (ISO). */
-  since?: string;
-  /** Transitions at or before this time. */
-  until?: string;
-}
-
 export interface MapQuery {
   /** How many records of the log to fold: the map as it was after them. Default: all. */
   position?: number;
@@ -218,74 +195,6 @@ export interface MapQuery {
   /** The context's id, on every item. Default: the context the first event's address names. */
   context?: string;
   live?: LiveInfo | null;
-}
-
-export interface MapItem {
-  context: string;
-  kind: string;
-  id: string;
-  label: string;
-  state: string;
-  stateLabel: string;
-  class: StateClass;
-  waitsOn: ActorKind | null;
-  column: string;
-  /** When it entered this state. */
-  since: string;
-  open: OpenTarget;
-}
-
-export interface MapCell {
-  column: string;
-  count: number;
-  /** How many of its items wait on the person. */
-  waitingOnPerson: number;
-  items: MapItem[];
-}
-
-export interface MapRow {
-  kind: string;
-  label: string;
-  source: KindDecl["source"];
-  derivation: string;
-  columns: (Column & { class: StateClass })[];
-  cells: MapCell[];
-  total: number;
-  waitingOnPerson: number;
-}
-
-export interface MapTransition {
-  context: string;
-  kind: string;
-  item: string;
-  label: string;
-  /** Null when the item appeared. */
-  from: string | null;
-  to: string;
-  fromColumn: string | null;
-  toColumn: string;
-  at: string;
-  seq: number;
-}
-
-export interface MapProblem {
-  kind: string;
-  message: string;
-}
-
-export interface MapSnapshot {
-  context: string;
-  /** How many records were folded. */
-  position: number;
-  /** The time of the last one; null for an empty log. */
-  at: string | null;
-  grouping: { id: string; label: string };
-  window: MapWindow;
-  rows: MapRow[];
-  transitions: MapTransition[];
-  totals: { items: number; open: number; waitingOnPerson: number };
-  /** Kinds that failed to list their items; the rest of the map is still drawn. */
-  problems: MapProblem[];
 }
 
 function contextOf(events: readonly DraftEvent[]): string {
