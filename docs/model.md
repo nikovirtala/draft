@@ -507,6 +507,23 @@ ark covers more of this than draft needs to invent. draft adds intake, the ladde
 | Scope of standing | `adr for <path>`: the decisions that govern a path, matched by globs | Workspace and universal scope |
 | Kind instances | `issues`: open, in progress, closed | The other kinds |
 
+## Evolvable by design
+
+draft is evolvable rather than flexible: change is cheap, and it is guided by fitness functions, which draft has as its fitness checks. The log is its memory, the checks are its selection pressure, and decisions are how it changes on purpose.
+
+| Bends | Holds |
+| --- | --- |
+| Kinds are data: a new kind is a file, old versions are upcast on read, unknown kinds are kept | The log is append-only, and a fact is never edited |
+| Any ACP agent runs a thread | Only a person accepts |
+| A new kind version reprocesses the whole history | Every kind closes, and every wait has a timeout |
+| Any given reopens when its tripwire is hit | Standing changes only through a decision |
+| Intake and the fitness checks take feedback like everything else | The bootstrap axioms change only through a code pull request |
+| What the UI shows is generated | The UI's grammar is small and fixed |
+
+The rigid core is what makes the rest safe to change. A cheap change is safe only when you can see what it broke: draft's changes leave a record, the checks catch what they broke, and a decision says why they happened. Without the core, a system this easy to change drifts, and nobody notices until late.
+
+Rigidity is still the risk. The release valves are the standard terminal states ("superseded, because…"), declining at intake, and feedback that moves a rule up or down the ladder. The checks show whether those are enough: a transition nobody takes, or instances that keep sticking in one state, mark where draft is too stiff. Three places to watch: person-only acceptance turning into friction, the fixed grammar feeling cramped before the component set grows, and "every kind closes" fitting badly with work that is genuinely ongoing.
+
 ## Durable context
 
 A context behaves like a durable execution, the idea behind [AWS Lambda durable functions](https://docs.aws.amazon.com/lambda/latest/dg/durable-functions.html). It has a running log of operations, steps whose results are recorded, waits that suspend it at no cost, and callbacks that wake it. It can live for months with no process running, because everything it needs is in the log.
