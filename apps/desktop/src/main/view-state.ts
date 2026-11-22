@@ -1,4 +1,5 @@
 import { DatabaseSync } from "node:sqlite";
+import type { MapSelection } from "../shared/ipc.ts";
 import {
   emptyLayout,
   type Layout,
@@ -26,6 +27,7 @@ export interface Bounds {
  *   block, its kind, from, to, when and why. Nothing reads it yet.
  * - `window_bounds`: where each block's window was last, kept per block.
  * - `seen`: how many messages of each thread this device has shown.
+ * - `map_cells`: the cell each map block has open: the row's kind and the column.
  */
 export class ViewStateStore {
   private readonly db: DatabaseSync;
@@ -43,6 +45,8 @@ export class ViewStateStore {
         block text primary key, x integer not null, y integer not null,
         width integer not null, height integer not null);
       create table if not exists seen (conversation text primary key, messages integer not null);
+      create table if not exists map_cells (
+        block text primary key, kind text not null, col text not null);
     `);
   }
 
@@ -144,6 +148,28 @@ export class ViewStateStore {
         "insert into seen values (?, ?) on conflict(conversation) do update set messages = excluded.messages",
       )
       .run(conversation, messages);
+  }
+
+  /** The cell each map block has open, by block address. */
+  mapCells(): Record<string, MapSelection> {
+    const rows = this.db.prepare("select block, kind, col from map_cells").all() as {
+      block: string;
+      kind: string;
+      col: string;
+    }[];
+    return Object.fromEntries(rows.map((r) => [r.block, { kind: r.kind, column: r.col }]));
+  }
+
+  /** Opens a cell of a map block, or closes it with `null`. */
+  setMapCell(block: string, cell: MapSelection | null): void {
+    if (cell === null) this.db.prepare("delete from map_cells where block = ?").run(block);
+    else
+      this.db
+        .prepare(
+          `insert into map_cells values (?, ?, ?)
+           on conflict(block) do update set kind = excluded.kind, col = excluded.col`,
+        )
+        .run(block, cell.kind, cell.column);
   }
 
   close(): void {

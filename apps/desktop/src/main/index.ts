@@ -1,4 +1,5 @@
 import { join } from "node:path";
+import { BY_CLASS } from "@nikovirtala/draft-core";
 import { app, ipcMain, shell } from "electron";
 import { z } from "zod";
 import { CHANNELS } from "../shared/ipc.ts";
@@ -95,6 +96,17 @@ function run(): void {
     ])
     .nullable();
 
+  const MapRequestSchema = z
+    .object({
+      since: z.iso.datetime({ precision: 3 }).optional(),
+      grouping: z.enum(["state", "class"]).optional(),
+    })
+    .strict();
+  const MapCellSchema = z
+    .object({ kind: z.string().min(1).max(200), column: z.string().min(1).max(200) })
+    .strict()
+    .nullable();
+
   /** The context of the window a call came from; every call is answered for that one only. */
   const runtimeOf = (
     e: Electron.IpcMainInvokeEvent | Electron.IpcMainEvent,
@@ -187,6 +199,20 @@ function run(): void {
       const r = runtimeOf(e);
       if (!parsed.success || r === null) return { ok: false, reason: "not-available" };
       return r.layout.move(parsed.data);
+    });
+    ipcMain.handle(CHANNELS.map, (e, request: unknown) => {
+      const parsed = MapRequestSchema.safeParse(request ?? {});
+      if (!parsed.success) throw new Error("bad request");
+      const { since, grouping } = parsed.data;
+      return requireRuntime(e).workspace.map({
+        ...(since === undefined ? {} : { window: { since } }),
+        ...(grouping === "class" ? { grouping: BY_CLASS } : {}),
+      });
+    });
+    ipcMain.handle(CHANNELS.selectMapCell, (e, block: unknown, cell: unknown) => {
+      const parsed = MapCellSchema.safeParse(cell);
+      if (!str(block, 500) || !parsed.success) throw new Error("bad request");
+      runtimeOf(e)?.layout.selectCell(block, parsed.data);
     });
     ipcMain.handle(CHANNELS.focus, (e, target: unknown) => {
       const parsed = FocusSchema.safeParse(target);

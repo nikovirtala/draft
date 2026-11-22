@@ -1187,3 +1187,258 @@ textarea:focus-visible {
   color: var(--text);
   resize: vertical;
 }
+
+/* The map: a row for each kind, a column for each state. What waits on you is lit. */
+.map-stub.inline {
+  padding: 8px 12px 12px;
+}
+
+.map {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 8px;
+  min-width: 0;
+}
+
+.map-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.map-summary {
+  margin: 0;
+  font-weight: 600;
+}
+
+.map-range {
+  margin: 0 0 0 auto;
+  padding: 0;
+  border: 0;
+  display: flex;
+  gap: 4px;
+}
+
+.map-range label {
+  color: var(--secondary);
+  border-radius: 999px;
+  padding: 1px 10px;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.map-range label.on {
+  color: var(--accent-text);
+  background: var(--accent-tint);
+  font-weight: 560;
+}
+
+.map-range input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.map-range label:focus-within {
+  outline: 2px solid var(--accent-border);
+  outline-offset: 1px;
+}
+
+.empty-map {
+  color: var(--secondary);
+  margin: 4px 0 0;
+}
+
+.map-row {
+  min-width: 0;
+}
+
+.map-row-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 2px;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.map-row-total {
+  color: var(--secondary);
+  font-weight: 500;
+}
+
+.map-derived {
+  color: var(--secondary);
+  font-size: 11.5px;
+  font-weight: 500;
+  border-bottom: 1px dotted var(--secondary);
+}
+
+.map-row-scroll {
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.map-row-grid {
+  position: relative;
+}
+
+.map-arrows {
+  display: block;
+  color: var(--accent-text);
+}
+
+.map-cells {
+  display: flex;
+}
+
+.map-cell {
+  font: inherit;
+  color: var(--text);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin: 0 -1px 0 0;
+  padding: 4px 6px 4px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0;
+  text-align: left;
+  cursor: pointer;
+  flex: none;
+}
+
+.map-cell:disabled {
+  cursor: default;
+  color: var(--secondary);
+  background: transparent;
+  border-style: dashed;
+}
+
+.map-cell.terminal:not(:disabled) {
+  background: var(--bubble);
+}
+
+.map-cell.lit {
+  color: var(--waiting);
+  background: var(--waiting-bg);
+  border-color: var(--waiting);
+  border-width: 2px;
+  padding: 3px 5px 3px;
+  position: relative;
+  z-index: 1;
+}
+
+.map-cell.selected {
+  outline: 2px solid var(--accent-border);
+  outline-offset: 1px;
+  position: relative;
+  z-index: 2;
+}
+
+.map-cell:focus-visible,
+.map-item:focus-visible {
+  outline: 2px solid var(--accent-border);
+  outline-offset: 1px;
+}
+
+.map-cell-label {
+  font-size: 11.5px;
+  line-height: 1.25;
+  min-height: 2.5em;
+  color: var(--secondary);
+}
+
+.map-cell.lit .map-cell-label {
+  color: var(--waiting);
+}
+
+.map-cell-count {
+  font-size: 20px;
+  font-weight: 650;
+  line-height: 1.2;
+}
+
+.map-cell-wait {
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.map-items {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 12px 10px;
+}
+
+.map-items-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.map-items h3,
+.map-moves h3 {
+  margin: 0;
+  font-size: 13px;
+}
+
+.map-items ul,
+.map-moves ul {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.map-item {
+  font: inherit;
+  color: var(--text);
+  width: 100%;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  text-align: left;
+  background: var(--background);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 5px 10px;
+  cursor: pointer;
+}
+
+.map-item.lit {
+  border-color: var(--waiting);
+}
+
+.map-item-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.map-item-since,
+.map-item-where {
+  color: var(--secondary);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.map-item:hover .map-item-where {
+  color: var(--accent-text);
+}
+
+.map-moves li {
+  font-size: 12.5px;
+}
+
+.map-move-label {
+  font-weight: 560;
+}

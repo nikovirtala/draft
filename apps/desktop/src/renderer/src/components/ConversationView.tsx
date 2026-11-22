@@ -4,6 +4,7 @@ import { agentLabel } from "./AgentState.tsx";
 import { Composer } from "./Composer.tsx";
 import { ConclusionCard, EndedNote } from "./Conclusion.tsx";
 import { InterruptBlock } from "./InterruptBlock.tsx";
+import { MapStub } from "./MapBlock.tsx";
 import { MessageView, StreamingMessage } from "./MessageView.tsx";
 import { NoteBlock } from "./NoteBlock.tsx";
 import { NoticeBlock } from "./NoticeBlock.tsx";
@@ -56,6 +57,8 @@ export function ConversationView({ conversation }: { conversation: string }) {
               ) : null;
             if (b.kind === "notice") return <NoticeBlock key={b.id} block={b} />;
             if (b.kind === "note") return <NoteBlock key={b.id} block={b} />;
+            if (b.kind === "map")
+              return <MapStub key={`${b.id}#map`} message={b.id} conversation={conversation} />;
             const m = state.messages.find((x) => x.address === b.address);
             return m === undefined ? null : (
               <MessageView

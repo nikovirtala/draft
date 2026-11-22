@@ -15,7 +15,9 @@ import type {
   Boot,
   ContextView,
   ConversationState,
+  MapSelection,
   Move,
+  OpenTarget,
   Stub,
   Thread,
   View,
@@ -66,6 +68,13 @@ export interface Workspace {
   leaveFocus: () => void;
   branch: (parentMessage: string, agent?: string) => void;
   threadOf: (conversation: string) => Thread | undefined;
+  /** Names the log as the main process last announced it; a map asks again when it changes. */
+  mapHead: string;
+  /** The cell a map block has open on this device. */
+  mapCell: (block: string) => MapSelection | null;
+  selectMapCell: (block: string, cell: MapSelection | null) => void;
+  /** Goes to where an item of the map lives: its thread or its stub. */
+  open: (target: OpenTarget) => Promise<void>;
 }
 
 const Ctx = createContext<Workspace | null>(null);
@@ -83,6 +92,7 @@ export function WorkspaceProvider({ boot, children }: { boot: Ready; children: R
   const [attention, setAttention] = useState(boot.attention);
   const [view, setView] = useState(boot.view);
   const [selection, setSelection] = useState<Selection>({ block: null, conversation: boot.main });
+  const [mapHead, setMapHead] = useState("");
   const pending = useRef(new Map<string, BlockRegistration>());
   const flush = useRef<ReturnType<typeof setTimeout> | null>(null);
   const viewRef = useRef(view);
@@ -115,6 +125,9 @@ export function WorkspaceProvider({ boot, children }: { boot: Ready; children: R
             break;
           case "view":
             setView(c.view);
+            break;
+          case "map":
+            setMapHead(c.head);
             break;
         }
       }),
@@ -151,7 +164,51 @@ export function WorkspaceProvider({ boot, children }: { boot: Ready; children: R
           : { conversation: selection.conversation };
       void window.draft.focus(target);
     };
+    const open = async (target: OpenTarget): Promise<void> => {
+      let info: BlockRegistration["info"];
+      if (target.kind === "stub") {
+        const address = `${target.from}#${target.target}`;
+        info = {
+          address,
+          kind: "status",
+          home: target.conversation,
+          depth: depths.get(target.conversation) ?? 0,
+          opens: null,
+          title: target.target.split(":").slice(1).join(":"),
+        };
+      } else {
+        const thread = threads.find((t) => t.conversation === target.conversation);
+        if (thread === undefined) {
+          // The main conversation: bring it to the front, at the block if it has one.
+          setSelection({ block: null, conversation: target.conversation });
+          if (target.anchor !== null) scrollToAnchor(target.anchor);
+          return;
+        }
+        info = {
+          address: thread.conversation,
+          kind: "thread",
+          home: thread.parentConversation,
+          depth: depths.get(thread.parentConversation) ?? 0,
+          opens: thread.conversation,
+          title: thread.title,
+        };
+      }
+      const known = view.layout.blocks[info.address];
+      // A block that was never on screen on this device is made first, where it was made.
+      if (known === undefined) await window.draft.ensureBlocks([{ info, initial: "minimized" }]);
+      if (known?.placement === "panel" || known?.placement === "window") return;
+      // Inside a thread the panel is the thread's: such a block opens in a window.
+      const depth = known?.info.depth ?? info.depth;
+      await window.draft.move({
+        type: depth === 0 ? "open-in-panel" : "pop-out",
+        block: info.address,
+      });
+    };
     return {
+      mapHead,
+      mapCell: (block) => view.cells[block] ?? null,
+      selectMapCell: (block, cell) => void window.draft.selectMapCell(block, cell),
+      open,
       context: boot.context,
       main: boot.main,
       states,
@@ -175,11 +232,24 @@ export function WorkspaceProvider({ boot, children }: { boot: Ready; children: R
       branch: (parentMessage, agent) => void window.draft.branch(parentMessage, agent),
       threadOf: (conversation) => threads.find((t) => t.conversation === conversation),
     };
-  }, [boot, states, threads, attention, view, selection, focus, register]);
+  }, [boot, states, threads, attention, view, selection, focus, register, mapHead]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 
 export function panelEntry(w: Pick<Workspace, "view">): Entry | null {
   return panelBlock(w.view.layout);
+}
+
+/** Scrolls the conversation to the block of an interrupt or step, when it is on screen. */
+function scrollToAnchor(anchor: string): void {
+  for (const key of [anchor, `failed:${anchor}`]) {
+    const el = [...document.querySelectorAll<HTMLElement>("[data-key]")].find(
+      (e) => e.dataset.key === key,
+    );
+    if (el !== undefined) {
+      el.scrollIntoView({ block: "center" });
+      return;
+    }
+  }
 }

@@ -2,7 +2,23 @@
  * The bridge between the renderer and the main process. The renderer only ever sees view state:
  * no API key, no token and no file system access crosses it.
  */
+import type { MapItem, MapSnapshot, OpenTarget } from "@nikovirtala/draft-core/map-types";
 import type { BlockInfo, Focus, FocusTarget, Layout, Move, Refusal } from "./placement.ts";
+
+export type { MapItem, MapSnapshot, OpenTarget };
+
+/** What a window asks the map for: transitions since a time, and how states are grouped. */
+export interface MapRequest {
+  /** Transitions at or after this time (ISO). */
+  since?: string;
+  grouping?: "state" | "class";
+}
+
+/** The cell a map has open on this device: a kind's row and one of its columns. */
+export interface MapSelection {
+  kind: string;
+  column: string;
+}
 
 /** What an agent's process was not given of the person's environment: names only, never values. */
 export interface AgentEnvironment {
@@ -94,7 +110,9 @@ export type Block =
       bytes: number;
       at: string;
     }
-  | { kind: "note"; id: string; what: string; text: string; at: string };
+  | { kind: "note"; id: string; what: string; text: string; at: string }
+  /** The map, asked for by the message with this address. */
+  | { kind: "map"; id: string; at: string };
 
 /** Why something needs a person, in the order of the attention order's ranks. */
 export type InterruptCause =
@@ -203,13 +221,17 @@ export interface View {
   layout: Layout;
   /** Messages of each thread already shown on this device. */
   seen: Record<string, number>;
+  /** The cell each map block has open on this device, by block address. */
+  cells: Record<string, MapSelection>;
 }
 
 export type Change =
   | { type: "state"; state: ConversationState }
   | { type: "delta"; conversation: string; address: string; text: string }
   | { type: "threads"; threads: Thread[]; attention: Attention[] }
-  | { type: "view"; view: View };
+  | { type: "view"; view: View }
+  /** The log moved: a map on screen asks again. */
+  | { type: "map"; head: string };
 
 /** The context a window shows, as far as the window needs to say so. */
 export interface ContextView {
@@ -336,6 +358,10 @@ export interface DraftBridge {
   followReference(conversation: string, address: string): Promise<void>;
   /** Lets the agent of this conversation read a reference's snapshot, and records the crossing. */
   pullReference(conversation: string, address: string): Promise<void>;
+  /** The map of this window's context, folded from its log now. */
+  map(request?: MapRequest): Promise<MapSnapshot>;
+  /** Remembers which cell of a map block is open on this device, or closes it with `null`. */
+  selectMapCell(block: string, cell: MapSelection | null): Promise<void>;
   onChange(cb: (c: Change) => void): () => void;
 }
 
@@ -365,5 +391,7 @@ export const CHANNELS = {
   answerProposal: "draft:answer-proposal",
   followReference: "draft:follow-reference",
   pullReference: "draft:pull-reference",
+  map: "draft:map",
+  selectMapCell: "draft:select-map-cell",
   change: "draft:change",
 } as const;

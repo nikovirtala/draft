@@ -1,4 +1,4 @@
-import type { BlockRegistration, MoveOutcome, View } from "../shared/ipc.ts";
+import type { BlockRegistration, MapSelection, MoveOutcome, View } from "../shared/ipc.ts";
 import {
   type BlockInfo,
   enterFocus,
@@ -20,6 +20,7 @@ import type { ViewStateStore } from "./view-state.ts";
 export class LayoutService {
   private layout: Layout;
   private seenMessages: Record<string, number>;
+  private cells: Record<string, MapSelection>;
   private readonly legacy: Record<string, "inline" | "minimized">;
   private readonly listeners = new Set<(v: View) => void>();
 
@@ -29,11 +30,12 @@ export class LayoutService {
   ) {
     this.layout = store.layout();
     this.seenMessages = store.seen();
+    this.cells = store.mapCells();
     this.legacy = store.legacyPlacements();
   }
 
   view(): View {
-    return { layout: this.layout, seen: this.seenMessages };
+    return { layout: this.layout, seen: this.seenMessages, cells: this.cells };
   }
 
   onChange(cb: (v: View) => void): () => void {
@@ -107,6 +109,15 @@ export class LayoutService {
     );
     this.commit(r.layout, r.changes);
     if (r.layout.focus !== null) this.focus({ block: info.address });
+  }
+
+  /** Opens a cell of a map block on this device, or closes it. View state: never the log. */
+  selectCell(block: string, cell: MapSelection | null): void {
+    if (this.layout.blocks[block] === undefined) return;
+    this.store.setMapCell(block, cell);
+    const { [block]: _gone, ...rest } = this.cells;
+    this.cells = cell === null ? rest : { ...rest, [block]: cell };
+    this.emit();
   }
 
   /** What each thread has shown on this device: the ones in the panel or a window are read. */

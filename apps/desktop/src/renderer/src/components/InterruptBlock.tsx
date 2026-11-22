@@ -117,6 +117,7 @@ export function InterruptBlock({
       <section
         className={`interrupt closed ${block.state}`}
         data-testid="interrupt"
+        data-key={block.id}
         data-cause={block.cause}
         data-state={block.state}
         aria-label={`${label}, ${block.state}`}
@@ -136,6 +137,7 @@ export function InterruptBlock({
     <section
       className="interrupt"
       data-testid="interrupt"
+      data-key={block.id}
       data-cause={block.cause}
       data-state="open"
       aria-label={label}

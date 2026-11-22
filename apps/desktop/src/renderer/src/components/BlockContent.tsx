@@ -1,6 +1,7 @@
 import type { Entry } from "../../../shared/placement.ts";
 import { useWorkspace, type Workspace } from "../workspace.tsx";
 import { BlockControls } from "./Icons.tsx";
+import { MapBlockFull } from "./MapBlock.tsx";
 import { StatusBlock, type StatusProps } from "./StatusStub.tsx";
 import { ThreadView } from "./ThreadView.tsx";
 
@@ -32,6 +33,8 @@ export function BlockContent({ entry }: { entry: Entry }) {
   switch (entry.info.kind) {
     case "thread":
       return <ThreadView entry={entry} />;
+    case "map":
+      return <MapBlockFull entry={entry} />;
     case "status": {
       const p = statusProps(ws, entry);
       if (p !== null) return <StatusBlock entry={entry} p={p} />;
