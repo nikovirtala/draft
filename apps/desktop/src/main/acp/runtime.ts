@@ -16,6 +16,7 @@ import {
   renderAgentContext,
 } from "@nikovirtala/draft-core";
 import { type AgentSpec, missingRequirement } from "./agents.ts";
+import { type CallPolicy, callPolicy } from "./call-policy.ts";
 import { DraftToolServer } from "./draft-server.ts";
 import { DraftSession } from "./draft-session.ts";
 import { agentEnvironment, ensureAgentEnvironmentFiles } from "./environment.ts";
@@ -80,6 +81,11 @@ export interface AcpRuntimeOptions {
    * redacted. For diagnosing an agent; off unless set.
    */
   transcript?: string;
+  /**
+   * How long a request for one of draft's tools is held while the person decides (call-policy.ts).
+   * Set by tests; otherwise it comes from the agent's kind.
+   */
+  callPolicy?: CallPolicy;
 }
 
 interface Session {
@@ -92,6 +98,8 @@ interface Session {
   tools: readonly DraftTool[];
   /** Ends the session's bearer token on draft's MCP server. */
   release: () => void;
+  /** Ends the calls a turn left pending, so a late answer is not acted on. */
+  endTurn: (turn: TurnMapper) => void;
 }
 
 interface Connection {
@@ -239,6 +247,7 @@ export class AcpRuntime implements AgentRuntime {
     session.turn = mapper;
     const cancel = () => {
       mapper.cancelled = true;
+      session.endTurn(mapper);
       void conn.agent.notify(acp.methods.agent.session.cancel, { sessionId: session.id });
     };
     if (input.signal?.aborted) cancel();
@@ -280,6 +289,7 @@ export class AcpRuntime implements AgentRuntime {
     } finally {
       input.signal?.removeEventListener("abort", cancel);
       session.turn = null;
+      session.endTurn(mapper);
     }
   }
 
@@ -479,18 +489,19 @@ export class AcpRuntime implements AgentRuntime {
     });
     const handle: { session: Session | null } = { session: null };
     let draft: { token: string; release(): void } | null = null;
+    let draftSession: DraftSession | null = null;
     const mcpServers = this.mcpServers(conn.init, token);
     if (tools.length > 0 && folder !== null) {
       const url = await this.draftServer.url();
-      draft = this.draftServer.register(
-        new DraftSession({
-          id: `${++this.sessionCount}`,
-          tools,
-          ctx: { folder },
-          env: agentEnvironment(spec, this.o.env, this.o.dataDir).env,
-          turn: () => handle.session?.turn ?? null,
-        }),
-      );
+      draftSession = new DraftSession({
+        id: `${++this.sessionCount}`,
+        tools,
+        ctx: { folder },
+        env: agentEnvironment(spec, this.o.env, this.o.dataDir).env,
+        turn: () => handle.session?.turn ?? null,
+        policy: this.o.callPolicy ?? callPolicy(spec.kind),
+      });
+      draft = this.draftServer.register(draftSession);
       mcpServers.push({
         type: "http",
         name: DRAFT_SERVER,
@@ -518,6 +529,7 @@ export class AcpRuntime implements AgentRuntime {
       turn: null,
       tools,
       release,
+      endTurn: (turn) => draftSession?.turnEnded(turn),
     };
     handle.session = session;
     try {

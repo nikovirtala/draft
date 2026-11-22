@@ -34,6 +34,17 @@ type Step =
        * that retries would. The results of all are recorded as "repeat" events.
        */
       repeat?: number;
+      /**
+       * The agent's MCP client gives up on the call after this many milliseconds (the SDK's
+       * request timeout, which also sends `notifications/cancelled`), as Kiro's does after 120 s.
+       */
+      timeoutMs?: number;
+      /**
+       * Calls the tool again with the same arguments, up to this many times, when the answer says
+       * to call again or the client timed out: what a model does with such an answer. Every
+       * attempt is recorded as an "attempt" event.
+       */
+      callAgain?: number;
     }
   | {
       /** A call that runs without asking, whatever the tool: the misbehaviour draft must catch. */
@@ -468,11 +479,52 @@ const agentApp = acp
           }
         }
         const client2 = await mcp(s, server);
+        const attempt = async () => {
+          for (let n = 1; ; n++) {
+            try {
+              const r = (await client2.callTool(
+                { name: tool, arguments: input },
+                undefined,
+                "timeoutMs" in step && step.timeoutMs !== undefined
+                  ? { timeout: step.timeoutMs }
+                  : undefined,
+              )) as { content?: { type: string; text?: string }[]; isError?: boolean };
+              const said = (r.content ?? []).map((c) => c.text ?? "").join("\n");
+              record({
+                event: "attempt",
+                tool,
+                attempt: n,
+                text: said,
+                isError: r.isError === true,
+                atMs: Math.round(performance.now()),
+              });
+              if (
+                "callAgain" in step &&
+                n <= (step.callAgain ?? 0) &&
+                /again with exactly the same arguments/.test(said)
+              )
+                continue;
+              return r;
+            } catch (err) {
+              const message = err instanceof Error ? err.message : String(err);
+              record({
+                event: "attempt",
+                tool,
+                attempt: n,
+                error: message,
+                atMs: Math.round(performance.now()),
+              });
+              if ("callAgain" in step && n <= (step.callAgain ?? 0) && /timed out/i.test(message))
+                continue;
+              throw err;
+            }
+          }
+        };
         const result = (await ("repeat" in step && step.repeat !== undefined
           ? Promise.resolve({
               content: [{ type: "text", text: "(repeated with one id; see the repeat events)" }],
             })
-          : client2.callTool({ name: tool, arguments: input }))) as {
+          : attempt())) as {
           content?: { type: string; text?: string }[];
           isError?: boolean;
         };

@@ -13,6 +13,7 @@ import {
 } from "@nikovirtala/draft-core";
 import { FakeKiroRemote } from "@nikovirtala/draft-core/testing";
 import type { AgentKind, AgentSpec } from "../src/main/acp/agents.ts";
+import type { CallPolicy } from "../src/main/acp/call-policy.ts";
 import { AcpRuntime } from "../src/main/acp/runtime.ts";
 
 export const RUNNING = "01KAHX7Z1M2N3P4Q5R6S7T8V9W";
@@ -119,6 +120,8 @@ export async function openAcp(
     token?: () => Promise<string | null>;
     /** The folder the person trusted for the context; draft's file and shell tools work in it. */
     folder?: string;
+    /** How long draft holds a request for its tools while the person decides. */
+    callPolicy?: CallPolicy;
   } = {},
 ): Promise<Opened> {
   const dir = o.dir ?? mkdtempSync(join(tmpdir(), "draft-acp-"));
@@ -130,6 +133,7 @@ export async function openAcp(
     spec,
     cwd: o.folder ?? join(dir, "agent-workspace"),
     ...(o.folder === undefined ? {} : { folder: () => o.folder as string }),
+    ...(o.callPolicy === undefined ? {} : { callPolicy: o.callPolicy }),
     env: o.env ?? { PATH: process.env.PATH ?? "" },
     dataDir: dir,
     clientInfo: { name: "draft", version: "0.0.0-test" },

@@ -424,6 +424,9 @@ export function offeredTools(o: {
   return o.builtinsRemoved && o.http && o.folder !== null ? DRAFT_TOOLS : [];
 }
 
+const STILL_DECIDING_BRIEFING =
+  "A call that asks the user may come back saying the user hasn't answered yet. Then call the same tool again with exactly the same arguments: draft asks the user once, runs the call once, and the repeated call returns its result. That answer is not a failure, so don't change the call or give up on it.";
+
 /**
  * What the agent is told about its tools besides Kiro Remote's. Derived from the tools the session
  * offers: none, or draft's file and shell tools. A built-in call that changes something and runs
@@ -438,7 +441,7 @@ export function toolsBriefing(tools: readonly DraftTool[]): string {
   const changes = tools.filter((t) => t.access !== "read").map((t) => t.name);
   return `- Besides those you have draft's own tools for the project folder, served by the MCP server "${DRAFT_SERVER}", and no others: ${tools.map((t) => t.name).join(", ")}. They reach only the project folder.
 - ${reads.join(", ")} read, run at once and are logged. ${changes.join(", ")} ask the user first and run only if the user says yes; draft records each as a step with its result. run_command runs without asking only for these read-only commands: ${readOnlyCommandSummary()}. Every other command asks.
-- Commands run without the user's GitHub, git, SSH, AWS or npm sign-ins, so \`git push\` and \`gh\` fail. Writes under ${PROTECTED_DIRECTORIES.join(", ")} are refused.
+${changes.length === 0 ? "" : `- ${STILL_DECIDING_BRIEFING}\n`}- Commands run without the user's GitHub, git, SSH, AWS or npm sign-ins, so \`git push\` and \`gh\` fail. Writes under ${PROTECTED_DIRECTORIES.join(", ")} are refused.
 - ${unasked}`;
 }
 
