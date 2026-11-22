@@ -1,0 +1,16 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M82MX9C1DNBES97ENY27080H
+subject: wkk1pace
+type: linked
+at: 2026-11-22T22:09:29Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: 244629292+kiro-agent@users.noreply.github.com
+data:
+  to: adr:n9gtf7y3
+  rel: implements
