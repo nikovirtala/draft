@@ -22,7 +22,9 @@ export type OpenTarget =
   /** A conversation (the main one or a thread), optionally at one of its blocks. */
   | { kind: "conversation"; conversation: string; anchor: string | null }
   /** A live status stub: the message that first mentioned it, and the conversation that is in. */
-  | { kind: "stub"; target: string; from: string; conversation: string };
+  | { kind: "stub"; target: string; from: string; conversation: string }
+  /** Something that lives outside draft: its pages, such as a decision's files or a deployment's run. */
+  | { kind: "links"; links: { label: string; url: string }[] };
 
 /** The state an item entered, and when. The last entry of a path is the item's state. */
 export interface PathEntry {
@@ -57,6 +59,8 @@ export interface MapItem {
   column: string;
   /** When it entered this state. */
   since: string;
+  /** What the cell counts it under besides its state, such as how an issue was closed. */
+  note: string | null;
   open: OpenTarget;
 }
 
@@ -65,6 +69,8 @@ export interface MapCell {
   count: number;
   /** How many of its items wait on the person. */
   waitingOnPerson: number;
+  /** The notes of its items, counted, most common first. */
+  notes: { note: string; count: number }[];
   items: MapItem[];
 }
 
@@ -77,6 +83,8 @@ export interface MapRow {
   cells: MapCell[];
   total: number;
   waitingOnPerson: number;
+  /** Why these counts may not be current: what could not be read last time. Null when they are. */
+  stale: string | null;
 }
 
 export interface MapTransition {
