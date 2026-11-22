@@ -1,0 +1,21 @@
+envelope: ledger/v1
+kind: decision
+schema: decision/v1
+id: 01M82MHPDYD7QHN25VFSSM216V
+subject: 8rhwhgbw
+type: scoped
+at: 2026-11-22T22:03:10Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: niko.virtala@hey.com
+data:
+  set:
+    - apps/desktop/src/main/acp/call-policy.ts
+    - apps/desktop/src/main/acp/draft-server.ts
+    - apps/desktop/src/main/acp/draft-session.ts
+    - apps/desktop/src/main/acp/runtime.ts
+    - apps/desktop/src/main/acp/turn.ts
+    - packages/core/src/agent-tools.ts
