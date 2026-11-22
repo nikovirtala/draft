@@ -1,0 +1,15 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M826Q5YPRS41KCMS18641HW5
+subject: xh46a2ks
+type: commented
+at: 2026-11-22T18:01:29Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: nikovirtala@users.noreply.github.com
+data:
+  text: "Done in the branch feat/agent-without-person-credentials (ADR zan5vjwz, proposed): agentEnvironment(spec, person's env, data dir) is one pure, unit-tested function that returns the agent's environment and a names-only report. It withholds GitHub, git, SSH, AWS and npm credentials and draft's own settings, and sets overrides: a token GitHub refuses plus an empty GH_CONFIG_DIR (an empty folder alone is not enough, gh falls back to the keychain entry stored without a user name), git with no system config, an agent-only global file, an empty credential.helper above the repository's own config, and no prompts, git over ssh and an ssh stand-in on PATH with no key, agent or config, empty AWS files, and an empty npmrc. HOME is unchanged, so Kiro's sign-in (a sqlite file under HOME) is found as before. agents.<name>.passEnv is the exception, and the status says when it is used. The agent status shows the withheld line with names on demand, and agent.session_started carries the report. A fake ACP agent proves gh, git, aws, npm and ssh find nothing inside it while the outer process still sees seeded values. Sandbox finding: Kiro's local command sandbox is switched on only through sandbox.json (global, under KIRO_HOME or ~/.kiro, or per project) or /sandbox; the ACP docs list no session option (_meta.kiro takes modeId, modelId, effortLevel), so there is no per-session way without writing the person's Kiro files, and it is not turned on. Left: (1) Niko checks on his Mac, in a real turn: gh auth status, git ls-remote over HTTPS against a private repository, aws sts get-caller-identity and ssh -T git@github.com all fail from the agent, acceptance still merges as him, and Kiro still answers (kiro-cli's sign-in under this environment is unverified on a real Mac). (2) Accept ADR zan5vjwz. (3) The sandbox for the agent's shell, once Kiro has a per-session switch or a decision to run the agent as another user. The end-to-end tests could not run in the build sandbox (Electron lacks libgtk-3)."
