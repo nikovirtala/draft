@@ -1,0 +1,15 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M82JW8CRW8325D2DG3GS3EZC
+subject: f7m75eh3
+type: commented
+at: 2026-11-22T21:33:59Z
+actor:
+  kind: agent
+  name: claude
+  email: null
+  agent: claude
+  on_behalf_of: niko.virtala@hey.com
+data:
+  text: "Checked with kiro-remote's pipeline status: the drill's failure (fd81077, 16:39) was followed by a successful deploy of its revert (48e7f4c, 16:48). So the rule 'a later success in the same environment resolves a failure' is the whole fix; the companion change in ark (an unfreeze marking the failure handled) was dropped, and the map needs no mark to read."
