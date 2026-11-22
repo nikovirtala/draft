@@ -43,6 +43,9 @@ export function parsePullRequestId(
 
 /** Check conclusions that need someone: the check failed or is waiting on a person. */
 const FAILED = new Set(["failure", "timed_out", "startup_failure", "action_required"]);
+/** Whether a completed check's conclusion is one that needs someone. */
+export const isFailedConclusion = (conclusion: string | null): boolean =>
+  conclusion !== null && FAILED.has(conclusion);
 const PASSED = new Set(["success", "neutral", "skipped"]);
 
 export interface PullRequestCheck {

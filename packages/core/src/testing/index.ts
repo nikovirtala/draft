@@ -23,6 +23,20 @@ export {
   type ReceivedCall,
   type ToolListEntry,
 } from "./fake-kiro-remote.ts";
+export {
+  appendMapFixture,
+  at as mapFixtureTime,
+  MAP_CONTEXT,
+  MAP_MAIN,
+  MAP_PR_FAILING,
+  MAP_PR_MERGED,
+  MAP_PR_READY,
+  MAP_SESSION,
+  MAP_THREAD_CONCLUDING,
+  MAP_THREAD_OPEN,
+  MAP_THREAD_WITHDRAWN,
+  pullRequestState,
+} from "./map-fixture.ts";
 export { appendRawLines, sealRawRecord } from "./raw.ts";
 
 /** The fake `gh` program: start it with `node <path> api …`, GH_FAKE_URL naming a fake GitHub. */
