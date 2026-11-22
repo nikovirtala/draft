@@ -15,9 +15,10 @@ Tools come from `mise.toml` (Node 26, pnpm). Install [Kiro CLI](https://kiro.dev
 
 ```sh
 pnpm install
-pnpm build
 DRAFT_KIRO_REMOTE_URL=https://<kiro-remote-host> pnpm --filter @nikovirtala/draft-desktop dev
 ```
+
+`dev` compiles as it starts and reads `draft-core` from its source, so nothing needs building first; `pnpm check` and the end-to-end tests build. To open a project, pass its absolute path after `--`: `pnpm --filter @nikovirtala/draft-desktop dev -- "$HOME/src/my-project"`.
 
 For Claude instead, install the adapter (`npm install -g @agentclientprotocol/claude-agent-acp`), set `"agent": "claude"` in `config.json` (or `DRAFT_AGENT=claude`), and start draft with `ANTHROPIC_API_KEY` set. draft stores no agent credential: Kiro keeps its own sign-in, and the key is read from the environment draft starts from and passed only to the Claude adapter.
 
