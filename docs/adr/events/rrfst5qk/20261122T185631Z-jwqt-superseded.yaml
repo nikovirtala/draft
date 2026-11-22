@@ -1,0 +1,15 @@
+envelope: ledger/v1
+kind: decision
+schema: decision/v1
+id: 01M829VY6EBBNSC3YGXW0HJWQT
+subject: rrfst5qk
+type: superseded
+at: 2026-11-22T18:56:31Z
+actor:
+  kind: human
+  name: Niko Virtala
+  email: niko.virtala@hey.com
+  agent: null
+  on_behalf_of: null
+data:
+  by: bavp4nfa
