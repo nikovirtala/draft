@@ -51,6 +51,7 @@ import {
   toolPermission,
 } from "./kiro.ts";
 import type { LogStore } from "./log.ts";
+import { isMapRequest } from "./map.ts";
 import type { Projection } from "./projection.ts";
 import { type PollerOptions, type Resolver, StubPoller, sameState } from "./resolver.ts";
 import { draftMetrics, failSpan, logEvent, tracer } from "./telemetry.ts";
@@ -148,6 +149,17 @@ export type UiBlock =
       what: "log-recovered";
       sidecar: string;
       bytes: number;
+      at: string;
+    }
+  | {
+      /**
+       * The map, asked for by a sentence ("show the map"). It is derived from that message, so it
+       * stays where it was asked after a restart; its content is the map's own projection, and
+       * where it is placed is view state of the device.
+       */
+      kind: "map";
+      /** The message that asked for it. */
+      id: string;
       at: string;
     }
   | {
@@ -492,6 +504,11 @@ export class ConversationService {
     return orderAttention(items);
   }
 
+  /** The steps this conversation is running now, by their `step.started` address. */
+  runningSteps(): string[] {
+    return [...[...this.stepsInFlight.values()].map((s) => s.started), ...this.userSteps];
+  }
+
   /** This conversation's own thread state, or null for the main conversation. */
   private threadFold(): ThreadFold | null {
     return this.isThread() ? this.projection.thread(this.conversation) : null;
@@ -687,11 +704,16 @@ export class ConversationService {
   }
 
   /** Messages and the blocks between them, in log order. */
-  private timeline(messages: readonly { address: string; seq: number }[]): UiBlock[] {
+  private timeline(
+    messages: readonly { address: string; seq: number; role: string; text: string; at: string }[],
+  ): UiBlock[] {
     const blocks: { seq: number; block: UiBlock }[] = messages.map((m) => ({
       seq: m.seq,
       block: { kind: "message", address: m.address },
     }));
+    for (const m of messages)
+      if (m.role === "user" && isMapRequest(m.text))
+        blocks.push({ seq: m.seq + 0.5, block: { kind: "map", id: m.address, at: m.at } });
     const thread = this.isThread();
     for (const u of this.projection.unknownEvents(this.conversation)) {
       // An event of no known conversation might belong anywhere: the main conversation shows it.
@@ -1493,6 +1515,9 @@ export class ConversationService {
     // only and becomes one action to confirm.
     const intent = options.aside === true ? null : (this.launcher?.recognise(text) ?? null);
     if (intent !== null) return this.propose(text, intent);
+    // A sentence that asks for the map is for draft too: it shows the map, and the agent never
+    // reads it.
+    if (isMapRequest(text)) return this.postPeopleOnly(text);
     const state = this.agentState();
     const addressed = state === "paused" && AGENT_MENTION.test(text);
     const toAgent = options.aside !== true && (state === "active" || addressed);

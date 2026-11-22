@@ -11,6 +11,8 @@ import {
 import type { Actor, EventDraft, Target } from "./events.ts";
 import { newItemId } from "./ids.ts";
 import { type AttentionItem, orderAttention } from "./interrupts.ts";
+import type { MapQuery, MapSnapshot } from "./map.ts";
+import { mapOf } from "./map-kinds.ts";
 import type { FolderDecisionRow } from "./projection.ts";
 import type { ThreadFold, ThreadState } from "./thread.ts";
 
@@ -59,7 +61,9 @@ export interface SwitchPreview {
 
 export type WorkspaceChange =
   | UiChange
-  | { type: "threads"; threads: UiThread[]; attention: AttentionItem[] };
+  | { type: "threads"; threads: UiThread[]; attention: AttentionItem[] }
+  /** The log moved: a map that is on screen asks for the projection again. */
+  | { type: "map"; head: string };
 
 export interface WorkspaceOptions extends ConversationOptions {
   agents?: AgentDirectory;
@@ -80,6 +84,7 @@ export class Workspace {
   private readonly services = new Map<string, ConversationService>();
   private readonly listeners = new Set<(c: WorkspaceChange) => void>();
   private lastThreads = "";
+  private lastMapHead = "";
 
   private constructor(
     private readonly o: WorkspaceOptions & { writer: SerialWriter; agents: AgentDirectory },
@@ -151,12 +156,32 @@ export class Workspace {
 
   private emitThreads(): void {
     if (this.listeners.size === 0) return;
+    this.emitMap();
     const threads = this.threads();
     const attention = this.attention();
     const key = JSON.stringify([threads, attention]);
     if (key === this.lastThreads) return;
     this.lastThreads = key;
     this.emit({ type: "threads", threads, attention });
+  }
+
+  /** Tells the windows that the log has moved since the map was last drawn. */
+  private emitMap(): void {
+    const head = this.o.log.head();
+    if (head === this.lastMapHead) return;
+    this.lastMapHead = head;
+    this.emit({ type: "map", head });
+  }
+
+  /**
+   * The map of this context: every kind's items by state, folded from the log. What runs in this
+   * process, which the log doesn't say, tells a step that is running from one that was lost.
+   */
+  map(query: MapQuery = {}): MapSnapshot {
+    const runningSteps = new Set<string>();
+    for (const s of [this.main, ...this.services.values()])
+      for (const a of s.runningSteps()) runningSteps.add(a);
+    return mapOf(this.o.log.events(), { live: { runningSteps }, ...query });
   }
 
   /** Every conversation's state, the main one first. */
