@@ -1,0 +1,14 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M82M1Q0WB95SYQ09P3PJJSX8
+subject: wkk1pace
+type: started
+at: 2026-11-22T21:54:26Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: 244629292+kiro-agent@users.noreply.github.com
+data: {}
