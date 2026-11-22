@@ -360,6 +360,8 @@ export interface DraftBridge {
   pullReference(conversation: string, address: string): Promise<void>;
   /** The map of this window's context, folded from its log now. */
   map(request?: MapRequest): Promise<MapSnapshot>;
+  /** Says whether this window has a map on screen: the repositories it covers are read while one has. */
+  setMapVisible(on: boolean): void;
   /** Remembers which cell of a map block is open on this device, or closes it with `null`. */
   selectMapCell(block: string, cell: MapSelection | null): Promise<void>;
   onChange(cb: (c: Change) => void): () => void;
@@ -392,6 +394,7 @@ export const CHANNELS = {
   followReference: "draft:follow-reference",
   pullReference: "draft:pull-reference",
   map: "draft:map",
+  mapVisible: "draft:map-visible",
   selectMapCell: "draft:select-map-cell",
   change: "draft:change",
 } as const;

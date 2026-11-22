@@ -38,6 +38,7 @@ const bridge: DraftBridge = {
   pullReference: (conversation, address) =>
     ipcRenderer.invoke(CHANNELS.pullReference, conversation, address),
   map: (request) => ipcRenderer.invoke(CHANNELS.map, request ?? {}),
+  setMapVisible: (on) => ipcRenderer.send(CHANNELS.mapVisible, on),
   selectMapCell: (block, cell) => ipcRenderer.invoke(CHANNELS.selectMapCell, block, cell),
   onChange: (cb) => {
     const listener = (_e: unknown, c: Change) => cb(c);

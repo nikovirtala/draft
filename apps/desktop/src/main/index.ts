@@ -71,6 +71,7 @@ function run(): void {
           config,
           user: s.user,
           resolvers: s.resolvers,
+          github: s.github,
           actions: s.actions,
           acceptance: s.acceptance,
           makeAgent: s.makeAgent,
@@ -208,6 +209,9 @@ function run(): void {
         ...(since === undefined ? {} : { window: { since } }),
         ...(grouping === "class" ? { grouping: BY_CLASS } : {}),
       });
+    });
+    ipcMain.on(CHANNELS.mapVisible, (e, on: unknown) => {
+      if (typeof on === "boolean") runtimeOf(e)?.setMapVisible(e.sender.id, on);
     });
     ipcMain.handle(CHANNELS.selectMapCell, (e, block: unknown, cell: unknown) => {
       const parsed = MapCellSchema.safeParse(cell);

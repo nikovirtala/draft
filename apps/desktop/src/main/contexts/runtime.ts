@@ -3,6 +3,7 @@ import {
   type ContextLauncher,
   type CrossContext,
   FileLogStore,
+  type GithubClient,
   type KiroRemoteTools,
   Projection,
   type Resolver,
@@ -18,7 +19,7 @@ import { LayoutService } from "../layout.ts";
 import { ViewStateStore } from "../view-state.ts";
 import { ActivityLog } from "./activity-log.ts";
 import { type AgentPlace, agentPlace, placeBriefing } from "./agent-place.ts";
-import type { FolderInfo } from "./folder.ts";
+import { type FolderInfo, githubRepoOf, gitRemote } from "./folder.ts";
 import { type ContextRegistry, pathsOf } from "./registry.ts";
 
 /** What every context shares: the device's identity, its Kiro Remote connection and resolvers. */
@@ -28,6 +29,8 @@ export interface RuntimeDeps {
   config: Config;
   user: ReturnType<typeof userActor>;
   resolvers: readonly Resolver[];
+  /** The read-only GitHub client, for the repositories a context's map covers. */
+  github: GithubClient;
   /** Kiro Remote as the person: what answering a permission request and retrying a step call. */
   actions: KiroRemoteTools | null;
   /** What answering an acceptance request runs, as the person. */
@@ -86,6 +89,11 @@ export class ContextRuntime {
       user: deps.user,
       context: entry.logContext,
       contextTitle: entry.title,
+      ark: {
+        github: deps.github,
+        repos: coveredRepos(deps, name),
+        intervalMs: deps.config.mapPollMs,
+      },
       launcher: deps.launcher(name),
       crossContext: deps.crossContext(name),
       ...(deps.actions === null ? {} : { actions: deps.actions }),
@@ -129,6 +137,11 @@ export class ContextRuntime {
     };
   }
 
+  /** A window has a map on screen, or no longer has; the repositories are read while one has. */
+  setMapVisible(windowId: number, on: boolean): void {
+    this.workspace.setMapVisible(String(windowId), on);
+  }
+
   /**
    * Records a person's answer about a folder: in this context's log as the person, and in the
    * registry, which holds the path. A trusted folder is where new agent sessions start.
@@ -152,6 +165,7 @@ export class ContextRuntime {
   }
 
   forgetWindow(windowId: number): void {
+    this.workspace.setMapVisible(String(windowId), false);
     if (this.visible.delete(windowId)) this.workspace.setVisible([...this.visible.values()].flat());
   }
 
@@ -162,6 +176,29 @@ export class ContextRuntime {
     await this.agents.close();
     for (const c of this.closers) c();
   }
+}
+
+/**
+ * The repositories a context's map covers: the ark sources the device is configured with
+ * (`draft:`, `ark:`), and the GitHub repository of the folder a person trusted for the context,
+ * from that folder's git remote. Read at most every few seconds; it changes when a person binds a
+ * folder.
+ */
+function coveredRepos(deps: RuntimeDeps, name: string): () => string[] {
+  let at = 0;
+  let known: string[] = [];
+  return () => {
+    const now = Date.now();
+    if (now - at < 5000) return known;
+    at = now;
+    const folder = deps.registry.get(name)?.folder ?? null;
+    const remote = folder === null ? null : gitRemote(folder);
+    const own = remote === null ? null : githubRepoOf(remote);
+    known = [
+      ...new Set([...Object.values(deps.config.arkSources), ...(own === null ? [] : [own])]),
+    ];
+    return known;
+  };
 }
 
 function currentPlace(deps: RuntimeDeps, name: string): AgentPlace {

@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   FileLogStore,
+  GithubClient,
   knownEvents,
   Projection,
   readLogRecords,
@@ -51,6 +52,7 @@ function depsFor(dataDir: string, registry: ContextRegistry, name: string) {
     config,
     user: USER,
     resolvers: [],
+    github: new GithubClient({ token: null }),
     actions: null,
     makeAgent: (spec, place) =>
       new AcpRuntime({

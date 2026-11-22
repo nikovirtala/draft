@@ -31,6 +31,8 @@ export interface Services {
   user: ReturnType<typeof userActor>;
   actions: (KiroRemoteTools & { close?(): Promise<void> }) | null;
   resolvers: Resolver[];
+  /** The read-only GitHub client: the map reads the repositories a context covers through it. */
+  github: GithubClient;
   /** How an answer to an acceptance request is carried out: the person's own git, gh and adr. */
   acceptance: AcceptanceActions;
   /** How draft reaches GitHub, for the note the main conversation shows; null for nothing to say. */
@@ -110,6 +112,7 @@ export async function createServices(o: {
     user: userActor(identity),
     actions: tools,
     resolvers,
+    github,
     acceptance: personActions(person),
     githubNote: githubNote(githubAuth),
     // One ACP agent process per agent a conversation chose, in each context, started where that
