@@ -32,6 +32,7 @@ describe("a conversation", () => {
       "context.created",
       "conversation.created",
       "message.posted",
+      "agent.turn_started",
       "agent.tool_called",
       "message.posted",
       "reference.made",
@@ -49,11 +50,12 @@ describe("a conversation", () => {
       "message.posted",
     ]);
     expect(turn.filter((e) => e.actor.kind === "agent").map((e) => e.type)).toEqual([
+      "agent.turn_started",
       "agent.tool_called",
       "message.posted",
     ]);
-    expect(turn[2]?.actor).toMatchObject({ kind: "agent", model: "claude-opus-5-5" });
-    expect(turn[1]?.data).toMatchObject({
+    expect(turn[3]?.actor).toMatchObject({ kind: "agent", model: "claude-opus-5-5" });
+    expect(turn[2]?.data).toMatchObject({
       name: "mcp__kiro-remote__kiro_list_sessions",
       decision: "allowed-read-only",
     });

@@ -18,6 +18,7 @@ import {
   type PermissionAnswer,
   singleAgent,
 } from "./agent.ts";
+import { buildAgentNote } from "./agent-changes.ts";
 import { buildAgentContext, contextDigest } from "./agent-context.ts";
 import { CONTEXT_ITEM, type ContextItemSnapshot, contextItemKey } from "./cross-context.ts";
 import {
@@ -1567,6 +1568,30 @@ export class ConversationService {
           exclude: [userAddress],
         });
 
+        // What the agent could not see since its last turn: the person's decisions and what draft
+        // resolved for the stubs referenced. It is written to the log before the agent runs, so
+        // the log's place of this turn is where the next note starts counting from.
+        const note = buildAgentNote(this.projection, this.conversation, { agent: agent.id });
+        await this.append(
+          [
+            {
+              type: "agent.turn_started",
+              address: itemAddress(this.conversation, newItemId(this.newId)),
+              conversation: this.conversation,
+              actor: { kind: "agent", id: agent.id, model: agent.model, version: agent.version },
+              traceId,
+              data: {
+                message: userAddress,
+                agent: agent.id,
+                note: note.text,
+                entries: note.entries,
+                omitted: note.omitted,
+              },
+            },
+          ],
+          "agent.turn_started",
+        );
+
         const agentAddress = itemAddress(this.conversation, newItemId(this.newId));
         span.setAttribute("draft.message.agent", agentAddress);
         this.streaming = { address: agentAddress, text: "" };
@@ -1598,6 +1623,7 @@ export class ConversationService {
             conversation: this.conversation,
             text: wrapUp ? `${text}${WRAP_UP_INSTRUCTION}` : text,
             context,
+            note: note.text,
             signal: abort.signal,
           },
           {

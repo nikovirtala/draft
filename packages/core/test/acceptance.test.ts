@@ -614,3 +614,98 @@ describe("acceptance beside contexts", () => {
     expect([...conversations]).toEqual([a.ws.mainConversation]);
   });
 });
+
+describe("the agent hears what the person decided", () => {
+  const lastNote = (h: Harness) => h.agent.received.at(-1)?.note ?? null;
+
+  it("tells the next prompt after an accept that the pull request was merged, at which commit, by whom", async () => {
+    const h = await harness();
+    await start(h);
+    // The first turn was the agent's own proposal: the stubs it named reached it already.
+    expect(h.agent.received).toHaveLength(1);
+    const adr = h.requests().find((r) => r.kind === "adr") as { id: string };
+    await h.ws.main.settleInterrupt(adr.id, "accepted");
+    const tip = h.fixture.tip(h.fixture.adr.branch);
+    h.github.updatePull(REPO, 7, { checks: GREEN, checksFor: tip, mergeableState: "clean" });
+    await h.poll();
+    const pr = h.requests().find((r) => r.kind === "pull-request") as { id: string };
+    await h.ws.main.settleInterrupt(pr.id, "accepted");
+
+    await h.ws.main.submit("is it still open?");
+    const note = lastNote(h) ?? "";
+    expect(note).toContain("draft's record, not the person's words");
+    expect(note).toContain("Test User accepted ADR");
+    expect(note).toContain("Test User accepted pull request");
+    expect(note).toContain(`[pull-request:${h.prTarget.id}]`);
+    expect(note).toContain(`commit ${tip.slice(0, 7)}`);
+    expect(note).toContain(`merged ${REPO}#7 by rebase, now ${tip.slice(0, 7)}`);
+    // And what draft resolved: the pull request is merged now.
+    expect(note).toMatch(/pull request nikovirtala\/draft#7 .*: merged;/);
+
+    // The turn's event records exactly what the agent was told.
+    const turns = h.events().filter((e) => e.type === "agent.turn_started");
+    expect(turns.at(-1)?.data).toMatchObject({ note, agent: "fake", omitted: 0 });
+    expect(turns.at(-1)?.data.entries).toBeGreaterThanOrEqual(3);
+
+    // Told once: the next turn carries nothing new.
+    await h.ws.main.submit("thanks");
+    expect(lastNote(h)).toBeNull();
+    expect(
+      h
+        .events()
+        .filter((e) => e.type === "agent.turn_started")
+        .at(-1)?.data.note,
+    ).toBeNull();
+  });
+
+  it("tells the next prompt after a rejection the reason, and that the pull request is closed", async () => {
+    const h = await harness();
+    await start(h);
+    const pr = h.requests().find((r) => r.kind === "pull-request") as { id: string };
+    await h.ws.main.settleInterrupt(pr.id, "rejected", { reason: "Superseded by #9." });
+    await h.ws.main.submit("what now?");
+    const note = lastNote(h) ?? "";
+    expect(note).toContain("Test User rejected pull request");
+    expect(note).toContain("Their reason: “Superseded by #9.”");
+    expect(note).toMatch(/pull request nikovirtala\/draft#7 .*: closed;/);
+  });
+
+  it("tells the prompt that follows a request for changes the note, once", async () => {
+    const h = await harness();
+    await start(h);
+    const adr = h.requests().find((r) => r.kind === "adr") as { id: string };
+    await h.ws.main.settleInterrupt(adr.id, "changes-requested", {
+      note: "Name the alternatives you rejected.",
+    });
+    // The turn the request started is the next one.
+    const note = lastNote(h) ?? "";
+    expect(note).toContain("Test User requested changes on ADR");
+    expect(note).toContain("Their note: “Name the alternatives you rejected.”");
+    await h.ws.main.submit("done?");
+    expect(lastNote(h)).toBeNull();
+  });
+
+  it("gives a referenced pull request's resolved state to the next prompt, and what resolves mid-turn to the one after", async () => {
+    const h = await harness();
+    await start(h);
+    // The agent named the pull request in its answer, so the person's next question carries it.
+    h.github.updatePull(REPO, 7, { checks: [{ name: "ci", status: "in_progress" }] });
+    await h.poll();
+    await h.ws.main.submit(`what do the checks of ${REPO}#7 say?`);
+    const first = lastNote(h) ?? "";
+    expect(first).toContain("pull request nikovirtala/draft#7");
+    expect(first).toContain("1 still running (ci)");
+    expect(first).toContain("mergeable:");
+    expect(first).toContain("review: none");
+
+    // The check passes between turns: the next prompt says so, without the agent running anything.
+    h.github.updatePull(REPO, 7, { checks: GREEN });
+    await h.poll();
+    await h.ws.main.submit("how are the checks now?");
+    const second = lastNote(h) ?? "";
+    expect(second).toContain("checks: 1 of 1 passed");
+    expect(second).not.toContain("still running");
+    await h.ws.main.submit("and now?");
+    expect(lastNote(h)).toBeNull();
+  });
+});

@@ -182,7 +182,13 @@ export class AcpRuntime implements AgentRuntime {
       try {
         response = await conn.agent.request(acp.methods.agent.session.prompt, {
           sessionId: session.id,
-          prompt: [...preamble, { type: "text", text: input.text }],
+          // The note of what changed since this agent's last turn goes before the person's text,
+          // on every turn: a session that lives across turns never saw it.
+          prompt: [
+            ...preamble,
+            ...(input.note == null ? [] : [{ type: "text" as const, text: input.note }]),
+            { type: "text", text: input.text },
+          ],
         });
       } catch (err) {
         // Whatever the agent kept of a failed turn, the next one starts a new session from the log.
