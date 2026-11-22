@@ -1,0 +1,14 @@
+// Markdown lint for the docs and READMEs. Lines are not wrapped (one paragraph, one line), and
+// AGENTS.md starts with prose. The ADR and issue records are written by adr and issues and checked
+// by their own verify; the skills are installed by those tools.
+{
+  "config": { "default": true, "MD013": false, "MD041": false },
+  "globs": ["**/*.md"],
+  "ignores": [
+    "**/node_modules/**",
+    "docs/adr/**",
+    "docs/issues/**",
+    ".claude/skills/**",
+    ".kiro/skills/**"
+  ]
+}

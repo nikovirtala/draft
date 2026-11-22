@@ -14,8 +14,38 @@ concurrency:
 
 # CI checks the tip of each push, never every commit. Node is the major pinned in mise.toml;
 # pnpm comes from "packageManager" in package.json.
+#
+# A change that touches only docs/, Markdown files or the license skips typecheck, test, build and
+# e2e: lint still runs (Biome, Markdown, commit messages, adr verify, issues verify), and `check`
+# passes when the skipped jobs were skipped for that reason.
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.diff.outputs.code }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - id: diff
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          # No base to compare with (a new branch, a force push): run everything.
+          if ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            echo "code=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          changed=$(git diff --name-only "$BASE...$HEAD")
+          echo "$changed"
+          if echo "$changed" | grep -qvE '^(docs/|LICENSE$)|\.md$'; then code=true; else code=false; fi
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+
   typecheck:
+    needs: changes
+    if: ${{ needs.changes.outputs.code == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -44,6 +74,8 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
+      - run: pnpm exec adr verify
+      - run: pnpm exec issues verify
       - name: Lint commit messages
         if: ${{ github.event_name == 'pull_request' }}
         env:
@@ -53,6 +85,8 @@ jobs:
         run: pnpm exec commitlint --from "origin/$BASE_REF" --to "$HEAD_SHA" --verbose
 
   test:
+    needs: changes
+    if: ${{ needs.changes.outputs.code == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -67,6 +101,8 @@ jobs:
       - run: pnpm test
 
   build:
+    needs: changes
+    if: ${{ needs.changes.outputs.code == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -82,6 +118,8 @@ jobs:
 
   # The desktop app end to end in Electron under Xvfb, with the fake agent and fake Kiro Remote.
   e2e:
+    needs: changes
+    if: ${{ needs.changes.outputs.code == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -105,14 +143,23 @@ jobs:
           path: apps/desktop/e2e/artifacts/
           if-no-files-found: ignore
 
-  # The one status to require in branch protection: it fails unless every job above passed.
+  # The one status to require in branch protection. It fails unless changes and lint passed and
+  # every other job passed, or was skipped because the change touched only docs.
   check:
     if: ${{ always() }}
-    needs: [typecheck, lint, test, build, e2e]
+    needs: [changes, typecheck, lint, test, build, e2e]
     runs-on: ubuntu-latest
     steps:
       - env:
+          CHANGES: ${{ needs.changes.result }}
+          CODE: ${{ needs.changes.outputs.code }}
+          LINT: ${{ needs.lint.result }}
           RESULTS: ${{ join(needs.*.result, ' ') }}
         run: |
-          echo "results: $RESULTS"
-          for r in $RESULTS; do [ "$r" = success ] || exit 1; done
+          echo "changes: $CHANGES, code: $CODE, lint: $LINT, results: $RESULTS"
+          [ "$CHANGES" = success ] && [ "$LINT" = success ] || exit 1
+          for r in $RESULTS; do
+            [ "$r" = success ] && continue
+            [ "$r" = skipped ] && [ "$CODE" = false ] && continue
+            exit 1
+          done
