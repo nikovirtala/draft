@@ -168,30 +168,47 @@ export async function decideTool(
   switch (toolPermission(name)) {
     case "allow":
       return { answer: { allow: true }, decision: "allowed-read-only" };
-    case "ask": {
-      const answer = await hooks.confirmTool({ toolUseId, name, input });
-      if (!answer.allow) return { answer, decision: "denied-by-user" };
-      // Intent before effect: the step is in the log before the tool runs, or the tool doesn't run.
-      let idempotencyKey: string;
-      try {
-        ({ idempotencyKey } = await hooks.beginStep({ toolUseId, name, input }));
-      } catch {
-        return {
-          answer: {
-            allow: false,
-            message: "draft could not record this action, so it did not run it.",
-          },
-          decision: "denied-by-policy",
-        };
-      }
-      return { answer, decision: "approved-by-user", idempotencyKey };
-    }
+    case "ask":
+      return askAndBegin(name, input, toolUseId, hooks);
     default:
       return {
         answer: { allow: false, message: `${name} is not available in draft` },
         decision: "denied-by-policy",
       };
   }
+}
+
+/**
+ * A call that changes something: the person is asked first, and once they say yes the step's
+ * intent is in the log before the tool runs. Used for Kiro Remote's tools, which the agent runs
+ * itself, and for draft's own file and shell tools, which draft runs.
+ */
+export async function askAndBegin(
+  name: string,
+  input: Record<string, unknown>,
+  toolUseId: string,
+  hooks: AgentTurnHooks,
+): Promise<{
+  answer: PermissionAnswer;
+  decision: Extract<AgentEvent, { type: "tool-call" }>["decision"];
+  idempotencyKey?: string;
+}> {
+  const answer = await hooks.confirmTool({ toolUseId, name, input });
+  if (!answer.allow) return { answer, decision: "denied-by-user" };
+  // Intent before effect: the step is in the log before the tool runs, or the tool doesn't run.
+  let idempotencyKey: string;
+  try {
+    ({ idempotencyKey } = await hooks.beginStep({ toolUseId, name, input }));
+  } catch {
+    return {
+      answer: {
+        allow: false,
+        message: "draft could not record this action, so it did not run it.",
+      },
+      decision: "denied-by-policy",
+    };
+  }
+  return { answer, decision: "approved-by-user", idempotencyKey };
 }
 
 /* ----------------------------------------------------------------------------------------------- */

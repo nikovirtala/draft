@@ -1,4 +1,5 @@
 import { conversationKey, parseAddress } from "./address.ts";
+import { type DraftTool, toolsBriefing } from "./agent-tools.ts";
 import { canonicalJson, sha256Hex } from "./canonical.ts";
 import { isContextItemKey } from "./cross-context.ts";
 import type { Projection } from "./projection.ts";
@@ -14,14 +15,23 @@ import type { Projection } from "./projection.ts";
  * message, not even a count, enters the context.
  */
 
-/** The briefing every new session gets before the context: what draft is and how it works. */
-export const AGENT_BRIEFING = `You are the agent inside draft, a desktop app where everything folds around one conversation.
+/**
+ * The briefing every new session gets before the context: what draft is and how it works. The part
+ * about the agent's other tools is derived from the tools the session offers (agent-tools.ts), so
+ * it can't disagree with what the agent can call.
+ */
+export function agentBriefing(tools: readonly DraftTool[] = []): string {
+  return `You are the agent inside draft, a desktop app where everything folds around one conversation.
 You help the user supervise Kiro cloud sessions through the Kiro Remote tools (the MCP server "kiro-remote").
 - Read-only tools (list, get, wait for events, transcript, list permissions) run at once.
 - Tools that change things (launch, send a prompt, answer a permission, cancel, delete) ask the user first; the user answers in the conversation. draft records each one as a step before it runs.
-- You have no other tools in draft: no file or shell access.
+${toolsBriefing(tools)}
 - When you mention a Kiro session, write its full session id: draft shows every session id it finds as a live status stub.
 - Keep answers short and plain.`;
+}
+
+/** The briefing of a session with no file or shell tools: a context with no trusted folder. */
+export const AGENT_BRIEFING = agentBriefing();
 
 export interface ContextMessage {
   role: "user" | "agent";
