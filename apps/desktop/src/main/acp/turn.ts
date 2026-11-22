@@ -15,6 +15,7 @@ import {
   type PermissionAnswer,
   personOnlyMessage,
 } from "@nikovirtala/draft-core";
+import { type CallPhase, TOO_LATE_TEXT } from "./call-policy.ts";
 import type { ToolOutcome } from "./folder-tools.ts";
 import { isKnownReadOnly, kiroUtilityCall, type ToolIdentity, toolIdentity } from "./tools.ts";
 
@@ -268,7 +269,15 @@ export class TurnMapper {
     shown: Record<string, unknown>;
     verdict: { class: "read" | "change" | "refused"; reason?: string };
     run(o: { idempotencyKey?: string }): Promise<ToolOutcome>;
+    /** Aborts when the call ends before it is over: the turn ended, or its time bound passed. */
     signal: AbortSignal;
+    /**
+     * Resolves when an agent request is waiting for this call, and throws once the call has ended.
+     * A change begins its step only after it: a yes with nobody there to be told starts nothing.
+     */
+    admit(): Promise<void>;
+    /** Says what the call is waiting for, for the agent's "call again" answer. */
+    phase(p: CallPhase): void;
   }): Promise<{ text: string; isError: boolean }> {
     const finish = (
       decision: NonNullable<Call["decision"]>,
@@ -294,6 +303,7 @@ export class TurnMapper {
       return { text: "The turn was cancelled, so draft did not run it.", isError: true };
     if (c.verdict.class === "read") {
       announce("allowed-read-only");
+      c.phase("running");
       const out = await runGuarded(c.run, {});
       this.push({
         type: "tool-result",
@@ -304,21 +314,31 @@ export class TurnMapper {
       });
       return { text: out.text, isError: out.isError };
     }
-    const r = await askAndBegin(c.name, c.shown, c.id, this.hooks);
+    const r = await askAndBegin(c.name, c.shown, c.id, {
+      confirmTool: (call) => this.hooks.confirmTool(call),
+      // The step begins once the person said yes and a request is there to be told the result.
+      beginStep: async (call) => {
+        await c.admit();
+        return this.hooks.beginStep(call);
+      },
+    });
     announce(r.decision);
     if (!r.answer.allow) {
       const text =
         r.decision === "denied-by-user"
           ? "The user declined this call, so draft did not run it."
-          : r.answer.message;
+          : c.signal.aborted
+            ? TOO_LATE_TEXT
+            : r.answer.message;
       finish(r.decision, text);
       return { text, isError: true };
     }
     if (c.signal.aborted || this.cancelled) {
-      const text = "The agent stopped waiting for the answer, so draft did not run it.";
+      const text = "The turn ended before draft ran this call, so it did not run it.";
       finish("approved-by-user", text);
       return { text, isError: true };
     }
+    c.phase("running");
     const out = await runGuarded(c.run, { idempotencyKey: r.idempotencyKey });
     this.push({
       type: "tool-result",

@@ -27,8 +27,10 @@ export interface DraftSessionHandle {
   /** The tools this session offers. */
   tools: readonly DraftTool[];
   /**
-   * Runs a call. `requestId` is the JSON-RPC id of the request: a request that arrives again with
-   * the same id is a retry and gets the first call's result. `signal` aborts when the agent hangs up.
+   * Answers a request for a call. `requestId` is the JSON-RPC id of the request: a request that
+   * arrives again with the same id is a retry and gets the first answer. A call outlives its
+   * request (draft-session.ts): the answer may be "still deciding, call again", and `signal`
+   * aborts when the agent hangs up, which ends the wait and not the call.
    */
   call(
     tool: string,
@@ -36,6 +38,12 @@ export interface DraftSessionHandle {
     requestId: string | number,
     signal: AbortSignal,
   ): Promise<DraftCallResult>;
+  /**
+   * The client cancelled this request (`notifications/cancelled`). Called whether or not the
+   * request was answered already: a result written to a request the client had given up on is
+   * given back to the next request for the same call.
+   */
+  cancelled?(requestId: string | number): void;
 }
 
 const PROTOCOL_VERSIONS = ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"];
@@ -46,6 +54,11 @@ export class DraftToolServer {
   private starting: Promise<string> | null = null;
   private port = 0;
   private readonly sessions = new Map<string, DraftSessionHandle>();
+  /** The `tools/call` requests being answered, by session and JSON-RPC id, for `notifications/cancelled`. */
+  private readonly inflight = new WeakMap<
+    DraftSessionHandle,
+    Map<string | number, AbortController>
+  >();
 
   /** The endpoint to hand to an agent; starts the server the first time. */
   url(): Promise<string> {
@@ -136,7 +149,20 @@ export class DraftToolServer {
     };
     if (typeof m !== "object" || m === null || typeof m.method !== "string")
       return rpcError(null, -32600, "invalid request");
-    if (m.id === undefined) return null;
+    if (m.id === undefined) {
+      // A client that gives up on a request says so (https://modelcontextprotocol.io/specification/2025-06-18/basic/utilities/cancellation)
+      // and may keep its connection. That ends the wait for the call, not the call: the agent is
+      // expected to call again (draft-session.ts).
+      const gone = m.params?.requestId;
+      if (
+        m.method === "notifications/cancelled" &&
+        (typeof gone === "string" || typeof gone === "number")
+      ) {
+        this.inflight.get(handle)?.get(gone)?.abort();
+        handle.cancelled?.(gone);
+      }
+      return null;
+    }
     const id = m.id;
     switch (m.method) {
       case "initialize": {
@@ -162,8 +188,21 @@ export class DraftToolServer {
       case "tools/call": {
         const name = m.params?.name;
         if (typeof name !== "string") return rpcError(id, -32602, "a tool name is required");
-        const r = await handle.call(name, m.params?.arguments ?? {}, id, signal);
-        return rpcResult(id, { content: [{ type: "text", text: r.text }], isError: r.isError });
+        // Ends when the connection closes or the client cancels this request.
+        const request = new AbortController();
+        const stop = () => request.abort();
+        signal.addEventListener("abort", stop, { once: true });
+        if (signal.aborted) stop();
+        const open = this.inflight.get(handle) ?? new Map<string | number, AbortController>();
+        this.inflight.set(handle, open);
+        open.set(id, request);
+        try {
+          const r = await handle.call(name, m.params?.arguments ?? {}, id, request.signal);
+          return rpcResult(id, { content: [{ type: "text", text: r.text }], isError: r.isError });
+        } finally {
+          signal.removeEventListener("abort", stop);
+          if (open.get(id) === request) open.delete(id);
+        }
       }
       default:
         return rpcError(id, -32601, `method not found: ${m.method}`);
