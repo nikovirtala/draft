@@ -4,6 +4,17 @@
  */
 import type { BlockInfo, Focus, FocusTarget, Layout, Move, Refusal } from "./placement.ts";
 
+/** What an agent's process was not given of the person's environment: names only, never values. */
+export interface AgentEnvironment {
+  withheld: { name: string; group: string }[];
+  /** Variables draft set in place of what the agent would have found. */
+  overridden: string[];
+  /** Variables passed through on purpose (`passEnv` in config.json). */
+  passed: string[];
+  /** `passEnv` names draft refuses to pass (its own settings). */
+  refused: string[];
+}
+
 export interface Segment {
   kind: "text" | "view";
   text?: string;
@@ -134,7 +145,14 @@ export interface ConversationState {
   /** The message this conversation branched off; null for the main conversation. */
   parent: string | null;
   title: string;
-  agent: { id: string; model: string; version: string; state: "active" | "paused" };
+  agent: {
+    id: string;
+    model: string;
+    version: string;
+    state: "active" | "paused";
+    /** What the agent's process doesn't get of the person's environment, by name; null: nothing known. */
+    environment: AgentEnvironment | null;
+  };
   messages: Message[];
   timeline: Block[];
   stubs: Record<string, Stub>;

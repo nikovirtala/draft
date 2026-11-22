@@ -12,6 +12,7 @@
  * FAKE_ACP_LOG names a JSON Lines file where it records what it received, for the tests to read.
  * Only erasable TypeScript syntax is used, so Node runs it as it is.
  */
+import { spawnSync } from "node:child_process";
 import { appendFileSync, readFileSync } from "node:fs";
 import { Readable, Writable } from "node:stream";
 import * as acp from "@agentclientprotocol/sdk";
@@ -58,6 +59,12 @@ interface Script {
   stubborn?: boolean;
   /** Exit the process during a prompt, after this many chunks of text. */
   crashAfterChunks?: number;
+  /**
+   * Commands to run in `session/new`, as the agent's own shell would, and record with what they
+   * printed: what the agent can see of the person's sign-ins. The whole environment is recorded
+   * too (event "environment"), so a test can look for a value that must not be in it.
+   */
+  probe?: { name: string; command: string[]; input?: string }[];
 }
 
 const scriptPath = process.env.FAKE_ACP_SCRIPT;
@@ -202,6 +209,26 @@ const agentApp = acp
     };
     sessions.set(s.id, s);
     record({ event: "session/new", sessionId: s.id, params });
+    if (script.probe !== undefined) {
+      record({ event: "environment", env: process.env });
+      for (const p of script.probe) {
+        const [command = "", ...args] = p.command;
+        const r = spawnSync(command, args, {
+          cwd: params.cwd,
+          encoding: "utf8",
+          timeout: 20_000,
+          ...(p.input === undefined ? {} : { input: p.input }),
+        });
+        record({
+          event: "probe",
+          name: p.name,
+          status: r.status,
+          error: r.error?.message ?? null,
+          stdout: r.stdout ?? "",
+          stderr: r.stderr ?? "",
+        });
+      }
+    }
     return {
       sessionId: s.id,
       configOptions: configOptions(s),

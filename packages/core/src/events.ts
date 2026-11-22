@@ -8,6 +8,34 @@ import { INTERRUPT_KINDS, type InterruptKind } from "./interrupts.ts";
 /** The previous hash of the first event in a log. */
 export const GENESIS_HASH = "0".repeat(64);
 
+/**
+ * What the environment of an agent's process leaves out of the person's own, by name and never by
+ * value (ADR for issue xh46a2ks). Written into the session's start event and shown in the agent's
+ * status.
+ */
+export const AGENT_WITHHELD_GROUPS = [
+  "draft",
+  "github",
+  "git",
+  "ssh",
+  "aws",
+  "npm",
+  "other-agent",
+] as const;
+export type AgentWithheldGroup = (typeof AGENT_WITHHELD_GROUPS)[number];
+
+export const AgentEnvironmentReportSchema = z.object({
+  /** Variables of the person's environment that did not reach the agent. */
+  withheld: z.array(z.object({ name: z.string().min(1), group: z.enum(AGENT_WITHHELD_GROUPS) })),
+  /** Variables draft set for the agent in place of what it would have found. */
+  overridden: z.array(z.string().min(1)),
+  /** Variables the person chose to pass through (`passEnv`), or that the agent's own `env` set. */
+  passed: z.array(z.string().min(1)),
+  /** `passEnv` names draft refuses to pass: its own settings never reach an agent. */
+  refused: z.array(z.string().min(1)).default([]),
+});
+export type AgentEnvironmentReport = z.infer<typeof AgentEnvironmentReportSchema>;
+
 const Hex64 = z.string().regex(/^[0-9a-f]{64}$/, "must be 64 lowercase hex characters");
 const TraceId = z.string().regex(/^[0-9a-f]{32}$/, "must be a 32-character hex trace ID");
 const AddressString = (versioned: boolean) =>
@@ -143,6 +171,8 @@ export const EventData = {
     contextHash: Hex64,
     contextMessages: z.number().int().min(0),
     contextOpenItems: z.number().int().min(0),
+    /** What the agent's process did not get of the person's environment; absent in older logs. */
+    environment: AgentEnvironmentReportSchema.optional(),
   }),
   /**
    * The log's last line was never completed, so it was never confirmed: its bytes moved to a

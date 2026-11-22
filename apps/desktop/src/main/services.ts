@@ -120,6 +120,7 @@ export async function createServices(o: {
         cwd: place.cwd,
         placeNote: place.note,
         env,
+        dataDir: config.dataDir,
         clientInfo: { name: "draft", version: o.appVersion },
         ...(env.DRAFT_ACP_TRANSCRIPT === undefined ? {} : { transcript: env.DRAFT_ACP_TRANSCRIPT }),
         kiro:

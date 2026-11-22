@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { Boot } from "../../shared/ipc.ts";
 import { windowTitle } from "../../shared/placement.ts";
-import { AgentState, agentLabel } from "./components/AgentState.tsx";
+import { AgentEnvironment, AgentState, agentLabel } from "./components/AgentState.tsx";
 import { AttentionBar } from "./components/AttentionBar.tsx";
 import { BlockContent } from "./components/BlockContent.tsx";
 import { ContextBar } from "./components/ContextBar.tsx";
@@ -50,6 +50,7 @@ function MainWindow() {
         <span className="spacer" />
         <AttentionBar />
       </header>
+      {main?.agent.environment != null && <AgentEnvironment environment={main.agent.environment} />}
       <div className={`workspace${panel === null ? "" : " with-panel"}`}>
         <section className="left" aria-label="Conversation">
           <ConversationView conversation={ws.main} />

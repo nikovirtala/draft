@@ -32,6 +32,7 @@ describe.skipIf(which === undefined)(`a real turn on ${which}`, () => {
       spec: resolveAgent({ agent: which as string, agents: {} }),
       cwd: join(out, "agent-workspace"),
       env: process.env,
+      dataDir: out,
       clientInfo: { name: "draft", version: "0.0.0-real" },
       kiro: { url: kiro.mcpUrl, baseUrl: kiro.baseUrl, token: async () => "real-turn-token" },
       transcript: join(out, "acp-transcript.jsonl"),

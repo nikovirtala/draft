@@ -58,6 +58,7 @@ function depsFor(dataDir: string, registry: ContextRegistry, name: string) {
         cwd: place.cwd,
         placeNote: place.note,
         env,
+        dataDir,
         clientInfo: { name: "draft", version: "0.0.0-test" },
         kiro: null,
       }),

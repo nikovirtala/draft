@@ -50,6 +50,7 @@ export interface Script {
   credits?: number;
   stubborn?: boolean;
   crashAfterChunks?: number;
+  probe?: { name: string; command: string[]; input?: string }[];
 }
 
 export function fakeSpec(
@@ -69,6 +70,7 @@ export function fakeSpec(
       command: o.command ?? process.execPath,
       args: o.command === undefined ? [FAKE_AGENT] : [],
       env: { FAKE_ACP_SCRIPT: scriptPath, FAKE_ACP_LOG: logPath },
+      passEnv: [],
       requires: o.requires ?? [],
       versionArgs: null,
       signIn: "Sign in to the fake.",
@@ -123,6 +125,7 @@ export async function openAcp(
     spec,
     cwd: join(dir, "agent-workspace"),
     env: o.env ?? { PATH: process.env.PATH ?? "" },
+    dataDir: dir,
     clientInfo: { name: "draft", version: "0.0.0-test" },
     kiro: {
       url: kiro.mcpUrl,
