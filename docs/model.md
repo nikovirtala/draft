@@ -296,7 +296,7 @@ The model proposes; the machine disposes. A recognizer reads messy conversation,
 
 ### Example: assumption
 
-```
+```text
 stated        --cited by a decision-->      load-bearing
 load-bearing  --a measurement agrees-->     confirmed      (terminal)
 load-bearing  --a signal contradicts-->     contradicted
@@ -354,7 +354,7 @@ A kind is a declarative, versioned file in the repo. Code is needed only for a k
 
 draft remembers three different things: what happened, what it still owes, and what it has agreed not to ask about. Each has its own test, its own store and its own way of changing. The stores are categories in one log, not separate databases.
 
-| | What it is | Test | How it changes | Examples |
+| Category | What it is | Test | How it changes | Examples |
 | --- | --- | --- | --- | --- |
 | Fact | What happened | It happened, at a time, and has a source | Never. A correction is a new fact that supersedes it | A commit, a log line, a measurement, a test result, a usage count, a finding with its date |
 | Kind | What is still owed | It can be left undone, someone waits on it, and done can be measured | Moves through its states until it closes | A change, a deployment, an open question, an assumption, a follow-up, a waiver |
@@ -411,7 +411,7 @@ Before accepting, intake compares the candidate with what exists. One that resta
 
 Who may create what follows "the model proposes, the machine disposes":
 
-|  | An agent | A person |
+| Action | An agent | A person |
 | --- | --- | --- |
 | Record a fact | Yes | Yes |
 | Open an instance of a kind | Yes | Yes |

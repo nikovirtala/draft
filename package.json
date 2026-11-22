@@ -9,7 +9,7 @@
   "scripts": {
     "prepare": "adr hooks install && issues hooks install",
     "typecheck": "pnpm -r run typecheck",
-    "lint": "biome check .",
+    "lint": "biome check . && markdownlint-cli2",
     "format": "biome check --write .",
     "test": "pnpm -r run test",
     "test:e2e": "pnpm --filter @nikovirtala/draft-desktop run test:e2e",
@@ -20,6 +20,7 @@
     "@biomejs/biome": "2.6.8",
     "@commitlint/cli": "21.2.4",
     "@commitlint/config-conventional": "21.2.4",
+    "markdownlint-cli2": "0.24.2",
     "@nikovirtala/adr": "0.7.0",
     "@nikovirtala/issues": "0.7.0",
     "@types/node": "24.19.2",
