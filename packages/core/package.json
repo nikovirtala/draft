@@ -18,6 +18,16 @@
       "types": "./dist/view.d.ts",
       "default": "./dist/view.js"
     },
+    "./map-graph": {
+      "source": "./src/map-graph.ts",
+      "types": "./dist/map-graph.d.ts",
+      "default": "./dist/map-graph.js"
+    },
+    "./map-layout": {
+      "source": "./src/map-layout.ts",
+      "types": "./dist/map-layout.d.ts",
+      "default": "./dist/map-layout.js"
+    },
     "./map-types": {
       "source": "./src/map-types.ts",
       "types": "./dist/map-types.d.ts",
