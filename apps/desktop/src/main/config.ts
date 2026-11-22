@@ -58,6 +58,8 @@ export interface Config {
   agentCwd: string;
   pollBaseMs: number;
   pollMaxMs: number;
+  /** How often the repositories a map covers are read while a map is on screen. */
+  mapPollMs: number;
   /** ark issue logs by source name, for references like `draft:15cxvdep`. */
   arkSources: Record<string, string>;
   /** The artifact server whose page links draft shows as live stubs. */
@@ -115,5 +117,6 @@ export function loadConfig(dataDir: string, env: NodeJS.ProcessEnv = process.env
     },
     pollBaseMs: Number(env.DRAFT_POLL_BASE_MS ?? 2000),
     pollMaxMs: Number(env.DRAFT_POLL_MAX_MS ?? 60_000),
+    mapPollMs: Number(env.DRAFT_MAP_POLL_MS ?? 30_000),
   };
 }

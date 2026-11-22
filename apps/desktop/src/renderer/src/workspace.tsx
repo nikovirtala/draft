@@ -165,6 +165,8 @@ export function WorkspaceProvider({ boot, children }: { boot: Ready; children: R
       void window.draft.focus(target);
     };
     const open = async (target: OpenTarget): Promise<void> => {
+      // Something outside draft opens by its links, which the list shows.
+      if (target.kind === "links") return;
       let info: BlockRegistration["info"];
       if (target.kind === "stub") {
         const address = `${target.from}#${target.target}`;

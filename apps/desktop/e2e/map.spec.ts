@@ -3,7 +3,13 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { FileLogStore } from "@nikovirtala/draft-core";
-import { appendMapFixture } from "@nikovirtala/draft-core/testing";
+import {
+  ADR_IDS,
+  ARK_REPO,
+  appendMapFixture,
+  FakeGithub,
+  seedArk,
+} from "@nikovirtala/draft-core/testing";
 import {
   type ElectronApplication,
   _electron as electron,
@@ -28,8 +34,25 @@ mkdirSync(artifacts, { recursive: true });
 const FAKE_AGENT = join(app, "test/fake-acp-agent.ts");
 const agentLog = join(artifacts, "m-fake-agent.jsonl");
 
-async function launch(dataDir: string): Promise<{ electronApp: ElectronApplication; page: Page }> {
+/** A fake GitHub with a repository of ark records: decisions, issues and deployments. */
+let github: FakeGithub;
+
+test.beforeAll(async () => {
+  github = await new FakeGithub().start();
+  // The records of the last hour, so the arrows between cells show.
+  seedArk(github, ARK_REPO, Date.now() - 50 * 60_000);
+});
+
+test.afterAll(async () => {
+  await github.stop();
+});
+
+async function launch(
+  dataDir: string,
+  arkSources: Record<string, string> = { draft: ARK_REPO },
+): Promise<{ electronApp: ElectronApplication; page: Page }> {
   writeFileSync(agentLog, "");
+  writeFileSync(join(dataDir, "config.json"), JSON.stringify({ arkSources }));
   const display = process.env.DISPLAY === undefined ? ["--ozone-platform=headless"] : [];
   const electronApp = await electron.launch({
     args: [join(app, "out/main/index.js"), "--no-sandbox", "--disable-gpu", ...display],
@@ -42,8 +65,10 @@ async function launch(dataDir: string): Promise<{ electronApp: ElectronApplicati
       DRAFT_AGENT_ARGS: JSON.stringify([FAKE_AGENT]),
       FAKE_ACP_SCRIPT: join(here, "fake-acp-script.json"),
       FAKE_ACP_LOG: agentLog,
-      // Nothing answers here: the stubs of the fixture keep the state the log gave them.
-      DRAFT_GITHUB_API_URL: "http://127.0.0.1:9",
+      // The stubs of the fixture find no pull request here and keep the state the log gave them;
+      // the map reads the ark records of ARK_REPO from it.
+      DRAFT_GITHUB_API_URL: github.baseUrl,
+      DRAFT_MAP_POLL_MS: "500",
       DRAFT_POLL_BASE_MS: "300",
       DRAFT_POLL_MAX_MS: "1200",
       DRAFT_ENVIRONMENT: "e2e",
@@ -51,7 +76,7 @@ async function launch(dataDir: string): Promise<{ electronApp: ElectronApplicati
     },
   });
   const page = await electronApp.firstWindow();
-  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.setViewportSize({ width: 1280, height: 1000 });
   return { electronApp, page };
 }
 
@@ -78,7 +103,7 @@ async function counts(scope: Locator | Page, kind: string, column: string) {
 
 test("an empty context says what will appear", async () => {
   const dataDir = mkdtempSync(join(tmpdir(), "draft-e2e-map-empty-"));
-  const { electronApp, page } = await launch(dataDir);
+  const { electronApp, page } = await launch(dataDir, {});
   const main = page.locator('[data-testid="conversation"][data-main="true"]');
   await expect(page.getByTestId("empty")).toBeVisible();
   await say(main, "show the map");
@@ -133,6 +158,29 @@ test("show the map on a recorded log: counts, a cell, an item, live moves, and a
     count: 1,
     waiting: 1,
   });
+  // 2b. The ark records of the repository the context covers arrive from GitHub: every decision
+  // by state (one of them only on an open pull request's branch), every issue, and a row for each
+  // environment of the repository's deployments.
+  await expect(cell(map, "decision", "proposed")).toHaveAttribute("data-count", "2");
+  expect(await counts(map, "decision", "proposed")).toEqual({ count: 2, waiting: 2 });
+  for (const column of ["accepted", "rejected", "withdrawn", "deprecated", "superseded"])
+    expect(await counts(map, "decision", column)).toEqual({ count: 1, waiting: 0 });
+  expect(await counts(map, "issue", "open")).toEqual({ count: 2, waiting: 0 });
+  expect(await counts(map, "issue", "in-progress")).toEqual({ count: 1, waiting: 0 });
+  expect(await counts(map, "issue", "closed")).toEqual({ count: 3, waiting: 0 });
+  // How a closed issue was closed is on its cell, not a state of its own.
+  await expect(cell(map, "issue", "closed").getByTestId("map-cell-note")).toHaveText(
+    "1 done, 1 obsolete, 1 wontfix",
+  );
+  const production = `deployment:${ARK_REPO}:production`;
+  const staging = `deployment:${ARK_REPO}:staging`;
+  expect(await counts(map, production, "success")).toEqual({ count: 1, waiting: 0 });
+  expect(await counts(map, production, "inactive")).toEqual({ count: 1, waiting: 0 });
+  // A failed run freezes the pipeline until you act: it waits on you.
+  expect(await counts(map, staging, "failure")).toEqual({ count: 1, waiting: 1 });
+  await expect(cell(map, staging, "failure")).toHaveClass(/lit/);
+  await expect(map.getByTestId("map-stale")).toHaveCount(0);
+
   // What waits on the person is lit, and the moves of the last hour are arrows in their rows.
   await expect(cell(map, "thread", "concluding")).toHaveClass(/lit/);
   await expect(cell(map, "thread", "open")).not.toHaveClass(/lit/);
@@ -142,7 +190,7 @@ test("show the map on a recorded log: counts, a cell, an item, live moves, and a
   await expect(map.getByTestId("map-move").first()).toBeVisible();
   const summary = await map.getByTestId("map-summary").innerText();
   expect(summary).toMatch(/^\d+ open · \d+ waiting on you$/);
-  await map.scrollIntoViewIfNeeded();
+  await map.getByTestId("map-row").filter({ hasText: "Decisions" }).scrollIntoViewIfNeeded();
   await shot(page, "m02-busy");
 
   // 3. A cell opens its items.
@@ -154,6 +202,28 @@ test("show the map on a recorded log: counts, a cell, an item, live moves, and a
   await expect(cell(map, "pull-request", "failing")).toHaveAttribute("aria-pressed", "true");
   await list.scrollIntoViewIfNeeded();
   await shot(page, "m03-cell-opened");
+
+  // 3b. A decision that is only on a pull request's branch: its items link to the files there and
+  // to the pull request; a deployment's link to its commit and its run.
+  await cell(map, "decision", "proposed").click();
+  await expect(list.getByTestId("map-item")).toHaveCount(2);
+  const onBranch = list.getByTestId("map-item").filter({ hasText: "Show ark records on the map" });
+  await expect(onBranch.getByTestId("map-item-link")).toHaveText(["Decision", "Pull request #11"]);
+  await expect(onBranch.getByTestId("map-item-link").first()).toHaveAttribute(
+    "href",
+    `https://github.com/${ARK_REPO}/tree/adr-ark-records/docs/adr/events/${ADR_IDS.onBranch}`,
+  );
+  await list.scrollIntoViewIfNeeded();
+  await shot(page, "m03b-decision-cell-opened");
+  await cell(map, staging, "failure").click();
+  await expect(list.getByTestId("map-item")).toHaveCount(1);
+  await expect(list.getByTestId("map-item-link")).toHaveText(["Commit", "Run"]);
+  await expect(list.getByTestId("map-item-link").nth(1)).toHaveAttribute(
+    "href",
+    "https://github.com/nikovirtala/draft/actions/runs/3",
+  );
+  await cell(map, "pull-request", "failing").click();
+  await expect(list.getByTestId("map-item")).toHaveCount(1);
 
   // 4. An item opens where it lives: a pull request at its stub, in the panel.
   await expect(panel).toHaveCount(0);

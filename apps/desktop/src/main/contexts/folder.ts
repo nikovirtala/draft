@@ -63,6 +63,18 @@ function gitConfigPath(folder: string): string | null {
   return existsSync(config) ? config : null;
 }
 
+/**
+ * The `owner/repo` of a GitHub remote, in any of the forms git takes (`https://github.com/o/r.git`,
+ * `git@github.com:o/r.git`, `ssh://git@github.com/o/r`), or null for a remote that isn't GitHub's.
+ */
+export function githubRepoOf(remote: string): string | null {
+  const m =
+    /^(?:(?:https?|ssh|git):\/\/(?:[^@/]+@)?|[^@/\s]+@)github\.com[:/]([A-Za-z0-9-]+)\/([A-Za-z0-9._-]+?)(?:\.git)?\/?$/.exec(
+      remote.trim(),
+    );
+  return m === null ? null : `${m[1]}/${m[2]}`;
+}
+
 /** The URL of `origin` (else of the first remote that has one) in the text of a git config. */
 export function remoteFromConfig(text: string): string | null {
   const remotes = new Map<string, string>();

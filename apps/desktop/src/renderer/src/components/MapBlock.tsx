@@ -43,16 +43,34 @@ function useMap(range: RangeId): MapSnapshot | null {
   return map;
 }
 
+/** Tells the main process this window has a map on screen, so the repositories it covers are read. */
+function useMapVisible(): void {
+  useEffect(() => {
+    window.draft.setMapVisible(true);
+    return () => window.draft.setMapVisible(false);
+  }, []);
+}
+
 export function summaryText(map: MapSnapshot): string {
   const { open, waitingOnPerson } = map.totals;
   return `${open} open · ${waitingOnPerson} waiting on you`;
 }
 
 /** A cell's words for a screen reader: where it is, how many, and whether they wait on you. */
-function cellLabel(rowLabel: string, columnLabel: string, count: number, waiting: number): string {
+function cellLabel(
+  rowLabel: string,
+  columnLabel: string,
+  count: number,
+  waiting: number,
+  notes: string,
+): string {
   const items = count === 1 ? "1 item" : `${count} items`;
-  return `${rowLabel}, ${columnLabel}: ${items}${waiting > 0 ? `, ${waiting} waiting on you` : ""}`;
+  return `${rowLabel}, ${columnLabel}: ${items}${waiting > 0 ? `, ${waiting} waiting on you` : ""}${notes === "" ? "" : `, ${notes}`}`;
 }
+
+/** What a cell says about its items besides their state: "2 done, 1 wontfix". */
+const notesText = (notes: { note: string; count: number }[]): string =>
+  notes.map((n) => `${n.count} ${n.note}`).join(", ");
 
 type Row = MapSnapshot["rows"][number];
 
@@ -149,6 +167,11 @@ function MapRowView({
         <span className="map-row-total" data-testid="map-row-total">
           {row.total}
         </span>
+        {row.stale !== null && (
+          <span className="map-stale" title={row.stale} data-testid="map-stale">
+            from before
+          </span>
+        )}
         {row.source === "derived" && (
           <span className="map-derived" title={row.derivation}>
             states derived
@@ -171,7 +194,14 @@ function MapRowView({
                   style={{ width: CELL }}
                   disabled={cell.count === 0}
                   aria-pressed={selected === cell.column}
-                  aria-label={cellLabel(row.label, column.label, cell.count, cell.waitingOnPerson)}
+                  aria-label={cellLabel(
+                    row.label,
+                    column.label,
+                    cell.count,
+                    cell.waitingOnPerson,
+                    notesText(cell.notes),
+                  )}
+                  title={notesText(cell.notes) || undefined}
                   data-testid="map-cell"
                   data-kind={row.kind}
                   data-column={cell.column}
@@ -181,8 +211,8 @@ function MapRowView({
                 >
                   <span className="map-cell-label">{column.label}</span>
                   <span className="map-cell-count">{cell.count}</span>
-                  <span className="map-cell-wait">
-                    {lit ? `${cell.waitingOnPerson} for you` : "\u00a0"}
+                  <span className="map-cell-wait" data-testid="map-cell-note">
+                    {lit ? `${cell.waitingOnPerson} for you` : notesText(cell.notes) || "\u00a0"}
                   </span>
                 </button>
               );
@@ -197,6 +227,7 @@ function MapRowView({
 const WHERE: Record<string, string> = {
   conversation: "its conversation",
   stub: "its stub",
+  links: "on GitHub",
 };
 
 function ItemList({
@@ -240,23 +271,47 @@ function ItemList({
         <ul>
           {items.map((item) => (
             <li key={item.id}>
-              <button
-                type="button"
-                className={`map-item${item.waitsOn === "user" ? " lit" : ""}`}
-                data-testid="map-item"
-                data-item={item.id}
-                aria-label={`${item.label}, ${item.stateLabel} since ${ageText(item.since)}. Opens ${WHERE[item.open.kind]}.`}
-                onClick={() => {
-                  setOpened(item.id);
-                  void ws.open(item.open);
-                }}
-              >
-                <span className="map-item-label">{item.label}</span>
-                <span className="map-item-since">{ageText(item.since)}</span>
-                <span className="map-item-where">
-                  {opened === item.id ? "Opened" : `Opens ${WHERE[item.open.kind]}`}
-                </span>
-              </button>
+              {item.open.kind === "links" ? (
+                <div
+                  className={`map-item${item.waitsOn === "user" ? " lit" : ""}`}
+                  data-testid="map-item"
+                  data-item={item.id}
+                >
+                  <span className="map-item-label">{item.label}</span>
+                  <span className="map-item-since">{ageText(item.since)}</span>
+                  <span className="map-item-links">
+                    {item.open.links.map((l) => (
+                      <a
+                        key={l.url}
+                        href={l.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        data-testid="map-item-link"
+                      >
+                        {l.label}
+                      </a>
+                    ))}
+                  </span>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  className={`map-item${item.waitsOn === "user" ? " lit" : ""}`}
+                  data-testid="map-item"
+                  data-item={item.id}
+                  aria-label={`${item.label}, ${item.stateLabel} since ${ageText(item.since)}. Opens ${WHERE[item.open.kind]}.`}
+                  onClick={() => {
+                    setOpened(item.id);
+                    void ws.open(item.open);
+                  }}
+                >
+                  <span className="map-item-label">{item.label}</span>
+                  <span className="map-item-since">{ageText(item.since)}</span>
+                  <span className="map-item-where">
+                    {opened === item.id ? "Opened" : `Opens ${WHERE[item.open.kind]}`}
+                  </span>
+                </button>
+              )}
             </li>
           ))}
         </ul>
@@ -299,6 +354,7 @@ function Moves({ map }: { map: MapSnapshot }) {
 export function MapView({ address }: { address: string }) {
   const ws = useWorkspace();
   const [range, setRange] = useState<RangeId>("hour");
+  useMapVisible();
   const map = useMap(range);
   const cell = ws.mapCell(address);
   if (map === null) return <p className="secondary">Reading the log…</p>;
@@ -360,7 +416,7 @@ export function MapView({ address }: { address: string }) {
       <Moves map={map} />
       {map.problems.length > 0 && (
         <p className="secondary" data-testid="map-problems">
-          Could not read: {map.problems.map((p) => p.kind).join(", ")}.
+          {map.problems.map((p) => p.message).join(" · ")}
         </p>
       )}
     </div>
