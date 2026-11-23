@@ -9,4 +9,4 @@ draft understands a project's environments, so a deployment that fixes a failed 
 - Supersession is a typed edge, from the deployment that fixes to the one it fixes, in the environment the topology names; the map draws it like any other edge.
 
 ## Done when
-- Fixtures with one environment, two in sequence and two in parallel each settle a failure only by a success in its own environment, through a supersedes edge; the topology is read from standing.
+- Fixtures with one environment, two in sequence and two in parallel each settle a failure only by a success in its own environment, through a supersedes edge; the topology is read as data from where it lives (GitHub's environments, the deployment package's configuration), in one shape a standing store can take over (the standing store itself is the follow-up n4kvxrc1).
