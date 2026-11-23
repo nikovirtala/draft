@@ -13,8 +13,9 @@ function ago(at: string | null): string {
 }
 
 /**
- * Which context this window is, where its agent works, and a short list of the others: reachable
- * from the conversation without leaving it. Opening one gives it a window of its own.
+ * Which context this window is, and a short list of the others: reachable from the conversation
+ * without leaving it. Opening one gives it a window of its own. Where the agent works is the
+ * footer's (`ContextFolder`).
  */
 export function ContextBar() {
   const ws = useWorkspace();
@@ -36,16 +37,6 @@ export function ContextBar() {
       <span className="context-name" data-testid="context-name">
         {context.name}
       </span>
-      {context.folder !== null && (
-        <span className="context-folder" data-testid="context-folder" title={context.folder.path}>
-          {context.folder.name}
-        </span>
-      )}
-      {context.folderMissing && (
-        <span className="context-folder missing" data-testid="context-folder-missing">
-          folder not found
-        </span>
-      )}
       <button
         type="button"
         className="contexts-button"
@@ -108,5 +99,24 @@ export function ContextBar() {
         </div>
       )}
     </div>
+  );
+}
+
+/** The folder the context's agent works in, or that the folder it was bound to is gone. */
+export function ContextFolder() {
+  const { context } = useWorkspace();
+  return (
+    <>
+      {context.folder !== null && (
+        <span className="context-folder" data-testid="context-folder" title={context.folder.path}>
+          {context.folder.name}
+        </span>
+      )}
+      {context.folderMissing && (
+        <span className="context-folder missing" data-testid="context-folder-missing">
+          folder not found
+        </span>
+      )}
+    </>
   );
 }
