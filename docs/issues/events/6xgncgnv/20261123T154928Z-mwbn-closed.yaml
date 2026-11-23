@@ -1,0 +1,16 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M84HJ5BTF0P024NC2N6GMWBN
+subject: 6xgncgnv
+type: closed
+at: 2026-11-23T15:49:28Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: 244629292+kiro-agent@users.noreply.github.com
+reason: "GlobalWorking renders in the footer's footer-activity slot (Footer.tsx) and no longer in the title bar. Test: test/renderer/working.test.tsx 'the window shows it in the footer's activity slot and never in the title bar'."
+data:
+  resolution: done
