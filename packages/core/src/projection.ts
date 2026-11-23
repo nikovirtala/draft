@@ -728,6 +728,20 @@ export class Projection {
     }));
   }
 
+  /**
+   * How many different people have spoken in this log, by the id of the user actor on their
+   * messages. The agent and resolvers are not people. Zero before anyone has spoken.
+   */
+  people(): number {
+    const r = this.db
+      .prepare(
+        `select count(distinct json_extract(actor_json, '$.id')) as n from messages
+         where json_extract(actor_json, '$.kind') = 'user'`,
+      )
+      .get() as { n: number };
+    return Number(r.n);
+  }
+
   /** Whether the agent takes part in `conversation`: active until someone pauses it. */
   agentState(conversation: string): AgentState {
     const r = this.db

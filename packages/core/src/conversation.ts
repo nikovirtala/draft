@@ -237,6 +237,8 @@ export interface UiState {
   /** The stubs being read now, by `type:id`. */
   resolving: string[];
   error: string | null;
+  /** How many different people have spoken in this context. Asides are advertised past one. */
+  people: number;
 }
 
 export type UiChange =
@@ -705,6 +707,7 @@ export class ConversationService {
       busy: this.busy,
       resolving: this.poller.inFlight(),
       error: this.error,
+      people: this.projection.people(),
     };
   }
 

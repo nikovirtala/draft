@@ -179,7 +179,10 @@ test("one conversation with live Kiro session stubs, restored from the log", asy
   // 7. Paused: messages go to people only, until @agent reaches through for one message.
   await agentState.getByRole("button", { name: "Pause the agent" }).click();
   await expect(agentState).toHaveAttribute("data-state", "paused");
-  await expect(page.getByTestId("composer-hint")).toContainText("paused");
+  await expect(page.getByLabel("Message")).toHaveAttribute(
+    "placeholder",
+    /The agent is paused and isn’t listening/,
+  );
   await page.getByLabel("Message").fill("Let's agree on the README wording before anything else.");
   await page.keyboard.press("Enter");
   await expect(page.getByTestId("aside-label")).toHaveCount(2);

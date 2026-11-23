@@ -181,6 +181,8 @@ export interface ConversationState {
   /** The stubs being read now, by `type:id`. */
   resolving: string[];
   error: string | null;
+  /** How many different people have spoken in this context. Asides are advertised past one. */
+  people: number;
 }
 
 /** A thread as the conversation it branched off shows it: the live state of its stub. */
