@@ -779,8 +779,7 @@ textarea:focus-visible {
 
 /* The thread's column is 44% (at least 380px) until the person sizes it with the divider. */
 .workspace.with-panel {
-  --panel-width: max(380px, 44%);
-  grid-template-columns: minmax(0, 1fr) 8px var(--panel-width);
+  grid-template-columns: minmax(0, 1fr) 8px max(380px, 44%);
 }
 
 .panel-divider {

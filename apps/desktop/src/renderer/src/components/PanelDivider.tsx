@@ -70,7 +70,10 @@ export function usePanelWidth(
     max: panelMax(limit),
     set,
     commit,
-    style: width === null ? undefined : ({ "--panel-width": `${shown}px` } as CSSProperties),
+    style:
+      width === null
+        ? undefined
+        : { gridTemplateColumns: `minmax(0, 1fr) ${DIVIDER_WIDTH}px ${shown}px` },
   };
 }
 

@@ -114,7 +114,7 @@ export function workspace(over: Partial<Workspace> = {}): Workspace {
     states: {},
     threads: [],
     attention: [],
-    view: { layout: { blocks: {}, focus: null }, seen: {}, cells: {} },
+    view: { layout: { blocks: {}, focus: null }, seen: {}, cells: {}, panelWidth: null },
     stubs: {},
     agents: [],
     defaultAgent: "kiro",
