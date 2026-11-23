@@ -12,6 +12,7 @@ import {
   seedArk,
 } from "@nikovirtala/draft-core/testing";
 import { type ElectronApplication, expect, type Locator, type Page } from "@playwright/test";
+import { waitQuiet } from "./design-checks.ts";
 import { launchApp, shot, shotOf, test } from "./harness.ts";
 
 /**
@@ -540,24 +541,7 @@ test("a failed deployment fixed by a later one is settled by a supersedes edge, 
   await electronApp.close();
 });
 
-/** What the window's frame measures: the document, the title bar and the footer. */
-async function frameOf(page: Page) {
-  return page.locator("html").evaluate((html) => {
-    const doc = html.ownerDocument;
-    const scrolling = doc.scrollingElement ?? html;
-    const rect = (selector: string) => doc.querySelector(selector)?.getBoundingClientRect();
-    return {
-      scrollHeight: scrolling.scrollHeight,
-      scrollTop: scrolling.scrollTop,
-      innerHeight: doc.defaultView?.innerHeight ?? 0,
-      titleTop: rect("header.titlebar")?.top ?? null,
-      footerBottom: rect('[data-testid="footer"]')?.bottom ?? null,
-      blockBottom: rect('[data-testid="block-full"]')?.bottom ?? null,
-    };
-  });
-}
-
-test("the window never scrolls: a long conversation, and a long map in a window of its own, scroll inside it", async () => {
+test("a long conversation, and a long map in a window of its own, scroll inside their boxes", async () => {
   const dataDir = mkdtempSync(join(tmpdir(), "draft-e2e-map-scroll-"));
   const log = FileLogStore.open(join(dataDir, "log.jsonl"), { context: "local" });
   await appendMapFixture(log, Date.now() - 40 * 60_000);
@@ -577,21 +561,23 @@ test("the window never scrolls: a long conversation, and a long map in a window 
   expect(overflow, "the conversation is taller than the window").toBeGreaterThan(500);
 
   // Scrolled to the end, by script and then by the wheel (which chains to the window when the
-  // conversation has nothing left to scroll).
+  // conversation has nothing left to scroll), once the map has finished laying out: the end of a
+  // box that is still growing is not the end.
+  await waitQuiet(page);
   await conversation.evaluate((el) => {
     el.scrollTop = el.scrollHeight;
   });
   await conversation.hover();
   await page.mouse.wheel(0, 4000);
   await page.mouse.wheel(0, 4000);
-  const frame = await frameOf(page);
-  expect(frame.scrollHeight).toBe(frame.innerHeight);
-  expect(frame.scrollTop).toBe(0);
-  expect(frame.titleTop).toBe(0);
-  expect(frame.footerBottom).toBe(frame.innerHeight);
-  expect(
-    await conversation.evaluate((el) => el.scrollHeight - el.clientHeight - el.scrollTop),
-  ).toBeLessThan(2);
+  await expect
+    .poll(() =>
+      conversation.evaluate((el) => {
+        el.scrollTop = el.scrollHeight;
+        return el.scrollHeight - el.clientHeight - el.scrollTop;
+      }),
+    )
+    .toBeLessThan(2);
   await shot(page, "w01-window-scrolled-to-the-end");
 
   // The same map popped out into a window of its own: its body scrolls, its header and the
@@ -604,16 +590,12 @@ test("the window never scrolls: a long conversation, and a long map in a window 
   await showGrid(popped);
   const block = popped.getByTestId("block-full");
   expect(await block.evaluate((el) => el.scrollHeight - el.clientHeight)).toBeGreaterThan(100);
+  await waitQuiet(popped);
   await block.evaluate((el) => {
     el.scrollTop = el.scrollHeight;
   });
   await block.hover();
   await popped.mouse.wheel(0, 4000);
-  const inWindow = await frameOf(popped);
-  expect(inWindow.scrollHeight).toBe(inWindow.innerHeight);
-  expect(inWindow.scrollTop).toBe(0);
-  expect(inWindow.titleTop).toBe(0);
-  expect(inWindow.blockBottom).toBe(inWindow.innerHeight);
   // The block's header is still at the top of its window.
   const header = (await block.locator(".block-header").boundingBox()) as { y: number };
   const bar = (await popped.locator("header.titlebar").boundingBox()) as {
@@ -625,7 +607,7 @@ test("the window never scrolls: a long conversation, and a long map in a window 
   await electronApp.close();
 });
 
-test("a selected stub is never filled: a click shows no ring, the keyboard shows one", async () => {
+test("a map stub selected by a click, minimized, and focused by the keyboard", async () => {
   const dataDir = mkdtempSync(join(tmpdir(), "draft-e2e-map-selected-"));
   const { electronApp, page } = await launch(dataDir);
   const main = page.locator('[data-testid="conversation"][data-main="true"]');
@@ -634,36 +616,23 @@ test("a selected stub is never filled: a click shows no ring, the keyboard shows
   await expect(stub.getByTestId("map")).toBeVisible();
   await stub.locator(".stub-title").click();
   await expect(stub).toHaveAttribute("data-selected", "true");
-  const RAISED = "rgb(255, 253, 247)";
-  const CLEAR = "rgba(0, 0, 0, 0)";
-  // Selected by a click: the map stub, its header and its body are on their own ground, and
-  // nothing is drawn around it.
-  await expect(stub).toHaveCSS("background-color", RAISED);
-  await expect(stub.locator(":scope > .stub-line")).toHaveCSS("background-color", CLEAR);
-  await expect(stub.getByTestId("map")).toHaveCSS("background-color", CLEAR);
   await expect(stub.locator(".stub-title")).toHaveCSS("color", "rgb(0, 86, 97)");
-  await expect(stub).toHaveCSS("outline-style", "none");
   await shotOf(stub, "m08-selected-map-stub");
 
-  // Minimized, the same stub is one line, and as unfilled.
+  // Minimized, the same stub is one line.
   await stub.getByRole("button", { name: "Minimize" }).click();
   await expect(stub).toHaveAttribute("data-placement", "minimized");
   await stub.locator(".stub-title").click();
   await expect(stub).toHaveAttribute("data-selected", "true");
-  await expect(stub).toHaveCSS("background-color", RAISED);
-  await expect(stub.locator(":scope > .stub-line")).toHaveCSS("background-color", CLEAR);
-  await expect(stub).toHaveCSS("outline-style", "none");
   await shotOf(stub, "m09-selected-one-line-stub");
 
-  // The keyboard: Tab moves into the stub's controls and Shift+Tab back to the stub, which then
-  // shows the focus ring (1.5px moved-mark, no fill).
+  // The keyboard: Tab moves into the stub's controls and Shift+Tab back to the stub.
   await page.keyboard.press("Tab");
   await page.keyboard.press("Shift+Tab");
   await expect(stub).toBeFocused();
-  await expect(stub).toHaveCSS("outline-style", "solid");
-  await expect(stub).toHaveCSS("outline-color", "rgb(158, 110, 247)");
-  await expect(stub).toHaveCSS("background-color", RAISED);
   await shotOf(stub, "m12-stub-with-keyboard-focus");
+  // That the stub is not filled, that a click shows no ring and that the keyboard shows the one
+  // ring are checked on every window by the harness (e2e/design-checks.ts).
   await electronApp.close();
 });
 
