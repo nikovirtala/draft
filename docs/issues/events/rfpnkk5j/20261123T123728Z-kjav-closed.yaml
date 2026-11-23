@@ -1,0 +1,16 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M846JK8BV2QZQV0YB74JKJAV
+subject: rfpnkk5j
+type: closed
+at: 2026-11-23T12:37:28Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: 244629292+kiro-agent@users.noreply.github.com
+reason: "The map, graph, stubs, interrupts and acceptance use the tokens of docs/design-system/tokens.json, with the loud red and green gone (tests: tokens.json equals the :root of styles.css; no literal colour outside the tokens; each token only in its job; contrast of every text pair, with the two pairs the README accepts allowed by name). The table of colour to meaning is in docs/implementation.md. Screenshots of the map and a thread, from CI's end-to-end run, are in the pull request."
+data:
+  resolution: done
