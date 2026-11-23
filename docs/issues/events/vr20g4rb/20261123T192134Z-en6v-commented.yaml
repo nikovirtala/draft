@@ -1,0 +1,15 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M84XPH9BAVPTEZWPWEY4EN6V
+subject: vr20g4rb
+type: commented
+at: 2026-11-23T19:21:34Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: 244629292+kiro-agent@users.noreply.github.com
+data:
+  text: The same file says titlebar is for 'the title bar and the footer'. styles.css:592 (`.footer`) sets no background, so the footer is drawn on page with a line hairline above it. Either the footer takes titlebar or the usage text names the title bar only; decide in the design system's preview first.
