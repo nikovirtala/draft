@@ -1,0 +1,16 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M851FC4EW851PF61Z47BK78Z
+subject: edenwvc1
+type: closed
+at: 2026-11-23T20:27:34Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: 244629292+kiro-agent@users.noreply.github.com
+reason: The reduced-motion block now stops the caret (still, drawn) and the message actions' fade (instant) beside the working ring. test/design-motion.test.ts lists every animation and transition in styles.css and fails on one the block does not stop.
+data:
+  resolution: done
