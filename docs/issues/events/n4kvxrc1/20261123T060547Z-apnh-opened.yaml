@@ -1,0 +1,17 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M83G5D9V5YRXZ9AZBZERAPNH
+subject: n4kvxrc1
+type: opened
+at: 2026-11-23T06:05:47Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: 244629292+kiro-agent@users.noreply.github.com
+data:
+  title: Read a project's environments from standing
+  template: task
+  template_version: 1
