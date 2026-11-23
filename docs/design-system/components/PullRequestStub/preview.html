@@ -1,0 +1,22 @@
+<!-- @dsCard group="Stubs" height=260 subtitle="Merged, open with a wait, failing, closed" -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Pull request stubs</title>
+<style>
+body{margin:0;font-family:var(--font-sans);background:var(--page);color:var(--text);font-size:13px}
+.chip{display:inline-flex;align-items:center;gap:var(--space-1);font-size:12.5px;line-height:1;font-weight:500;padding:7px var(--space-3);border-radius:var(--radius-chip);border:1px solid transparent;white-space:nowrap}
+.chip i{font-style:normal;font-size:11px}
+.moved{background:var(--moved-fill);color:var(--moved-strong)}
+.done{background:var(--done-fill);color:var(--done-word)}
+.review{background:var(--review-fill);color:var(--review-word)}
+.waiting{background:var(--waiting-fill);color:var(--waiting-word)}
+.failed{background:var(--waiting-fill);color:var(--waiting-word);border:var(--hairline-dashed) dashed var(--waiting-mark)}
+.idle{background:transparent;color:var(--muted);border:var(--hairline) solid var(--idle-line)}
+.loop{background:transparent;color:var(--muted);border:var(--hairline-dashed) dashed var(--loop-mark)}
+.row{display:flex;flex-wrap:wrap;gap:var(--space-2);align-items:center}
+.k{width:150px;flex:none;color:var(--muted);font-size:12px}
+.stub{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--raised);border:var(--hairline) solid var(--line-strong);border-radius:var(--radius-card);padding:10px 14px}.ref{color:var(--muted);font-family:var(--font-mono);font-size:12px}.t{color:var(--ink);font-weight:600}.dot{width:8px;height:8px;border-radius:50%;flex:none}</style></head>
+<body>
+<div style="padding:16px;display:grid;gap:10px"><div class="stub"><span class="dot" style="background:var(--done-mark)"></span><span class="ref">nikovirtala/draft#36</span><span class="t">Record feedback from first use</span><span class="chip done">✓ Merged</span><span class="chip done">✓ 8/8 checks passed</span></div><div class="stub"><span class="dot" style="background:var(--review-mark)"></span><span class="ref">nikovirtala/draft#41</span><span class="t">One palette</span><span class="chip review">○ Open</span><span class="chip review">4 running</span><span class="chip waiting">Your review</span></div><div class="stub"><span class="dot" style="background:var(--waiting-mark)"></span><span class="ref">nikovirtala/draft#39</span><span class="t">Fix the build</span><span class="chip review">○ Open</span><span class="chip failed"><i>✕</i> 2 failing</span><span class="chip failed"><i>✕</i> Merge conflict</span></div><div class="stub"><span class="dot" style="background:var(--idle-line)"></span><span class="ref">nikovirtala/ark#120</span><span class="t">Mark a failure handled</span><span class="chip idle">Closed</span></div></div>
+</body>
+</html>

@@ -1,0 +1,22 @@
+<!-- @dsCard group="Acceptance" height=190 subtitle="Passed, failed, waiting" -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Acceptance evidence</title>
+<style>
+body{margin:0;font-family:var(--font-sans);background:var(--page);color:var(--text);font-size:13px}
+.chip{display:inline-flex;align-items:center;gap:var(--space-1);font-size:12.5px;line-height:1;font-weight:500;padding:7px var(--space-3);border-radius:var(--radius-chip);border:1px solid transparent;white-space:nowrap}
+.chip i{font-style:normal;font-size:11px}
+.moved{background:var(--moved-fill);color:var(--moved-strong)}
+.done{background:var(--done-fill);color:var(--done-word)}
+.review{background:var(--review-fill);color:var(--review-word)}
+.waiting{background:var(--waiting-fill);color:var(--waiting-word)}
+.failed{background:var(--waiting-fill);color:var(--waiting-word);border:var(--hairline-dashed) dashed var(--waiting-mark)}
+.idle{background:transparent;color:var(--muted);border:var(--hairline) solid var(--idle-line)}
+.loop{background:transparent;color:var(--muted);border:var(--hairline-dashed) dashed var(--loop-mark)}
+.row{display:flex;flex-wrap:wrap;gap:var(--space-2);align-items:center}
+.k{width:150px;flex:none;color:var(--muted);font-size:12px}
+.req{background:var(--raised);border:var(--hairline) solid var(--line-strong);border-radius:var(--radius-card);padding:14px 16px;max-width:560px}.q{color:var(--ink);font-weight:600;margin-bottom:10px}.ev{display:grid;grid-template-columns:92px 1fr;gap:8px 10px;align-items:center}.n{color:var(--ink);font-weight:600}.n span{color:var(--muted);font-weight:400}</style></head>
+<body>
+<div style="padding:16px"><div class="req"><div class="q">Accept this pull request?</div><div class="ev"><span class="chip done">✓ Passed</span><span class="n">Checks <span>· 8 of 8 passed</span></span><span class="chip failed"><i>✕</i> Failed</span><span class="n">adr verify <span>· 2 findings</span></span><span class="chip waiting">Waiting</span><span class="n">Review <span>· not yet</span></span></div></div></div>
+</body>
+</html>

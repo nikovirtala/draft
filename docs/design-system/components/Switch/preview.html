@@ -1,0 +1,22 @@
+<!-- @dsCard group="Controls" height=80 subtitle="The selected option is moved-selected, with ink words" -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Switch</title>
+<style>
+body{margin:0;font-family:var(--font-sans);background:var(--page);color:var(--text);font-size:13px}
+.chip{display:inline-flex;align-items:center;gap:var(--space-1);font-size:12.5px;line-height:1;font-weight:500;padding:7px var(--space-3);border-radius:var(--radius-chip);border:1px solid transparent;white-space:nowrap}
+.chip i{font-style:normal;font-size:11px}
+.moved{background:var(--moved-fill);color:var(--moved-strong)}
+.done{background:var(--done-fill);color:var(--done-word)}
+.review{background:var(--review-fill);color:var(--review-word)}
+.waiting{background:var(--waiting-fill);color:var(--waiting-word)}
+.failed{background:var(--waiting-fill);color:var(--waiting-word);border:var(--hairline-dashed) dashed var(--waiting-mark)}
+.idle{background:transparent;color:var(--muted);border:var(--hairline) solid var(--idle-line)}
+.loop{background:transparent;color:var(--muted);border:var(--hairline-dashed) dashed var(--loop-mark)}
+.row{display:flex;flex-wrap:wrap;gap:var(--space-2);align-items:center}
+.k{width:150px;flex:none;color:var(--muted);font-size:12px}
+.seg{display:inline-flex;gap:4px;padding:3px;border:var(--hairline) solid var(--line);border-radius:10px;background:var(--surface)}.seg span{padding:6px 12px;border-radius:var(--radius-chip);color:var(--muted);font-weight:500}.seg span:hover{background:var(--moved-fill)}.seg .on{background:var(--moved-selected);color:var(--ink)}</style></head>
+<body>
+<div style="padding:16px" class="row"><span class="seg"><span class="on">Last hour</span><span>Last day</span><span>Everything</span></span><span class="seg"><span class="on">Graph</span><span>By state</span></span></div>
+</body>
+</html>

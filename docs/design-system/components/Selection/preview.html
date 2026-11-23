@@ -1,0 +1,22 @@
+<!-- @dsCard group="Controls" height=300 subtitle="Hover, selected, changed, a count badge" -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Selection and change, the Wisteria Lily way</title>
+<style>
+body{margin:0;font-family:var(--font-sans);background:var(--page);color:var(--text);font-size:13px}
+.chip{display:inline-flex;align-items:center;gap:var(--space-1);font-size:12.5px;line-height:1;font-weight:500;padding:7px var(--space-3);border-radius:var(--radius-chip);border:1px solid transparent;white-space:nowrap}
+.chip i{font-style:normal;font-size:11px}
+.moved{background:var(--moved-fill);color:var(--moved-strong)}
+.done{background:var(--done-fill);color:var(--done-word)}
+.review{background:var(--review-fill);color:var(--review-word)}
+.waiting{background:var(--waiting-fill);color:var(--waiting-word)}
+.failed{background:var(--waiting-fill);color:var(--waiting-word);border:var(--hairline-dashed) dashed var(--waiting-mark)}
+.idle{background:transparent;color:var(--muted);border:var(--hairline) solid var(--idle-line)}
+.loop{background:transparent;color:var(--muted);border:var(--hairline-dashed) dashed var(--loop-mark)}
+.row{display:flex;flex-wrap:wrap;gap:var(--space-2);align-items:center}
+.k{width:150px;flex:none;color:var(--muted);font-size:12px}
+.pane{display:flex;gap:0;background:var(--page);border:var(--hairline) solid var(--line);border-radius:var(--radius-card);overflow:hidden;width:520px}.rail{width:56px;background:var(--raised);display:flex;flex-direction:column;align-items:center;gap:14px;padding:12px 0}.tile{width:36px;height:36px;border-radius:10px;display:grid;place-items:center}.tile.on{background:var(--moved-fill)}.ic{width:18px;height:18px;border:2px solid var(--moved-mark);border-radius:4px}.ic.off{border-color:var(--line-strong)}.badge-wrap{position:relative}.badge{position:absolute;right:-8px;bottom:-8px;min-width:18px;height:18px;border-radius:999px;background:var(--moved-strong);color:var(--page);font:600 11px/18px var(--font-sans);text-align:center}.list{flex:1;padding:10px 0}.it{display:flex;justify-content:space-between;padding:6px 14px;color:var(--text);margin:1px 6px;border-radius:6px}.it.hover{background:var(--moved-fill)}.it.sel{background:var(--moved-selected);color:var(--ink)}.it.changed span:first-child{color:var(--moved-word);font-weight:500}.mk{color:var(--moved-word);font-weight:600}.d{width:8px;height:8px;border-radius:50%;background:var(--moved-fill);align-self:center}.d.dark{background:var(--moved-mark)}</style></head>
+<body>
+<div style="padding:16px"><div class="pane"><div class="rail"><div class="tile on"><div class="ic"></div></div><div class="tile"><div class="ic off"></div></div><div class="tile badge-wrap"><div class="ic off"></div><span class="badge">7</span></div></div><div class="list"><div class="it"><span>Main conversation</span></div><div class="it hover"><span>Thread: the map as a graph</span></div><div class="it changed"><span>Thread: one palette</span><span class="d"></span></div><div class="it sel changed"><span>Thread: voice, same room</span><span class="d dark"></span></div><div class="it"><span>Thread: environments</span></div><div class="it changed"><span>ADR 8rhwhgbw</span><span class="mk">U</span></div></div></div></div>
+</body>
+</html>

@@ -1,0 +1,22 @@
+<!-- @dsCard group="States" height=330 subtitle="Every state, and the board's chips beside draft's" -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>State chips</title>
+<style>
+body{margin:0;font-family:var(--font-sans);background:var(--page);color:var(--text);font-size:13px}
+.chip{display:inline-flex;align-items:center;gap:var(--space-1);font-size:12.5px;line-height:1;font-weight:500;padding:7px var(--space-3);border-radius:var(--radius-chip);border:1px solid transparent;white-space:nowrap}
+.chip i{font-style:normal;font-size:11px}
+.moved{background:var(--moved-fill);color:var(--moved-strong)}
+.done{background:var(--done-fill);color:var(--done-word)}
+.review{background:var(--review-fill);color:var(--review-word)}
+.waiting{background:var(--waiting-fill);color:var(--waiting-word)}
+.failed{background:var(--waiting-fill);color:var(--waiting-word);border:var(--hairline-dashed) dashed var(--waiting-mark)}
+.idle{background:transparent;color:var(--muted);border:var(--hairline) solid var(--idle-line)}
+.loop{background:transparent;color:var(--muted);border:var(--hairline-dashed) dashed var(--loop-mark)}
+.row{display:flex;flex-wrap:wrap;gap:var(--space-2);align-items:center}
+.k{width:150px;flex:none;color:var(--muted);font-size:12px}
+</style></head>
+<body>
+<div style="padding:16px;display:grid;gap:10px"><div class="row"><span class="k">Moved, agent's activity</span><span class="chip moved">Working</span><span class="chip moved">Moved 2 min ago</span><span class="chip moved">Kiro is answering</span></div><div class="row"><span class="k">Done, settled</span><span class="chip done">✓ Merged</span><span class="chip done">✓ 8/8 checks passed</span><span class="chip done">✓ Approved</span><span class="chip done">✓ Accepted</span></div><div class="row"><span class="k">Under way elsewhere</span><span class="chip review">○ Open</span><span class="chip review">4 running</span><span class="chip review">In review</span></div><div class="row"><span class="k">Waits on you</span><span class="chip waiting">Your review</span><span class="chip waiting">Proposed · for you</span><span class="chip waiting">Permission asked</span></div><div class="row"><span class="k">Failure</span><span class="chip failed"><i>✕</i> 2 failing</span><span class="chip failed"><i>✕</i> Merge conflict</span><span class="chip failed"><i>✕</i> Changes requested</span></div><div class="row"><span class="k">Not started, open loop</span><span class="chip idle">Not started</span><span class="chip idle">Closed</span><span class="chip loop">Open loop</span></div><div class="row" style="margin-top:6px;padding-top:12px;border-top:var(--hairline) solid var(--line)"><span class="k">The delivery board</span><span class="chip" style="background:#d7f2e4;color:#009456">?28</span><span class="chip" style="background:#ede1ff;color:#973cff">?61</span><span class="chip" style="background:#dcefff;color:#0a7fd1">?62</span><span class="chip" style="background:#fbecc9;color:#b87700">?63</span><span class="chip" style="color:#6f8487;border-color:#b9c4c4">?70</span></div><div class="row"><span class="k">draft, same chips</span><span class="chip done">?28</span><span class="chip moved">?61</span><span class="chip review">?62</span><span class="chip waiting">?63</span><span class="chip idle">?70</span></div></div>
+</body>
+</html>
