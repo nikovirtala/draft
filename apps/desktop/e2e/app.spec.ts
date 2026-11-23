@@ -3,13 +3,8 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { appendRawLines, FakeKiroRemote } from "@nikovirtala/draft-core/testing";
-import {
-  type ElectronApplication,
-  _electron as electron,
-  expect,
-  type Page,
-  test,
-} from "@playwright/test";
+import { type ElectronApplication, expect, type Page } from "@playwright/test";
+import { launchApp, shot, test } from "./harness.ts";
 
 /**
  * draft end to end, in Electron, against the scripted fake ACP agent (a real stdio process) and the
@@ -62,7 +57,7 @@ test.afterAll(async () => {
 async function launch(): Promise<{ electronApp: ElectronApplication; page: Page }> {
   // Without a display (a sandbox with no Xvfb), Chromium's headless platform renders offscreen.
   const display = process.env.DISPLAY === undefined ? ["--ozone-platform=headless"] : [];
-  const electronApp = await electron.launch({
+  const electronApp = await launchApp({
     args: [join(app, "out/main/index.js"), "--no-sandbox", "--disable-gpu", ...display],
     cwd: app,
     env: {
@@ -96,9 +91,6 @@ const agentRecords = (): Record<string, any>[] =>
     .split("\n")
     .filter((l) => l !== "")
     .map((l) => JSON.parse(l));
-
-const shot = (page: Page, name: string) =>
-  page.screenshot({ path: join(artifacts, `${name}.png`) });
 
 test("one conversation with live Kiro session stubs, restored from the log", async () => {
   // 1. An empty conversation.

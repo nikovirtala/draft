@@ -3,13 +3,8 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { FakeKiroRemote } from "@nikovirtala/draft-core/testing";
-import {
-  type ElectronApplication,
-  _electron as electron,
-  expect,
-  type Page,
-  test,
-} from "@playwright/test";
+import { type ElectronApplication, expect, type Page } from "@playwright/test";
+import { launchApp, shot, test } from "./harness.ts";
 
 /**
  * The window's frame, end to end in Electron: what the top bar holds and what the footer holds,
@@ -41,7 +36,7 @@ async function launch(
   data: string = dataDir,
 ): Promise<{ electronApp: ElectronApplication; page: Page }> {
   const display = process.env.DISPLAY === undefined ? ["--ozone-platform=headless"] : [];
-  const electronApp = await electron.launch({
+  const electronApp = await launchApp({
     args: [join(app, "out/main/index.js"), "--no-sandbox", "--disable-gpu", ...display],
     cwd: app,
     env: {
@@ -64,9 +59,6 @@ async function launch(
   await page.setViewportSize({ width: 1280, height: 900 });
   return { electronApp, page };
 }
-
-const shot = (page: Page, name: string) =>
-  page.screenshot({ path: join(artifacts, `${name}.png`) });
 
 const MAIN_WORDS = "Ask, describe, or type @ to reference anything";
 const THREAD_WORDS = "Reply in thread…";

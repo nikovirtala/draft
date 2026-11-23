@@ -4,14 +4,8 @@ import { dirname, join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { fileURLToPath } from "node:url";
 import { FakeKiroRemote } from "@nikovirtala/draft-core/testing";
-import {
-  type ElectronApplication,
-  _electron as electron,
-  expect,
-  type Locator,
-  type Page,
-  test,
-} from "@playwright/test";
+import { type ElectronApplication, expect, type Locator, type Page } from "@playwright/test";
+import { launchApp, shot, test } from "./harness.ts";
 
 /**
  * Blocks, threads, the panel, real windows and focus, end to end in Electron against two scripted
@@ -79,7 +73,7 @@ test.afterAll(async () => {
 
 async function launch(): Promise<{ electronApp: ElectronApplication; page: Page }> {
   const display = process.env.DISPLAY === undefined ? ["--ozone-platform=headless"] : [];
-  const electronApp = await electron.launch({
+  const electronApp = await launchApp({
     args: [join(app, "out/main/index.js"), "--no-sandbox", "--disable-gpu", ...display],
     cwd: app,
     env: {
@@ -103,9 +97,6 @@ async function launch(): Promise<{ electronApp: ElectronApplication; page: Page 
   await page.setViewportSize({ width: 1280, height: 840 });
   return { electronApp, page };
 }
-
-const shot = (page: Page, name: string) =>
-  page.screenshot({ path: join(artifacts, `${name}.png`) });
 
 // biome-ignore lint/suspicious/noExplicitAny: JSON records written by the fake agents, read in assertions
 const records = (file: string): Record<string, any>[] =>

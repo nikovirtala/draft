@@ -4,14 +4,8 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { FakeGithub, FakeKiroRemote } from "@nikovirtala/draft-core/testing";
-import {
-  type ElectronApplication,
-  _electron as electron,
-  expect,
-  type Locator,
-  type Page,
-  test,
-} from "@playwright/test";
+import { type ElectronApplication, expect, type Locator, type Page } from "@playwright/test";
+import { launchApp, shot, test } from "./harness.ts";
 
 /**
  * What needs you, in one place and one order, end to end in Electron: a scripted ACP agent over
@@ -100,7 +94,7 @@ async function launch(
   data: string = dataDir,
 ): Promise<{ electronApp: ElectronApplication; page: Page }> {
   const display = process.env.DISPLAY === undefined ? ["--ozone-platform=headless"] : [];
-  const electronApp = await electron.launch({
+  const electronApp = await launchApp({
     args: [join(app, "out/main/index.js"), "--no-sandbox", "--disable-gpu", ...display],
     cwd: app,
     env: {
@@ -126,9 +120,6 @@ async function launch(
   await page.setViewportSize({ width: 1280, height: 900 });
   return { electronApp, page };
 }
-
-const shot = (page: Page, name: string) =>
-  page.screenshot({ path: join(artifacts, `${name}.png`) });
 
 // biome-ignore lint/suspicious/noExplicitAny: log events, read in assertions
 const readLog = (): Record<string, any>[] =>
