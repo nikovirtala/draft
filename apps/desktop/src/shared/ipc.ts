@@ -178,6 +178,8 @@ export interface ConversationState {
   prompts: Prompt[];
   proposals: Proposal[];
   busy: boolean;
+  /** The stubs being read now, by `type:id`. */
+  resolving: string[];
   error: string | null;
 }
 

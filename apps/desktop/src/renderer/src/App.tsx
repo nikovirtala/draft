@@ -7,6 +7,7 @@ import { BlockContent } from "./components/BlockContent.tsx";
 import { ContextBar } from "./components/ContextBar.tsx";
 import { ConversationView } from "./components/ConversationView.tsx";
 import { TrustStep } from "./components/TrustStep.tsx";
+import { GlobalWorking, Working } from "./components/Working.tsx";
 import { useVisibleStubs } from "./visibility.ts";
 import { panelEntry, useWorkspace, type Workspace, WorkspaceProvider } from "./workspace.tsx";
 
@@ -47,6 +48,7 @@ function MainWindow() {
             onChange={(s) => void window.draft.setAgentState(ws.main, s)}
           />
         )}
+        <GlobalWorking />
         <span className="spacer" />
         <AttentionBar />
       </header>
@@ -97,6 +99,15 @@ function Shell({ boot }: { boot: Ready }) {
   );
 }
 
+/** A window that is opening its context: the log is read and the agent made ready. */
+export function BootingWindow() {
+  return (
+    <div className="app" data-testid="booting">
+      <Working active label="Opening this context" place="context" className="opening" />
+    </div>
+  );
+}
+
 export function App() {
   const [boot, setBoot] = useState<Boot | null>(null);
   const load = () => void window.draft.boot().then(setBoot);
@@ -123,7 +134,7 @@ export function App() {
       </div>
     );
   }
-  if (boot === null) return <div className="app" />;
+  if (boot === null) return <BootingWindow />;
   return <Shell boot={boot} />;
 }
 

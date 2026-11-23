@@ -7,6 +7,7 @@ import { useWorkspace } from "../workspace.tsx";
 import { BlockControls } from "./Icons.tsx";
 import { LayoutSwitch, MapGraph, type MapLayout } from "./MapGraph.tsx";
 import { useSelectable } from "./selectable.ts";
+import { Working } from "./Working.tsx";
 
 /**
  * The map (docs/model.md, "The map"): one row for each kind, one column for each of its states,
@@ -374,6 +375,7 @@ export function MapView({ address }: { address: string }) {
         <p className="map-summary" data-testid="map-summary" aria-live="polite">
           {summaryText(map)}
         </p>
+        <Working active={map.reading} label="Reading GitHub" place="map" />
         <fieldset className="map-range" aria-label="Moves shown">
           {RANGES.map((r) => (
             <label key={r.id} className={range === r.id ? "on" : ""}>
@@ -485,6 +487,7 @@ function MapLine() {
   return (
     <span className="stub-status" data-testid="map-line" aria-live="polite">
       {map === null ? "…" : summaryText(map)}
+      <Working active={map?.reading === true} label="Reading GitHub" place="map" />
     </span>
   );
 }

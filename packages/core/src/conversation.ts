@@ -234,6 +234,8 @@ export interface UiState {
   /** Sentences that asked to open a context and wait for a person to confirm. */
   proposals: UiProposal[];
   busy: boolean;
+  /** The stubs being read now, by `type:id`. */
+  resolving: string[];
   error: string | null;
 }
 
@@ -399,6 +401,7 @@ export class ConversationService {
       },
       o.poller,
     );
+    this.poller.onActivity = () => this.emitState();
   }
 
   /**
@@ -700,6 +703,7 @@ export class ConversationService {
       prompts: [...this.prompts.values()].map((p) => p.prompt),
       proposals: [...this.proposals.values()],
       busy: this.busy,
+      resolving: this.poller.inFlight(),
       error: this.error,
     };
   }

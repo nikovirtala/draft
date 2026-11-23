@@ -344,6 +344,8 @@ export class ArkMap {
   private readonly rows = new Map<string, () => void>();
   private readonly viewers = new Set<string>();
   private inFlight: Promise<boolean> | null = null;
+  /** Called when a read starts or ends, so a window can show that the map is being read. */
+  onReading: () => void = () => {};
 
   constructor(
     private readonly registry: KindRegistry,
@@ -357,6 +359,11 @@ export class ArkMap {
   /** Rises when what the kinds read has changed. */
   get version(): number {
     return this.records.version;
+  }
+
+  /** A read of GitHub is under way. */
+  get reading(): boolean {
+    return this.inFlight !== null;
   }
 
   /** What the kinds read: the records as of the last refresh. */
@@ -376,15 +383,19 @@ export class ArkMap {
   /** Reads what changed when a map is on screen and it is time. Returns whether the map changed. */
   tick(): Promise<boolean> {
     if (this.viewers.size === 0 || !this.records.due()) return Promise.resolve(false);
-    this.inFlight ??= this.records
-      .refresh(this.o.intervalMs ?? 30_000)
-      .then((changed) => {
-        this.syncRows();
-        return changed;
-      })
-      .finally(() => {
-        this.inFlight = null;
-      });
+    if (this.inFlight === null) {
+      this.inFlight = this.records
+        .refresh(this.o.intervalMs ?? 30_000)
+        .then((changed) => {
+          this.syncRows();
+          return changed;
+        })
+        .finally(() => {
+          this.inFlight = null;
+          this.onReading();
+        });
+      this.onReading();
+    }
     return this.inFlight;
   }
 

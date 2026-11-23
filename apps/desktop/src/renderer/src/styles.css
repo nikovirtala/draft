@@ -877,6 +877,12 @@ textarea:focus-visible {
   border-color: transparent;
 }
 
+.thread-chip.working {
+  color: var(--moved-strong);
+  background: var(--moved-fill);
+  border-color: transparent;
+}
+
 .thread-preview {
   margin: 4px 0 4px 18px;
   color: var(--muted);
@@ -1955,4 +1961,67 @@ div.map-item {
 .pr-state.pr-closed::before {
   content: "✕";
   font-size: 11px;
+}
+
+/* The one indicator that draft is working: a ring turning in the colour of the agent's activity. */
+.working {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  gap: 6px;
+}
+
+.working-ring {
+  width: 14px;
+  height: 14px;
+  border-radius: var(--radius-round);
+  border: 2px solid color-mix(in srgb, var(--moved-mark) 25%, transparent);
+  border-top-color: var(--moved-mark);
+  animation: working-turn 0.9s linear infinite;
+}
+
+.working-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--moved-word);
+}
+
+.thread-chip .working-label,
+.thread-chip.working .working-label {
+  color: inherit;
+  font-size: inherit;
+}
+
+.turn-working {
+  align-self: flex-start;
+}
+
+.opening {
+  margin: 30vh auto 0;
+}
+
+@keyframes working-turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Without motion the ring stays, half drawn: still there, never turning. */
+@media (prefers-reduced-motion: reduce) {
+  .working-ring {
+    animation: none;
+    border-right-color: var(--moved-mark);
+  }
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
 }
