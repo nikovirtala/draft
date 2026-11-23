@@ -1,0 +1,122 @@
+<!-- @dsCard group="Kiro Remote" height=1500 subtitle="What the change feed says: a wait edge, the stub's wait and woke chips, a feed that stopped" -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Kiro Remote's change feed</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:var(--font-sans);background:var(--page);color:var(--text);font-size:13px;line-height:20px}
+.wrap{padding:16px;display:grid;gap:22px}
+.k{margin:0 0 6px;color:var(--muted);font-size:12px;line-height:16px;font-weight:400}
+.k b{color:var(--ink);font-weight:600}
+.chip,.pending,.where{display:inline-flex;align-items:center;gap:var(--space-1);font-size:12.5px;line-height:1;font-weight:500;padding:7px var(--space-3);border-radius:var(--radius-chip);border:1px solid transparent;white-space:nowrap}
+.chip i{font-style:normal;font-size:11px}
+.moved,.where{background:var(--moved-fill);color:var(--moved-strong)}
+.done{background:var(--done-fill);color:var(--done-word)}
+.review{background:var(--review-fill);color:var(--review-word)}
+.waiting{background:var(--waiting-fill);color:var(--waiting-word)}
+.failed{background:var(--waiting-fill);color:var(--waiting-word);border:var(--hairline-dashed) dashed var(--waiting-mark)}
+.idle{background:transparent;color:var(--muted);border:var(--hairline) solid var(--idle-line)}
+.row{display:flex;flex-wrap:wrap;gap:var(--space-2);align-items:center}
+.primary-button,.secondary-button{font:inherit;font-weight:560;border-radius:9px;padding:7px 16px;cursor:default;color:var(--ink)}
+.primary-button{background:var(--moved-selected);border:var(--hairline) solid var(--line-strong)}
+.primary-button.off{opacity:.45}
+.secondary-button{background:var(--raised);border:var(--hairline) solid var(--line)}
+.small{padding:3px 10px;font-size:12px;font-weight:500;border-radius:6px}
+.focus{outline:1.5px solid var(--moved-mark);outline-offset:1px}
+.working{display:inline-flex;align-items:center;gap:8px;color:var(--moved-word);font-weight:500}
+.working-ring{width:14px;height:14px;border-radius:var(--radius-round);border:2px solid color-mix(in srgb,var(--moved-mark) 25%,transparent);border-top-color:var(--moved-mark);flex:none}
+.working-ring.s{width:10px;height:10px}
+@media (prefers-reduced-motion:no-preference){.working-ring{animation:turn .9s linear infinite}}
+@keyframes turn{to{transform:rotate(360deg)}}
+.caret{display:inline-block;width:.5em;height:1.05em;margin-left:2px;vertical-align:text-bottom;background:var(--moved-mark)}
+.dot{width:8px;height:8px;border-radius:var(--radius-round);flex:none;background:var(--idle-line)}
+.dot.run{background:var(--moved-mark)}.dot.open{background:var(--review-mark)}.dot.merged{background:var(--done-mark)}.dot.wait{background:var(--waiting-mark)}
+.ref{color:var(--muted);font-family:var(--font-mono);font-size:12px}
+.t{color:var(--ink);font-weight:600}
+.secondary{color:var(--muted)}
+.stub,.thread-stub{display:flex;align-items:center;gap:10px;flex-wrap:wrap;min-height:40px;background:var(--raised);border:var(--hairline) solid var(--line-strong);border-radius:var(--radius-card);padding:6px 12px}
+.thread-mark{color:var(--moved-strong);font-weight:700}
+.stub .grow,.thread-stub .grow{flex:1}
+.win{display:flex;flex-direction:column;background:var(--page);border:var(--hairline) solid var(--line-strong);border-radius:var(--radius-card);overflow:hidden;color:var(--text)}
+.titlebar{display:flex;align-items:baseline;gap:12px;padding:10px 20px;background:var(--titlebar);border-bottom:var(--hairline) solid var(--line);position:relative}
+.titlebar b{color:var(--ink);font-weight:650}
+.titlebar .ctx{color:var(--ink)}
+.titlebar .title{color:var(--muted)}
+.titlebar .spacer{flex:1}
+.attention{font-weight:560;color:var(--waiting-word)}
+.footer{display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px;padding:6px 12px;border-top:var(--hairline) solid var(--line);font-size:12px;color:var(--muted)}
+.footer.on-titlebar{background:var(--titlebar)}
+.footer .agent-state{margin-left:auto;display:flex;gap:8px;align-items:center}
+.footer .chip{padding:6px 9px}
+.footer .agent-state .who{color:var(--ink)}
+.workspace{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr)}
+.workspace.with-panel{grid-template-columns:minmax(0,1fr) 8px 44%}
+.divider{border-left:var(--hairline) solid var(--line)}
+.left,.panel{min-height:0;min-width:0;display:flex;flex-direction:column;background:var(--page)}
+.conversation{flex:1;min-height:0;overflow:hidden;position:relative}
+.column{max-width:950px;margin:0 auto;padding:20px 24px 12px;display:flex;flex-direction:column;gap:14px}
+.empty{color:var(--muted);text-align:center;margin:44px 0 0}
+.notice{background:var(--raised);border:var(--hairline-dashed) dashed var(--line-strong);border-radius:var(--radius-card);color:var(--muted);padding:10px 14px}
+.message.user{align-self:flex-end;max-width:78%}
+.message.user .body{background:var(--surface);border-radius:14px 14px 4px 14px;padding:9px 14px}
+.message.agent{align-self:stretch;font-family:var(--font-serif);font-size:15px;line-height:24px}
+.message.agent p,.message.user p{margin:0 0 .6em}.message.agent p:last-child{margin:0}
+.message.agent code{font-family:var(--font-mono);font-size:12px}
+.message.aside{align-self:flex-end}
+.message.aside .audience{margin:0 0 3px;font-size:11.5px;color:var(--muted);text-align:right}
+.message.aside .body{background:transparent;border:var(--hairline-dashed) dashed var(--line-strong);border-radius:var(--radius-card);padding:8px 14px}
+.composer-wrap{padding:10px 24px 12px;width:100%;max-width:950px;margin:0 auto}
+.composer{display:flex;gap:10px;align-items:flex-end}
+.composer .field{flex:1;background:var(--surface);color:var(--ink);border:var(--hairline) solid var(--line-strong);border-radius:12px;padding:9px 12px;min-height:40px}
+.composer .field.ph{color:var(--muted)}
+.composer-hint{margin:6px 2px 0;color:var(--muted);font-size:12px}
+kbd{font:11px var(--font-sans);border:var(--hairline) solid var(--line-strong);border-radius:4px;padding:0 4px;background:var(--raised)}
+.panel-head{padding:12px 16px 10px;border-bottom:var(--hairline) solid var(--line);display:grid;gap:8px;background:var(--page)}
+.panel-head .name{color:var(--ink);font-weight:700}
+.panel-body{flex:1;padding:16px;overflow:hidden}
+.prompt,.interrupt{background:var(--waiting-fill);border:var(--hairline) solid var(--line-strong);border-radius:12px;padding:12px 14px;max-width:900px}
+.interrupt-label{margin:0 0 8px;display:flex;gap:12px;align-items:baseline;color:var(--waiting-word)}
+.interrupt-label .age{color:var(--muted)}
+.prompt-title{margin:0 0 8px;color:var(--ink)}
+.prompt-title strong{color:var(--waiting-word)}
+.prompt-input{margin:0 0 10px;padding:8px 10px;background:var(--surface);border:var(--hairline) solid var(--line-strong);border-radius:8px;font:12.5px/18px var(--font-mono);white-space:pre-wrap}
+.prompt-actions{display:flex;justify-content:flex-end;gap:8px}
+.error{display:flex;align-items:center;gap:var(--space-3);color:var(--waiting-word);background:var(--waiting-fill);border:var(--hairline-dashed) dashed var(--waiting-mark);border-radius:var(--radius-card);padding:10px 14px}
+.error::before{content:"✕";font-weight:600}
+.box{background:var(--raised);border:var(--hairline) solid var(--line-strong);border-radius:var(--radius-card);padding:12px;max-width:640px}.stage{background:var(--raised);border:var(--hairline) solid var(--line-strong);border-radius:var(--radius-card);display:grid;place-items:center;padding:8px 0}.legend{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}.card{border:var(--hairline) solid var(--line-strong);border-radius:var(--radius-card);background:var(--raised);padding:10px 14px;margin-top:8px}.card .t{display:block}.dl{display:grid;grid-template-columns:130px 1fr;gap:2px 0;padding:6px 8px;color:var(--text)}.dl dt{color:var(--muted)}.dl dd{margin:0}.crumbs{color:var(--ink);margin:0 0 6px}.running{color:var(--moved-strong);font-weight:600}.nb{margin-top:10px}</style></head>
+<body>
+<div class="wrap">
+
+<section data-draws="fw01-session-waits-on-a-pull-request-map">
+<p class="k"><b>A session waits for a pull request, on the map.</b> The edge is a <code>waiting-mark</code> line at the weight of a cascade, with an arrow to what it waits for; the item it points to is a <code>waiting-fill</code> disc with a <code>waiting-mark</code> hairline. The legend names it in words.</p>
+<div class="box"><p class="crumbs"><u>Context</u> › <u>Kiro sessions</u> › <b>Build the feed view</b></p><div class="stage"><svg viewBox="0 0 520 260" width="520" height="260" style="color:var(--waiting-mark)" role="img" aria-label="A session with an edge to the pull request it waits for"><defs><marker id="fw-waits" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="currentColor"/></marker></defs>
+<circle cx="300" cy="70" r="34" fill="var(--surface)" stroke="var(--idle-line)" stroke-width="2"/>
+<text x="300" y="146" text-anchor="middle" font-size="13" fill="var(--muted)" font-family="var(--font-sans)">Build the feed view</text>
+<path d="M296 108 C280 150 250 170 236 200" fill="none" stroke="var(--waiting-mark)" stroke-width="1.6" style="color:var(--waiting-mark)" marker-end="url(#fw-waits)"/><circle cx="232" cy="214" r="12" fill="var(--waiting-fill)" stroke="var(--waiting-mark)" stroke-width=".75"/><text x="232" y="246" text-anchor="middle" font-size="12" fill="var(--waiting-word)" font-family="var(--font-sans)">nikovirtala/kiro-remote#7…</text></svg></div><div class="card"><b class="t">Build the feed view</b><span class="secondary">Kiro sessions · Running since just now</span><ul style="margin:6px 0 0;padding-left:18px"><li>Build the feed view waits for nikovirtala/kiro-remote#7: Publish the change feed</li></ul></div><div class="legend"><span class="chip waiting"><span style="color:var(--waiting-mark)">→</span>Wait: a session waits for a pull request</span><span class="chip moved">→ Cascade: a reference between items that moved</span><span class="chip done">○ Settled: done</span><span class="chip waiting">○ Waiting: needs you</span></div></div>
+</section>
+<section data-draws="fw03-the-pull-request-merged-and-the-session-woke-map">
+<p class="k"><b>The pull request merged and the session woke, on the map.</b> The wait edge is gone with the wait; the session says why it woke in words.</p>
+<div class="box"><p class="crumbs"><u>Context</u> › <u>Kiro sessions</u> › <b>Build the feed view</b></p><div class="stage"><svg viewBox="0 0 520 260" width="520" height="260" style="color:var(--waiting-mark)" role="img" aria-label="A session, settled"><defs><marker id="fw-woke" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="currentColor"/></marker></defs>
+<circle cx="260" cy="110" r="40" fill="var(--surface)" stroke="var(--idle-line)" stroke-width="2"/>
+<text x="260" y="176" text-anchor="middle" font-size="13" fill="var(--muted)" font-family="var(--font-sans)">Build the feed view</text>
+</svg></div><div class="card"><b class="t">Build the feed view</b><span class="secondary">Kiro sessions · Running since just now · woke: a pull request it waited for nikovirtala/kiro-remote#7 merged</span></div><div class="legend"><span class="chip waiting"><span style="color:var(--waiting-mark)">→</span>Wait: a session waits for a pull request</span><span class="chip moved">→ Cascade: a reference between items that moved</span><span class="chip done">○ Settled: done</span><span class="chip waiting">○ Waiting: needs you</span></div></div>
+</section>
+<section data-draws="fw02-session-waits-on-a-pull-request-stub">
+<p class="k"><b>A session's stub while it waits.</b> The wait is a wait chip with the pull request's reference. Keyboard focus is on the stub: a 1.5px <code>moved-mark</code> ring, no fill.</p>
+<div class="box"><div class="stub focus" style="margin-bottom:6px"><span class="dot run"></span><span class="t">Build the feed view</span><span class="running">Running</span><span class="chip waiting">Waiting for nikovirtala/kiro-remote#7</span></div>
+<dl class="dl"><dt>Session</dt><dd class="ref">01KAHX7Z1M2N3P4Q5R6S7T8V9W</dd><dt>Repositories</dt><dd>nikovirtala/kiro-remote</dd><dt>Waiting for</dt><dd>nikovirtala/kiro-remote#7</dd><dt>Built from</dt><dd>the kiro-remote feed, cursor 1, from the session as it was at 0</dd><dt>When mentioned</dt><dd>Running</dd></dl></div>
+</section>
+<section data-draws="fw04-the-pull-request-merged-and-the-session-woke-stub">
+<p class="k"><b>The same stub after it woke.</b> The wait chip is replaced by a <code>moved-fill</code> chip that says why.</p>
+<div class="box"><div class="stub" style="margin-bottom:6px"><span class="dot run"></span><span class="t">Build the feed view</span><span class="running">Running</span><span class="chip moved">Woke: a pull request it waited for nikovirtala/kiro-remote#7 merged</span></div>
+<dl class="dl"><dt>Last woke</dt><dd>a pull request it waited for nikovirtala/kiro-remote#7 merged, 7:11:42 PM</dd><dt>Built from</dt><dd>the kiro-remote feed, cursor 4, from the session as it was at 0</dd></dl></div>
+</section>
+<section data-draws="fw06-the-feed-stopped-at-a-type-draft-cant-read">
+<p class="k"><b>The feed stopped at a type draft can't read.</b> A note from draft (<code>raised</code>, dashed hairline, <code>muted</code> words), a wait chip on what may be out of date, and the provenance line says so.</p>
+<div class="box"><div class="notice" style="margin-bottom:10px">Kiro Remote's change feed has an event draft can't read (wait.paused, number 3). It changes what sessions wait for, so draft stopped following the feed, and what it shows of waits and links may be out of date. Update draft to read it again.</div>
+<div class="stub" style="margin-bottom:8px"><span class="dot run"></span><span class="t">Build the feed view</span><span class="running">Running</span><span class="chip waiting">Waits may be out of date</span></div>
+<p class="secondary" style="margin:0">Built from the kiro-remote feed, cursor 7 · out of date: it stopped at wait.paused.</p></div>
+</section>
+</div>
+</body>
+</html>

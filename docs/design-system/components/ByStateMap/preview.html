@@ -1,0 +1,114 @@
+<!-- @dsCard group="Map" height=1100 subtitle="Cells in every state, the chosen cell, arcs for a three-state and a six-state kind, an empty context" -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>The map, by state</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:var(--font-sans);background:var(--page);color:var(--text);font-size:13px;line-height:20px}
+.wrap{padding:16px;display:grid;gap:22px}
+.k{margin:0 0 6px;color:var(--muted);font-size:12px;line-height:16px;font-weight:400}
+.k b{color:var(--ink);font-weight:600}
+.chip,.pending,.where{display:inline-flex;align-items:center;gap:var(--space-1);font-size:12.5px;line-height:1;font-weight:500;padding:7px var(--space-3);border-radius:var(--radius-chip);border:1px solid transparent;white-space:nowrap}
+.chip i{font-style:normal;font-size:11px}
+.moved,.where{background:var(--moved-fill);color:var(--moved-strong)}
+.done{background:var(--done-fill);color:var(--done-word)}
+.review{background:var(--review-fill);color:var(--review-word)}
+.waiting{background:var(--waiting-fill);color:var(--waiting-word)}
+.failed{background:var(--waiting-fill);color:var(--waiting-word);border:var(--hairline-dashed) dashed var(--waiting-mark)}
+.idle{background:transparent;color:var(--muted);border:var(--hairline) solid var(--idle-line)}
+.row{display:flex;flex-wrap:wrap;gap:var(--space-2);align-items:center}
+.primary-button,.secondary-button{font:inherit;font-weight:560;border-radius:9px;padding:7px 16px;cursor:default;color:var(--ink)}
+.primary-button{background:var(--moved-selected);border:var(--hairline) solid var(--line-strong)}
+.primary-button.off{opacity:.45}
+.secondary-button{background:var(--raised);border:var(--hairline) solid var(--line)}
+.small{padding:3px 10px;font-size:12px;font-weight:500;border-radius:6px}
+.focus{outline:1.5px solid var(--moved-mark);outline-offset:1px}
+.working{display:inline-flex;align-items:center;gap:8px;color:var(--moved-word);font-weight:500}
+.working-ring{width:14px;height:14px;border-radius:var(--radius-round);border:2px solid color-mix(in srgb,var(--moved-mark) 25%,transparent);border-top-color:var(--moved-mark);flex:none}
+.working-ring.s{width:10px;height:10px}
+@media (prefers-reduced-motion:no-preference){.working-ring{animation:turn .9s linear infinite}}
+@keyframes turn{to{transform:rotate(360deg)}}
+.caret{display:inline-block;width:.5em;height:1.05em;margin-left:2px;vertical-align:text-bottom;background:var(--moved-mark)}
+.dot{width:8px;height:8px;border-radius:var(--radius-round);flex:none;background:var(--idle-line)}
+.dot.run{background:var(--moved-mark)}.dot.open{background:var(--review-mark)}.dot.merged{background:var(--done-mark)}.dot.wait{background:var(--waiting-mark)}
+.ref{color:var(--muted);font-family:var(--font-mono);font-size:12px}
+.t{color:var(--ink);font-weight:600}
+.secondary{color:var(--muted)}
+.stub,.thread-stub{display:flex;align-items:center;gap:10px;flex-wrap:wrap;min-height:40px;background:var(--raised);border:var(--hairline) solid var(--line-strong);border-radius:var(--radius-card);padding:6px 12px}
+.thread-mark{color:var(--moved-strong);font-weight:700}
+.stub .grow,.thread-stub .grow{flex:1}
+.win{display:flex;flex-direction:column;background:var(--page);border:var(--hairline) solid var(--line-strong);border-radius:var(--radius-card);overflow:hidden;color:var(--text)}
+.titlebar{display:flex;align-items:baseline;gap:12px;padding:10px 20px;background:var(--titlebar);border-bottom:var(--hairline) solid var(--line);position:relative}
+.titlebar b{color:var(--ink);font-weight:650}
+.titlebar .ctx{color:var(--ink)}
+.titlebar .title{color:var(--muted)}
+.titlebar .spacer{flex:1}
+.attention{font-weight:560;color:var(--waiting-word)}
+.footer{display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px;padding:6px 12px;border-top:var(--hairline) solid var(--line);font-size:12px;color:var(--muted)}
+.footer.on-titlebar{background:var(--titlebar)}
+.footer .agent-state{margin-left:auto;display:flex;gap:8px;align-items:center}
+.footer .chip{padding:6px 9px}
+.footer .agent-state .who{color:var(--ink)}
+.workspace{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr)}
+.workspace.with-panel{grid-template-columns:minmax(0,1fr) 8px 44%}
+.divider{border-left:var(--hairline) solid var(--line)}
+.left,.panel{min-height:0;min-width:0;display:flex;flex-direction:column;background:var(--page)}
+.conversation{flex:1;min-height:0;overflow:hidden;position:relative}
+.column{max-width:950px;margin:0 auto;padding:20px 24px 12px;display:flex;flex-direction:column;gap:14px}
+.empty{color:var(--muted);text-align:center;margin:44px 0 0}
+.notice{background:var(--raised);border:var(--hairline-dashed) dashed var(--line-strong);border-radius:var(--radius-card);color:var(--muted);padding:10px 14px}
+.message.user{align-self:flex-end;max-width:78%}
+.message.user .body{background:var(--surface);border-radius:14px 14px 4px 14px;padding:9px 14px}
+.message.agent{align-self:stretch;font-family:var(--font-serif);font-size:15px;line-height:24px}
+.message.agent p,.message.user p{margin:0 0 .6em}.message.agent p:last-child{margin:0}
+.message.agent code{font-family:var(--font-mono);font-size:12px}
+.message.aside{align-self:flex-end}
+.message.aside .audience{margin:0 0 3px;font-size:11.5px;color:var(--muted);text-align:right}
+.message.aside .body{background:transparent;border:var(--hairline-dashed) dashed var(--line-strong);border-radius:var(--radius-card);padding:8px 14px}
+.composer-wrap{padding:10px 24px 12px;width:100%;max-width:950px;margin:0 auto}
+.composer{display:flex;gap:10px;align-items:flex-end}
+.composer .field{flex:1;background:var(--surface);color:var(--ink);border:var(--hairline) solid var(--line-strong);border-radius:12px;padding:9px 12px;min-height:40px}
+.composer .field.ph{color:var(--muted)}
+.composer-hint{margin:6px 2px 0;color:var(--muted);font-size:12px}
+kbd{font:11px var(--font-sans);border:var(--hairline) solid var(--line-strong);border-radius:4px;padding:0 4px;background:var(--raised)}
+.panel-head{padding:12px 16px 10px;border-bottom:var(--hairline) solid var(--line);display:grid;gap:8px;background:var(--page)}
+.panel-head .name{color:var(--ink);font-weight:700}
+.panel-body{flex:1;padding:16px;overflow:hidden}
+.prompt,.interrupt{background:var(--waiting-fill);border:var(--hairline) solid var(--line-strong);border-radius:12px;padding:12px 14px;max-width:900px}
+.interrupt-label{margin:0 0 8px;display:flex;gap:12px;align-items:baseline;color:var(--waiting-word)}
+.interrupt-label .age{color:var(--muted)}
+.prompt-title{margin:0 0 8px;color:var(--ink)}
+.prompt-title strong{color:var(--waiting-word)}
+.prompt-input{margin:0 0 10px;padding:8px 10px;background:var(--surface);border:var(--hairline) solid var(--line-strong);border-radius:8px;font:12.5px/18px var(--font-mono);white-space:pre-wrap}
+.prompt-actions{display:flex;justify-content:flex-end;gap:8px}
+.error{display:flex;align-items:center;gap:var(--space-3);color:var(--waiting-word);background:var(--waiting-fill);border:var(--hairline-dashed) dashed var(--waiting-mark);border-radius:var(--radius-card);padding:10px 14px}
+.error::before{content:"✕";font-weight:600}
+.box{background:var(--raised);border:var(--hairline) solid var(--line-strong);border-radius:var(--radius-card);padding:12px;max-width:640px}.map-bar{display:flex;justify-content:space-between;align-items:center;margin:8px 0 12px;gap:12px}.seg{display:inline-flex;gap:4px;padding:3px;background:var(--surface);border:var(--hairline) solid var(--line);border-radius:10px}.seg span{padding:6px 12px;border-radius:var(--radius-chip);color:var(--muted);font-weight:500}.seg .on{background:var(--moved-selected);color:var(--ink)}
+.map-row{margin:0 0 14px}.map-row-title{display:flex;align-items:center;gap:8px;margin:0 0 2px;font-size:13px;font-weight:650;color:var(--ink)}.map-row-total{color:var(--muted);font-weight:500}.map-derived{color:var(--muted);font-size:11.5px;font-weight:500;border-bottom:var(--hairline) dotted var(--line)}.map-row-grid{overflow-x:auto}.map-arrows{display:block;color:var(--moved-mark)}.map-arrows path{stroke:var(--moved-mark);fill:none}.map-arrows marker path{stroke:none;fill:var(--moved-mark)}.map-cells{display:flex}
+.map-cell{display:flex;flex-direction:column;align-items:flex-start;width:90px;margin:0 2px 0 0;padding:4px 6px;border-radius:7px;border:var(--hairline) solid transparent;background:var(--surface);color:var(--ink);flex:none;text-align:left}.map-cell.active{color:var(--moved-strong);background:var(--moved-fill)}.map-cell.terminal{color:var(--done-word);background:var(--done-fill)}.map-cell.none{color:var(--muted);background:transparent;border-color:var(--idle-line)}.map-cell.lit{color:var(--waiting-word);background:var(--waiting-fill)}.map-cell.selected{color:var(--ink);background:var(--moved-selected)}
+.map-cell-label{font-size:11.5px;line-height:1.25;min-height:2.5em}.map-cell-count{font-size:20px;font-weight:650;line-height:1.2}.map-cell-wait{font-size:11.5px;font-weight:600}.map-items{border:var(--hairline) solid var(--line);border-radius:var(--radius-card);padding:10px 12px;margin-top:6px}.map-items-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}.map-item{display:flex;justify-content:space-between;background:var(--surface);border:var(--hairline) solid var(--line);border-radius:8px;padding:6px 10px}.map-item .secondary{margin-left:12px}.legend{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}</style></head>
+<body>
+<div class="wrap">
+
+<section data-draws="m10-arcs-issues">
+<p class="k"><b>Arcs between the three states of a kind.</b> Each arc starts and ends on a cell's top edge, all share one arrowhead, the stroke is wider for more items, and an arc that holds another is drawn higher, so none crosses another or covers a label. A cell is a chip by state: purple for what is under way, green for terminal.</p>
+<div class="box"><div class="map-row"><p class="map-row-title">Issues <span class="map-row-total">6</span> <span class="map-derived">states derived</span></p>
+<div class="map-row-grid"><svg class="map-arrows" width="276" height="56" viewBox="0 0 276 56" aria-label="Arcs between states: Open to In progress, In progress to Closed, Open to Closed"><defs><marker id="ah3" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0L10 5L0 10z"/></marker></defs><path d="M56 55 C56 38 120 38 120 52" stroke-width="1.5" marker-end="url(#ah3)"/><path d="M154 55 C154 38 212 38 212 52" stroke-width="1.5" marker-end="url(#ah3)"/><path d="M24 55 C24 18 246 18 246 52" stroke-width="2" marker-end="url(#ah3)"/></svg><div class="map-cells"><span class="map-cell active"><span class="map-cell-label">Open</span><span class="map-cell-count">2</span><span class="map-cell-wait">&nbsp;</span></span><span class="map-cell active"><span class="map-cell-label">In progress</span><span class="map-cell-count">1</span><span class="map-cell-wait">&nbsp;</span></span><span class="map-cell terminal"><span class="map-cell-label">Closed</span><span class="map-cell-count">3</span><span class="map-cell-wait">1 done, 1 …</span></span></div></div></div></div>
+</section>
+<section data-draws="m11-arcs-decisions">
+<p class="k"><b>Arcs between the six states of a kind.</b> The cell where something waits on you is <code>waiting-fill</code> and says "2 for you" in words.</p>
+<div class="box"><div class="map-row"><p class="map-row-title">Decisions <span class="map-row-total">7</span> <span class="map-derived">states derived</span></p>
+<div class="map-row-grid"><svg class="map-arrows" width="552" height="56" viewBox="0 0 552 56" aria-label="Arcs between states: Proposed to Accepted, Accepted to Deprecated, Deprecated to Superseded, Proposed to Superseded"><defs><marker id="ah6" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0L10 5L0 10z"/></marker></defs><path d="M56 55 C56 38 120 38 120 52" stroke-width="1.5" marker-end="url(#ah6)"/><path d="M154 55 C154 28 396 28 396 52" stroke-width="1.5" marker-end="url(#ah6)"/><path d="M430 55 C430 38 488 38 488 52" stroke-width="1.5" marker-end="url(#ah6)"/><path d="M24 55 C24 8 522 8 522 52" stroke-width="2" marker-end="url(#ah6)"/></svg><div class="map-cells"><span class="map-cell lit"><span class="map-cell-label">Proposed</span><span class="map-cell-count">2</span><span class="map-cell-wait">2 for you</span></span><span class="map-cell terminal"><span class="map-cell-label">Accepted</span><span class="map-cell-count">1</span><span class="map-cell-wait">&nbsp;</span></span><span class="map-cell terminal"><span class="map-cell-label">Rejected</span><span class="map-cell-count">1</span><span class="map-cell-wait">&nbsp;</span></span><span class="map-cell terminal"><span class="map-cell-label">Withdrawn</span><span class="map-cell-count">1</span><span class="map-cell-wait">&nbsp;</span></span><span class="map-cell terminal"><span class="map-cell-label">Deprecated</span><span class="map-cell-count">1</span><span class="map-cell-wait">&nbsp;</span></span><span class="map-cell terminal"><span class="map-cell-label">Superseded</span><span class="map-cell-count">1</span><span class="map-cell-wait">&nbsp;</span></span></div></div></div></div>
+</section>
+<section data-draws="m03-cell-opened">
+<p class="k"><b>A cell opened.</b> The chosen cell is the chosen option of a control: <code>moved-selected</code> with <code>ink</code> words. An empty cell has no fill and an <code>idle-line</code> hairline. Its list opens below, on the page, with its own close button.</p>
+<div class="box"><div class="map-row"><p class="map-row-title">Pull requests <span class="map-row-total">5</span> <span class="map-derived">states derived</span></p>
+<div class="map-row-grid"><svg class="map-arrows" width="460" height="56" viewBox="0 0 460 56" aria-label="Arcs between states: Open to Failing"><defs><marker id="ah5" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0L10 5L0 10z"/></marker></defs><path d="M132 55 C132 38 212 38 212 52" stroke-width="1.5" marker-end="url(#ah5)"/></svg><div class="map-cells"><span class="map-cell none"><span class="map-cell-label">Ready to merge</span><span class="map-cell-count">0</span><span class="map-cell-wait">&nbsp;</span></span><span class="map-cell active"><span class="map-cell-label">Open</span><span class="map-cell-count">2</span><span class="map-cell-wait">&nbsp;</span></span><span class="map-cell lit selected"><span class="map-cell-label">Failing</span><span class="map-cell-count">1</span><span class="map-cell-wait">1 for you</span></span><span class="map-cell terminal"><span class="map-cell-label">Merged</span><span class="map-cell-count">2</span><span class="map-cell-wait">&nbsp;</span></span><span class="map-cell none"><span class="map-cell-label">Closed</span><span class="map-cell-count">0</span><span class="map-cell-wait">&nbsp;</span></span></div></div></div><div class="map-items"><div class="map-items-head"><b class="t">Pull requests · Failing</b><span class="secondary-button small">Close list</span></div><div class="map-item"><span>nikovirtala/draft#3: Change 3</span><span class="secondary">21 min · Opens its stub</span></div></div></div>
+</section>
+<section data-draws="m01-empty">
+<p class="k"><b>An empty context.</b> A sentence from the kinds the registry knows; no cells. Keyboard focus is on the layout switch's chosen option: a 1.5px <code>moved-mark</code> ring around it, no added fill.</p>
+<div class="box"><div class="t">The map</div><div class="map-bar"><b style="color:var(--text)">0 open · 0 waiting on you</b><span class="row"><span class="seg"><span class="on">Last hour</span><span>Last day</span><span>Everything</span></span><span class="seg"><span>Graph</span><span class="on focus">By state</span></span></span></div><p style="margin:0;color:var(--text)">Nothing to show yet. Threads, Steps, Interrupts, Acceptance requests, Kiro sessions, Pull requests, Checks, Decisions and Issues appear here as they come up: a row for each kind, a column for each state, with what waits on you lit and the latest moves drawn as arrows.</p></div>
+</section>
+</div>
+</body>
+</html>
