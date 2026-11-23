@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { ageText, CAUSE_LABELS } from "../../../shared/attention.ts";
 import { attentionText } from "../../../shared/placement.ts";
 import { useWorkspace } from "../workspace.tsx";
@@ -6,10 +7,12 @@ import { useWorkspace } from "../workspace.tsx";
  * What needs a person, counted once for all conversations and in one order. In focus it reads "N
  * in focus, M elsewhere": only the focused conversation shows its interrupts in full, the rest
  * only count. The list under it is the whole order: permission requests, failures, what is left
- * to resolve, then reviews, oldest first, each with the conversation it is in.
+ * to resolve, then reviews, oldest first, each with the conversation it is in. Each item is a
+ * button that goes to what it counts, the way an item of the map does: click or Enter.
  */
 export function AttentionBar() {
   const ws = useWorkspace();
+  const list = useRef<HTMLDetailsElement>(null);
   const focus = ws.view.layout.focus;
   const text = attentionText(ws.attentionCount, focus !== null);
   const title =
@@ -29,7 +32,7 @@ export function AttentionBar() {
           In focus{title === null ? "" : `: ${title}`} · Esc leaves
         </span>
       )}
-      <details className="attention-list-wrap">
+      <details className="attention-list-wrap" ref={list}>
         <summary data-testid="attention-count">{text}</summary>
         <div className="attention-list" data-testid="attention-list">
           <p className="secondary">
@@ -42,8 +45,18 @@ export function AttentionBar() {
                 data-testid="attention-item"
                 data-cause={a.cause}
               >
-                <span className="chip">{CAUSE_LABELS[a.cause]}</span> {nameOf(a.conversation)}{" "}
-                <span className="secondary">· {ageText(a.at)}</span>
+                <button
+                  type="button"
+                  className="attention-open"
+                  data-testid="attention-open"
+                  onClick={() => {
+                    if (list.current !== null) list.current.open = false;
+                    void ws.openAttention(a);
+                  }}
+                >
+                  <span className="chip">{CAUSE_LABELS[a.cause]}</span> {nameOf(a.conversation)}{" "}
+                  <span className="secondary">· {ageText(a.at)}</span>
+                </button>
               </li>
             ))}
           </ol>

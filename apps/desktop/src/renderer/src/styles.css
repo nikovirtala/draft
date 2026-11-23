@@ -1055,6 +1055,23 @@ textarea:focus-visible {
   margin: 4px 0;
 }
 
+.attention-open {
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  padding: 2px 6px;
+  margin: -2px -6px;
+  cursor: pointer;
+}
+
+.attention-open:hover,
+.attention-open:focus-visible {
+  background: var(--moved-fill);
+}
+
 .thread-conclusion {
   margin: 6px 0 0 20px;
   padding: 8px 12px;

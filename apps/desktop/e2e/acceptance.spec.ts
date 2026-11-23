@@ -154,6 +154,19 @@ test("an ADR is accepted as you, signed, and its pull request merged as a second
   await adrRequest.scrollIntoViewIfNeeded();
   await shot(page, "c02-acceptance-requests-with-green-evidence");
 
+  // An attention item opens the acceptance request it counts: scrolled to, and with the keyboard
+  // on it. Enter on the item does it too.
+  await main.getByTestId("message-user").first().scrollIntoViewIfNeeded();
+  await count.click();
+  const toAccept = page
+    .getByTestId("attention-item")
+    .filter({ hasText: "Ready for you to accept" })
+    .first();
+  await toAccept.getByTestId("attention-open").focus();
+  await page.keyboard.press("Enter");
+  await expect(request.first()).toBeFocused();
+  await expect(request.first()).toBeInViewport();
+
   // 3. Request changes: your note goes to the agent in the thread, and the request is settled
   // until there is new evidence.
   await adrRequest.getByTestId("settle-changes-requested").click();

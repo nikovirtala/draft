@@ -26,7 +26,12 @@ export function PromptCard({
 }) {
   const bare = prompt.tool.replace(/^mcp__(kiro-remote|draft)__/, "");
   return (
-    <section className="prompt" data-testid="prompt" aria-label="The agent asks for permission">
+    <section
+      className="prompt"
+      data-testid="prompt"
+      data-key={prompt.id}
+      aria-label="The agent asks for permission"
+    >
       <p className="prompt-title">
         The agent wants to <strong>{ACTIONS[bare] ?? bare}</strong>.
       </p>

@@ -43,6 +43,7 @@ export function ConclusionCard({
     <section
       className="prompt conclusion-card"
       data-testid="conclusion-card"
+      data-key={conclusion.address}
       aria-label="A conclusion to confirm"
     >
       <p className="interrupt-label">
