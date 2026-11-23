@@ -807,8 +807,7 @@ button.icon:hover {
   background: transparent;
 }
 
-.panel-divider:hover,
-.panel-divider:focus-visible {
+.panel-divider:hover {
   background: var(--moved-fill);
 }
 
@@ -1139,8 +1138,7 @@ button.icon:hover {
   cursor: pointer;
 }
 
-.attention-open:hover,
-.attention-open:focus-visible {
+.attention-open:hover {
   background: var(--moved-fill);
 }
 

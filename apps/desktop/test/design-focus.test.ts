@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
+import { FILL_TOKENS } from "../src/shared/fills.ts";
 import { declarationsOf, type Rule, rulesOf } from "./css-rules.ts";
 
 /** Keyboard focus (spec A5, C3): one ring for the whole stylesheet, never a fill. */
 
 const rules = rulesOf();
+const FILL_PROPERTIES = new Set(["background", "background-color", "fill"]);
+const FILL_VALUE = new RegExp(`var\\((${FILL_TOKENS.join("|")})\\)`);
 
 describe("keyboard focus", () => {
   const outlines = rules.filter((r) => declarationsOf(r.body).some(([p]) => /^outline/.test(p)));
@@ -29,5 +32,16 @@ describe("keyboard focus", () => {
           .map(([p, v]) => `${r.selectors.join(", ")}: ${p}: ${v}`),
       );
     expect(wrong).toEqual([]);
+  });
+
+  it("draws no focus as a fill", () => {
+    const fills = rules
+      .filter((r) => r.selectors.some((s) => s.includes(":focus")))
+      .flatMap((r) =>
+        declarationsOf(r.body)
+          .filter(([p, v]) => FILL_PROPERTIES.has(p) && FILL_VALUE.test(v))
+          .map(([p, v]) => `${r.selectors.join(", ")}: ${p}: ${v}`),
+      );
+    expect(fills).toEqual([]);
   });
 });
