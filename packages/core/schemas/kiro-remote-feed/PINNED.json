@@ -1,0 +1,18 @@
+{
+  "repo": "nikovirtala/kiro-remote",
+  "path": "packages/core/schemas/feed",
+  "commit": "120026347cc533e00923dd366c808d859eab9d85",
+  "files": [
+    "envelope.json",
+    "link.added.json",
+    "link.removed.json",
+    "link.state_changed.json",
+    "page.json",
+    "wait.registered.json",
+    "wait.removed.json",
+    "wake.delivered.json",
+    "wake.dropped.json",
+    "wake.queued.json",
+    "wake.released.json"
+  ]
+}
