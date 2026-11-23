@@ -1,0 +1,16 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M851HHX94G4K2JPKKHWR4SB4
+subject: t9s857yn
+type: closed
+at: 2026-11-23T20:28:45Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: 244629292+kiro-agent@users.noreply.github.com
+reason: Every state in states.json names a preview that draws it (data-draws), the checks' k01 to k04 are listed, and test/preview-states.test.ts fails a state with no fitting preview.
+data:
+  resolution: done

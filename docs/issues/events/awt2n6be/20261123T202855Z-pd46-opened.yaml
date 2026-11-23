@@ -1,0 +1,17 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M851HVHHXDFTGWGRZV90PD46
+subject: awt2n6be
+type: opened
+at: 2026-11-23T20:28:55Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: 244629292+kiro-agent@users.noreply.github.com
+data:
+  title: the attention list wraps its second item's number under its text
+  template: task
+  template_version: 1

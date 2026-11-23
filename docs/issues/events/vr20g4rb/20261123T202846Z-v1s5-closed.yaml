@@ -1,0 +1,16 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M851HJP5W3H8R42WFX75V1S5
+subject: vr20g4rb
+type: closed
+at: 2026-11-23T20:28:46Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: 244629292+kiro-agent@users.noreply.github.com
+reason: "D5: tokens.json, README.md and Selection/README.md agree; palette:sync leaves no diff. D6 is the new issue for the footer's ground."
+data:
+  resolution: done
