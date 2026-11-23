@@ -1,0 +1,60 @@
+Every MCP tool that changes something now takes an optional `idempotencyKey`, with the same 24-hour deduplication as the REST API. A key reused with a different request is refused, over REST too.
+
+Kiro-Remote-Session: 01M7ZB4B8Q8MWGN6XTEFSSC7V0
+
+## What changed
+
+- **Tools.** `kiro_launch_session`, `kiro_adopt_session`, `kiro_send_prompt`, `kiro_answer_permission`, `kiro_set_config`, `kiro_link_pull_request`, `kiro_unlink_pull_request`, `kiro_cancel_turn` and `kiro_delete_session` accept `idempotencyKey` (1 to 128 characters from `A-Z a-z 0-9 . _ ~ : -`). Read-only tools have none. Each description says what the key does in one sentence.
+- **One implementation.** The stdio client sends the key as the `Idempotency-Key` header instead of a fresh one. The in-process `/mcp` client wraps its direct service call in `withIdempotentResult`, a thin JSON wrapper over the same `withIdempotency` the REST routes use. Without a key the stdio client still generates a fresh key, and the in-process client adds nothing.
+- **Fingerprint.** The store keeps a SHA-256 of (method, route or tool, canonical validated input) next to the stored result. Same key and fingerprint returns the stored result. A different fingerprint is refused: REST answers 422 `idempotency-key-reused`, MCP returns a tool error with the same text. Entries without a fingerprint stay valid until they expire. Errors are still not stored.
+- **REST.** `PATCH /config` and `DELETE /links/...` accept the header optionally (they never needed one) so the stdio tools `kiro_set_config` and `kiro_unlink_pull_request` can use it. The header is now validated for length and charset (400 `invalid-idempotency-key`). The OpenAPI document and `docs/rest-api.md`, `docs/mcp.md`, `docs/testing.md` and the README are updated.
+- The stdio tool error now includes the server's problem `detail`, so a 422 reads `REST API error 422: this idempotency key was already used for a different request; ...` instead of just the status.
+
+## Evidence
+
+Run against the AWS Emulator with the real `Repository` (table with `GSI1`), through `callTool` on the in-process client and through the REST router:
+
+```
+MCP call 1: {"sessionId":"id-1","turnId":null}
+MCP call 2: {"sessionId":"id-1","turnId":null}
+sessions in table: 1 commands enqueued: 1
+MCP reused key, different input: isError= true [{"type":"text","text":"this idempotency key was already used for a different request; use a new key for a different request, or repeat the original request unchanged"}]
+sessions still: 1
+REST 1: 202 {"sessionId":"r1","turnId":null}
+REST 2: 202 {"sessionId":"r1","turnId":null}
+REST 3: 422 {"type":"https://kiro-remote.example-owner.dev/problems/idempotency-key-reused","title":"Unprocessable Entity","status":422,"detail":"this idempotency key was already used for a different request; ..."}
+```
+
+(The two error texts are shortened here; the first line of the quoted text is the one the code produces.) This came from a throwaway script that is not committed. The committed tests cover the same cases.
+
+Checks: `pnpm build`, `pnpm test` (core 180, github 154, auth 124, api 109 + 15 emulator tests skipped by default, mcp 77, e2e 63, bridge 131, cdk 83) and `pnpm lint` pass on each of the two commits. With `KIRO_REMOTE_EMULATOR_TEST=1` against the emulator, `emulator.test.ts` and `idempotency-emulator.test.ts` pass (15 tests).
+
+Versions: AWS Emulator 1.0.556 (2026-11-21, latest release), Node v24.22.1 (the sandbox cannot install Node 26; `.mise.toml` pins 26.13.0), pnpm 12.18.0, vitest 5.1.0, zod 4.6.7, AWS CLI 2.36.47.
+
+## Decisions
+
+- **Charset and length.** The REST header had no restriction. I chose 1 to 128 characters of `A-Z a-z 0-9 . _ ~ : -` for both REST and MCP. It covers UUIDs, ULIDs and `step:launch:3` style keys. `#` is excluded because the key is part of the partition key `IDEMP#<sub>#<key>`. This tightens REST: a key outside the set now gets a 400 where it used to be accepted. UUIDs, which the stdio client generates, fit. The set follows the unreserved characters of [RFC 3986 section 2.3](https://www.rfc-editor.org/rfc/rfc3986#section-2.3) plus `:`.
+- **Fingerprint input is the validated input**, after zod defaults, with object keys sorted. So `{prompt}` and `{whenBusy:"steer", prompt}` are the same request. REST uses method plus the concrete path (session id included) plus body. The in-process client uses `MCP` plus the client method name plus its input.
+- **A key is not portable between transports.** The stored result has the transport's shape (REST body vs tool result), and the fingerprints differ, so replaying a stdio-launched key over `/mcp` is refused rather than returning a wrong-shaped result. draft uses one transport per run, so this should not matter.
+- **Optional header on PATCH config and DELETE link.** Making it required would break existing clients. [RFC 9110 section 9.2.2](https://www.rfc-editor.org/rfc/rfc9110#section-9.2.2) already defines PATCH and DELETE semantics without it. When the header is absent the routes behave as before.
+- **422 and not 409** for key reuse, as you asked. The problem type is `idempotency-key-reused`, matching the existing `PROBLEM_TYPE_BASE` slugs. The status follows the draft [Idempotency-Key header](https://datatracker.ietf.org/doc/draft-ietf-httpapi-idempotency-key-header/), which uses 422 for this case.
+- **Stored fingerprint is optional in the item type**, so no migration is needed.
+- **Emulator.** `dnf install` failed on the read-only filesystem, so I unpacked the official RPM into `.agents/tasks/` and ran the binary from there with `HOME` pointed at a writable directory. The emulator does not evaluate IAM, so this proves DynamoDB behaviour only.
+- **Test placement.** The emulator test lives in `packages/api` because only that package depends on the AWS SDK. It runs the REST route and `withIdempotentResult` on the real table. The `InProcessClient` itself is covered by the fake-DynamoDB tests in `packages/mcp`.
+
+## After deploy
+
+- Call `kiro_launch_session` twice over `/mcp` with the same `idempotencyKey` and the same input. Both calls should return the same `sessionId`, and `kiro_list_sessions` should show one new session.
+- Call it again with the same key and a different prompt. Expect a tool error saying the key was already used for a different request, and still one session.
+- Over stdio (`kiro-remote mcp`), repeat the first check. The second call should return the first call's result. The CLI error text for the third call should include the reason, not just `REST API error 422`.
+- `curl` a `POST /v1/sessions` twice with one `Idempotency-Key` header (same body: same `sessionId`; different body: 422 `idempotency-key-reused`), and once with a key containing a space (400 `invalid-idempotency-key`).
+- In the DynamoDB console, look at an `IDEMP#...` item: it should now have a `fingerprint` attribute and the same `ttl` as before. Items written before the deploy have no `fingerprint` and still replay normally.
+- Real IAM was not exercised. The consumer role already writes and reads `IDEMP#` items for REST, and this change adds no new DynamoDB operation.
+- Note that a draft step that already ran with a fresh key before this deploy cannot be deduplicated retroactively.
+
+## Next
+
+- **Concurrent first calls.** Two overlapping first calls with one key both run the handler; the conditional put makes both return the same stored result, but both ran. The emulator test shows this. Closing it needs a reserve-then-complete record, which is a larger change to the store.
+- `kiro_wait_for_events` and the other read tools have no key by design.
+- The live e2e harness does not exercise `idempotencyKey` yet. It would need a deployed stack.
+- Node 26 was not available in the sandbox, so the checks ran on Node 24.

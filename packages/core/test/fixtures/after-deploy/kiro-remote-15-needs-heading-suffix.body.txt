@@ -1,0 +1,195 @@
+## Summary
+
+Depends on the published [`@example-owner/deployment` 0.1.0](https://www.npmjs.com/package/@example-owner/deployment) (from [example-owner/ark#118](https://github.com/example-owner/ark/pull/118), released by ark's release workflow with npm provenance), locked in `pnpm-lock.yaml` with the registry's integrity. Nothing of the package is vendored here.
+
+kiro-remote moves from deploying by hand to deploying from `main` through the ark member **deployment**, as longplay's platform does:
+
+- **`KiroRemotePipelineStack`** (`packages/pipeline`), in its own CDK app so the service's deploy never touches it: CodeConnections, CodePipeline V2 with SUPERSEDED, one CodeBuild action (ARM, Docker for the bridge image), the retained ledger table, its own notification topic and a build-failed alarm. The build's role (the runner) assumes a deploy role, a read-only smoke role and one role per deployment task, each trusted by the runner alone.
+- **`deploy.toml`**: every name the run uses, the preflight (deploy.sh's guards) and the settings schema from `deploy.env.example`, with the settings whose absence would delete something REQUIRED. `config.test.ts` holds it to `scripts/deploy.sh`'s keys, context names, defaults and required settings.
+- **The smoke checks** (`packages/pipeline/src/smoke/checks.ts`), from `docs/deploy.md` and the README, run as a role that cannot read session data. `checks.test.ts` fails when a check makes a call the role is not granted.
+- **`tasks/`**, empty, with the protocol in `tasks/README.md`.
+- **The policy simulation** (`packages/pipeline/scripts/simulate-pipeline-policy.ts`), with a refusal beside every grant.
+- **Provenance:** every function gets `OTEL_RESOURCE_ATTRIBUTES` (`vcs.ref.head.revision`, `vcs.repository.url.full`, `deployment.environment.name`, `service.version`) from the pipeline's context, and the api, bridge and github loggers put them on every log line.
+- **`scripts/deploy.sh` is unchanged** and stays the break-glass path. `AGENTS.md` takes longplay's deployment rules, adapted: agents never deploy; checks and tasks instead of runbooks; `needs-person` for what only a person can do. `docs/pipeline.md` is the runbook.
+- **A decision log** (`adr init --skill`), with three proposed decisions: `2n47hfqw` (the pipeline), `bwram7sv` (the smoke role), `x7s3v8da` (provenance). None is accepted here.
+
+## Evidence
+
+All against the published `@example-owner/deployment` 0.1.0 from npm, after deleting every `node_modules` and running `pnpm install --frozen-lockfile` (passes), on Node 26.13.0 and pnpm 12.18.0. kiro-remote has no CI, so these local runs are the evidence. Each result is the same as the earlier run against a packed tarball of the ark branch; the policy simulation's output is identical line for line.
+
+- **`pnpm check`** (lint, type-check, tests; the settings parity test is `packages/pipeline/src/config.test.ts`, 6 passed): core 182, pipeline 36, auth 124, github 154, api 109 (15 skipped, the emulator tests), mcp 77, bridge 131, e2e 63, cdk 85: all passed. `adr verify`: no findings.
+- **The service synth** (`cdk synth KiroRemoteDnsStack KiroRemoteStack` in `packages/cdk`, with deploy.toml's `-c` settings and the provenance context): passes cdk-nag, and all 8 of the service's functions carry `OTEL_RESOURCE_ATTRIBUTES=vcs.ref.head.revision=9bb4f62…,vcs.repository.url.full=https://github.com/example-owner/kiro-remote,deployment.environment.name=production,service.version=9bb4f62…` (the CDK trigger provider, not the service's, does not). Without the context, none does (`packages/cdk/src/provenance.test.ts`).
+- **The pipeline stack's synth** (`pnpm --filter @example-owner/kiro-remote-pipeline synth`):
+
+```text
+KiroRemotePipelineStack: 22 resources
+  1  AWS::CDK::Metadata
+  1  AWS::CloudWatch::Alarm
+  1  AWS::CodeBuild::Project
+  1  AWS::CodePipeline::Pipeline
+  1  AWS::DynamoDB::Table
+  4  AWS::IAM::Policy
+  6  AWS::IAM::Role
+  1  AWS::KMS::Alias
+  1  AWS::KMS::Key
+  1  AWS::Logs::LogGroup
+  1  AWS::S3::Bucket
+  1  AWS::S3::BucketPolicy
+  1  AWS::SNS::Topic
+  1  AWS::SNS::TopicPolicy
+ledger kiro-remote-deployment-ledger: deletion protection True, PITR True, policy Retain
+role kiro-remote-deployment-runner: trusts {"Service": "codebuild.amazonaws.com"}; 16 actions: codeconnections:GetConnection, codeconnections:GetConnectionToken, codeconnections:UseConnection, codestar-connections:GetConnection, codestar-connections:GetConnectionToken, codestar-connections:UseConnection, dynamodb:GetItem, dynamodb:PutItem, dynamodb:Query, dynamodb:Scan, secretsmanager:GetSecretValue, sns:Publish, ssm:GetParameter, ssm:GetParametersByPath, ssm:PutParameter, sts:AssumeRole
+role kiro-remote-deployment-deploy: trusts {"AWS": "arn:aws:iam::827333031966:role/kiro-remote-deployment-runner"}; 3 actions: cloudformation:DescribeStacks, secretsmanager:DescribeSecret, sts:AssumeRole
+role kiro-remote-deployment-smoke: trusts {"AWS": "arn:aws:iam::827333031966:role/kiro-remote-deployment-runner"}; 6 actions: cloudformation:DescribeStacks, cloudformation:ListStackResources, cognito-idp:DescribeManagedLoginBrandingByClient, lambda:GetFunctionConfiguration, secretsmanager:DescribeSecret, sqs:GetQueueAttributes
+build kiro-remote-deploy-run: ARM_CONTAINER BUILD_GENERAL1_MEDIUM aws/codebuild/amazonlinux-aarch64-standard:3.0, privileged=True, timeout 90 min
+pipeline kiro-remote-deploy: V2, SUPERSEDED, stages ['Source:CodeStarSourceConnection', 'Deploy:CodeBuild']
+outputs: BuildLogGroup, LedgerTableName, NotifyTopicArn, PipelineName, RunnerRoleArn
+```
+
+- **The pipeline stack's role tests** (`pipeline-stack.test.ts`, 11): V2, SUPERSEDED, a clone of the repository, one CodeBuild action; the ledger retained, deletion-protected, with point-in-time recovery; no `Fn::ImportValue`; the freeze check before anything is installed, then `pnpm check`, then `deploy run`; each work role trusted by the runner only; the runner never deletes the flag or a ledger item; the smoke role has no action that reads data.
+- **The policy simulation**, with IAM's own engine (`iam simulate-custom-policy`, read-only, in account 827333031966) on the synthesized template: runner 13 grants and 25 refusals, deploy 8 and 14, smoke 7 and 24. The smoke role and the trust decisions:
+
+```text
+kiro-remote-deployment-smoke: 7 grants, 24 refusals
+ok       allowed  cloudformation:DescribeStacks                      stack/KiroRemoteStack/0f1e2d3c-0000-0000-0000-00 stack outputs and status
+ok       allowed  cloudformation:ListStackResources                  stack/KiroRemoteStack/0f1e2d3c-0000-0000-0000-00 the functions and queues of the stack
+ok       allowed  cloudformation:DescribeStacks                      stack/KiroRemoteDnsStack/0f1e2d3c-0000-0000-0000 the DNS stack's status
+ok       refused  cloudformation:DescribeStacks                      stack/artifact-prod-platform/0f1e2d3c-0000-0000- no other stack
+ok       refused  cloudformation:UpdateStack                         stack/KiroRemoteStack/0f1e2d3c-0000-0000-0000-00 reads only
+ok       allowed  lambda:GetFunctionConfiguration                    function:KiroRemoteStack-KiroRemoteApiFnAEA3E115 runtime, tracing and environment
+ok       refused  lambda:GetFunctionConfiguration                    function:SpotifyNewReleasesPoller-Poller-Fn      only the service's functions
+ok       refused  lambda:InvokeFunction                              function:KiroRemoteStack-KiroRemoteApiFnAEA3E115 it invokes nothing
+ok       refused  lambda:UpdateFunctionConfiguration                 function:KiroRemoteStack-KiroRemoteApiFnAEA3E115 reads only
+ok       allowed  cognito-idp:DescribeManagedLoginBrandingByClient   userpool/eu-north-1_f7watYE0D                    the facade client's branding style
+ok       refused  cognito-idp:ListUsers                              userpool/eu-north-1_f7watYE0D                    a user is session data: no list of users
+ok       refused  cognito-idp:AdminGetUser                           userpool/eu-north-1_f7watYE0D                    and no user
+ok       allowed  secretsmanager:DescribeSecret                      secret:kiro-remote/kiro-api-key-AbC123           the Kiro API key secret exists
+ok       refused  secretsmanager:GetSecretValue                      secret:kiro-remote/kiro-api-key-AbC123           never its value
+ok       refused  secretsmanager:GetSecretValue                      secret:kiro-remote/github-app-AbC123             never the GitHub App's key
+ok       refused  secretsmanager:DescribeSecret                      secret:spotify-new-releases-poller/token-AbC123  only kiro-remote's secrets
+ok       allowed  sqs:GetQueueAttributes                             KiroRemoteStack-KiroRemoteGithubDlqC543AD13-kUGw how many messages wait in the dead-letter queue
+ok       refused  sqs:ReceiveMessage                                 KiroRemoteStack-KiroRemoteGithubDlqC543AD13-kUGw never a message
+ok       refused  sqs:ReceiveMessage                                 KiroRemoteStack-KiroRemoteCommandQueuefifo27BBE5 never a command
+ok       refused  dynamodb:GetItem                                   table/KiroRemoteStack-KiroRemoteTable897F2E95-PD the sessions table holds session data
+ok       refused  dynamodb:Query                                     table/KiroRemoteStack-KiroRemoteTable897F2E95-PD the sessions table holds session data
+ok       refused  dynamodb:Scan                                      table/KiroRemoteStack-KiroRemoteTable897F2E95-PD the sessions table holds session data
+ok       refused  dynamodb:BatchGetItem                              table/KiroRemoteStack-KiroRemoteTable897F2E95-PD the sessions table holds session data
+ok       refused  dynamodb:Query                                     table/kiro-remote-deployment-ledger              nor the ledger: the runner keeps it
+ok       refused  s3:GetObject                                       kiroremotestack-kiroremotepayloadbucket47e35ff6- the payload bucket holds session data
+ok       refused  s3:ListBucket                                      kiroremotestack-kiroremotepayloadbucket47e35ff6- not even the names of the objects
+ok       refused  logs:FilterLogEvents                               log-group:/aws/lambda/KiroRemoteStack-KiroRemote logs can hold session content
+ok       refused  logs:GetLogEvents                                  log-group:/aws/lambda/KiroRemoteStack-KiroRemote same
+ok       refused  logs:StartQuery                                    log-group:/aws/lambda/KiroRemoteStack-KiroRemote same
+ok       refused  kms:Decrypt                                        key/ebecd41c-f527-4a30-bc95-1860d17923a6         no key use
+ok       refused  ssm:GetParameter                                   parameter/kiro-remote/deployment/frozen          the flag is the runner's
+
+ok       kiro-remote-deployment-smoke: 1 caller(s) trusted, 7 refused
+
+trust:
+ok       kiro-remote-deployment-runner: 1 caller(s) trusted, 3 refused
+ok       kiro-remote-deployment-deploy: 1 caller(s) trusted, 7 refused
+ok       kiro-remote-deployment-smoke: 1 caller(s) trusted, 7 refused
+
+OK: 91 policy decisions and 20 trust decisions match
+```
+
+
+- **The smoke checks' dry run** (`node packages/pipeline/scripts/smoke.ts --dry-run`: every call recorded, none made; the stub answers nothing, so each check stops after its first call):
+
+```text
+DRY   stack  the stacks are healthy
+        read  aws cloudformation describe-stacks --stack-name KiroRemoteStack
+        (stopped at the dry run's empty answers; a real run makes more calls)
+DRY   outputs  the named outputs
+        read  aws cloudformation describe-stacks --stack-name KiroRemoteStack
+        (stopped at the dry run's empty answers; a real run makes more calls)
+DRY   auth  the managed-login domain and its branding
+        read  aws cloudformation describe-stacks --stack-name KiroRemoteStack
+        (stopped at the dry run's empty answers; a real run makes more calls)
+DRY   api  the API's public routes
+        read  aws cloudformation describe-stacks --stack-name KiroRemoteStack
+        (stopped at the dry run's empty answers; a real run makes more calls)
+DRY   functions  the functions' runtime, tracing and Powertools
+        read  aws cloudformation list-stack-resources --stack-name KiroRemoteStack
+        (stopped at the dry run's empty answers; a real run makes more calls)
+DRY   secrets  the Kiro API key lives in Secrets Manager
+        read  aws cloudformation list-stack-resources --stack-name KiroRemoteStack
+        (stopped at the dry run's empty answers; a real run makes more calls)
+DRY   provenance  the functions carry the deployed commit
+        read  aws cloudformation list-stack-resources --stack-name KiroRemoteStack
+        (stopped at the dry run's empty answers; a real run makes more calls)
+DRY   queues  the GitHub dead-letter queue
+        read  aws cloudformation list-stack-resources --stack-name KiroRemoteStack
+        (stopped at the dry run's empty answers; a real run makes more calls)
+
+8 check(s), 8 call(s), all read-only; nothing was called
+```
+
+- **The smoke checks for real, read-only, against the deployed stack** with my read-only credentials (`node packages/pipeline/scripts/smoke.ts`). Everything passes except provenance, which fails on all 8 functions as it should: they were deployed by hand, before this change stamps them. The first pipeline run stamps them.
+
+```text
+PASS  stack  KiroRemoteStack is healthy  (UPDATE_COMPLETE)
+PASS  stack  KiroRemoteDnsStack is healthy  (CREATE_COMPLETE)
+PASS  outputs  the outputs docs/deploy.md names exist  (UserPoolId, FacadeClientId, ApiUrl, ManagedLoginDomainUrl, McpResourceIdentifier)
+PASS  outputs  the custom domain outputs  (CustomDomainTarget, CustomDomainHostedZoneId)
+PASS  auth  the managed-login domain is <prefix>.auth.<region>.amazoncognito.com  (https://kiro-remote.auth.eu-north-1.amazoncognito.com)
+PASS  auth  the facade client has a branding style  (present)
+PASS  api  GET /openapi.json is the OpenAPI 3.1 contract  (HTTP 200, openapi 3.1.0)
+PASS  api  the MCP resource metadata names the MCP resource  (HTTP 200)
+PASS  api  the OAuth authorization server metadata is served  (HTTP 200)
+PASS  api  GET /v1/sessions without a token is refused  (HTTP 401)
+PASS  api  GET /mcp without a token is refused  (HTTP 401)
+PASS  api  the default execute-api endpoint answers  (HTTP 200)
+PASS  functions  the service's functions exist  (8 function(s))
+PASS  functions  KiroRemoteApiFnAEA3E115: Node 26 or the bridge image, active tracing, Powertools
+PASS  functions  KiroRemoteBridgeCapsPublisherFn3217BEF2: Node 26 or the bridge image, active tracing, Powertools
+PASS  functions  KiroRemoteBridgeConsumerFn322E483B: Node 26 or the bridge image, active tracing, Powertools
+PASS  functions  KiroRemoteCatchUpFn7627B437: Node 26 or the bridge image, active tracing, Powertools
+PASS  functions  KiroRemoteGithubConsumerFn4E4D40DA: Node 26 or the bridge image, active tracing, Powertools
+PASS  functions  KiroRemoteGithubWebhookFnCDEE4EF6: Node 26 or the bridge image, active tracing, Powertools
+PASS  functions  KiroRemoteOAuthCallbackFn94B49E2F: Node 26 or the bridge image, active tracing, Powertools
+PASS  functions  KiroRemoteOAuthTokenFn282F6F1C: Node 26 or the bridge image, active tracing, Powertools
+PASS  secrets  no function has the Kiro API key as a plain variable
+PASS  secrets  the bridge's Kiro API key secret exists  (kiro-remote/kiro-api-key-DuTGZY)
+FAIL  provenance  KiroRemoteApiFnAEA3E115: OTEL_RESOURCE_ATTRIBUTES names the deployed commit  (no vcs.ref.head.revision)
+FAIL  provenance  KiroRemoteBridgeCapsPublisherFn3217BEF2: OTEL_RESOURCE_ATTRIBUTES names the deployed commit  (no vcs.ref.head.revision)
+FAIL  provenance  KiroRemoteBridgeConsumerFn322E483B: OTEL_RESOURCE_ATTRIBUTES names the deployed commit  (no vcs.ref.head.revision)
+FAIL  provenance  KiroRemoteCatchUpFn7627B437: OTEL_RESOURCE_ATTRIBUTES names the deployed commit  (no vcs.ref.head.revision)
+FAIL  provenance  KiroRemoteGithubConsumerFn4E4D40DA: OTEL_RESOURCE_ATTRIBUTES names the deployed commit  (no vcs.ref.head.revision)
+FAIL  provenance  KiroRemoteGithubWebhookFnCDEE4EF6: OTEL_RESOURCE_ATTRIBUTES names the deployed commit  (no vcs.ref.head.revision)
+FAIL  provenance  KiroRemoteOAuthCallbackFn94B49E2F: OTEL_RESOURCE_ATTRIBUTES names the deployed commit  (no vcs.ref.head.revision)
+FAIL  provenance  KiroRemoteOAuthTokenFn282F6F1C: OTEL_RESOURCE_ATTRIBUTES names the deployed commit  (no vcs.ref.head.revision)
+INFO  queues  the GitHub dead-letter queue  (0 message(s))
+
+8 FAILED
+```
+
+## Decisions
+
+- **A decision log for kiro-remote,** started with the published adr 0.7.0 (`adr init --skill`: the log, its template and the skill; not `--setup`, which would also add MCP config, harness hooks and a `prepare` script). biome now skips `docs/adr` and `.claude/skills`: its Markdown formatter rewrote the adr template's front matter and would rewrite decision bodies adr freezes.
+- **`GITHUB_APP_SECRET_ARN` is REQUIRED in the pipeline only.** `deploy.sh` treats it as optional, but GitHub wake is deployed (its webhook, queues and functions are in the stack), a deploy without the setting removes them, and the pipeline deploys with no one reading a diff. The test checks that every setting deploy.sh requires is REQUIRED here, not the reverse.
+- **No rollback triggers yet:** `aws cloudwatch describe-alarms` in eu-north-1 finds no alarm of kiro-remote, and a missing alarm would fail the deploy ([rollback triggers](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/using-cfn-rollback-triggers.html)). The deploy role gets no CloudWatch permission until there are; a test says so.
+- **The pipeline owns its notification topic** (`kiro-remote-deployment`), because the service has none; `--alarm-email` subscribes an address at the bootstrap.
+- **The CDK output directory is `cdk.out`,** as deploy.sh's: the first synth into `cdk.out.deploy` copied itself into the bridge image's build context until the path was too long, because `BRIDGE_IMAGE_EXCLUDES` excludes `**/cdk.out` only.
+- **Blank means off cannot be said in SSM** (it holds no empty value), so the pipeline uses the defaults for `CUSTOM_DOMAIN_NAME` and `DNS_ZONE_NAME`. Both are on in the deployed stack.
+- **0.1.0 is excluded from pnpm's minimum release age** (`minimumReleaseAgeExclude` in `pnpm-workspace.yaml`, beside `@biomejs/*`): it was less than a day old when it was locked. The entry names that one version and can go once it is a day old.
+- **Provenance reaches the logs through Powertools' `persistentKeys`,** since Powertools reads no `OTEL_*` variable; `OTEL_RESOURCE_ATTRIBUTES` is what an OpenTelemetry SDK reads if one is added. The value changes per commit, so every function's configuration is updated on every pipeline deploy.
+- **The smoke checks use the public API over HTTP without a token** for what configuration cannot show (the OpenAPI contract, the OAuth metadata, a 401 without a token), and no AWS read of a table, object, log, user or secret value.
+- **Versions:** `@example-owner/deployment` 0.1.0 (it brings Zod 4.6.7 and the AWS SDK 3.1173.0); for the pipeline app aws-cdk-lib 2.278.0, constructs 10.8.1 and the CDK CLI 2.1149.0, the latest on 2026-11-21. The service stays on its locked aws-cdk-lib 2.275.0 and CLI 2.1148.0, because bumping them changes what deploys and belongs in its own change (2.1148 has both rollback-trigger flags). vitest ^5.1.0 (resolved 5.1.0; latest 5.1.1) and biome ^2.6.6 as before.
+- **A root `pnpm check` script** (lint, build, test), which the build runs before it deploys, like longplay's.
+
+## After deploy (`needs-person`)
+
+1. **Store the settings in SSM** from your `deploy.env`: `./scripts/pipeline.sh settings`. It refuses without `KIRO_CLI_VERSION`, `KIRO_API_KEY_SECRET_ARN`, `HOSTED_ZONE_ID` or `GITHUB_APP_SECRET_ARN`.
+2. **The GitHub token** for the deployment records: a fine-grained token for `example-owner/kiro-remote` only, **Deployments: Read and write**, stored as `aws secretsmanager create-secret --region eu-north-1 --name kiro-remote/deployment/github-token --secret-string '<token>'`. Without it the pipeline deploys and records no GitHub deployment.
+3. **The CodeConnections handshake:** `aws codeconnections create-connection --region eu-north-1 --provider-type GitHub --connection-name kiro-remote-github`, then Developer Tools → Settings → Connections → `kiro-remote-github` → Update pending connection → the AWS Connector for GitHub app for `example-owner/kiro-remote` only. It must read **Available**.
+4. **Check the roles** (read-only): `./scripts/pipeline.sh simulate` → `OK: 91 policy decisions and 20 trust decisions match`.
+5. **Bootstrap the pipeline stack:** `./scripts/pipeline.sh bootstrap --connection-arn <arn> --alarm-email <you>`, confirm the topic's subscription mail, then `./scripts/pipeline.sh simulate --deployed`.
+6. **Watch the first run** (merging this starts it; otherwise Release change on `kiro-remote-deploy`), in `/aws/codebuild/kiro-remote-deploy-run`: the freeze check, `mise install`, `pnpm check`, the settings and preflight, the synth, `rollback triggers ...: none`, the deploy (every function's configuration changes once), the smoke checks all PASS, now provenance too, `no deployment task was pending`, `DONE`. The repository's Deployments page shows `production` active at the commit.
+7. **The drill:** merge a commit that adds `add("stack", "a drill: this check fails on purpose", "FAIL", "remove me");` to the first check in `packages/pipeline/src/smoke/checks.ts`. Watch the run deploy it, fail the smoke stage, set the freeze flag, deploy the last good commit again (`rolled back: the last good commit <sha> is deployed again`), mail the topic and end `rolled-back`; GitHub shows the drill's deployment as failure and the previous one still active; `./scripts/pipeline.sh status` says `PIPELINE FROZEN`. Merge the revert: its run stops at the flag. **Unfreeze:** `./scripts/pipeline.sh unfreeze`, then Release change: the revert deploys and passes.
+
+## Next
+
+Out of scope here: moving longplay onto the package; the read-only MCP server; the npm dist-tag target; draft's deployment kind; the release member. For kiro-remote: CloudWatch alarms on the service (the dead-letter queues, function errors), so the deploy gets rollback triggers; the first deployment task, with its role; cdk-nag on the pipeline app; bumping the service's aws-cdk-lib and CDK CLI.
+
+Kiro-Remote-Session: 01M7ZTP537JPC3HZKZTCQEWTDM
