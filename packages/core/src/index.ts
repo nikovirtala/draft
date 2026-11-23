@@ -23,6 +23,7 @@ export * from "./map.ts";
 export * from "./map-ark.ts";
 export * from "./map-graph.ts";
 export * from "./map-kinds.ts";
+export * from "./map-labels.ts";
 export * from "./map-layout.ts";
 export * from "./map-viewport.ts";
 export * from "./oauth.ts";

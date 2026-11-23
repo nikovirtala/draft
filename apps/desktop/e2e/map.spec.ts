@@ -174,6 +174,21 @@ test("show the map on a recorded log: counts, a cell, an item, live moves, and a
   await expect(clusterOf("acceptance")).toHaveAttribute("data-count", "3");
   await expect(graph.getByTestId("graph-edge").first()).toBeVisible();
   await expect(graph.getByTestId("graph-legend")).toContainText("Open loop");
+  // Names have boxes of their own: none touches another name.
+  const names = await graph
+    .getByTestId("graph-name")
+    .evaluateAll((els) =>
+      els.map((e) => e.getBoundingClientRect()).map((r) => [r.left, r.top, r.right, r.bottom]),
+    );
+  expect(names.length).toBeGreaterThanOrEqual(6);
+  for (const [i, a] of names.entries())
+    for (const b of names.slice(i + 1))
+      expect(
+        (a?.[0] ?? 0) < (b?.[2] ?? 0) &&
+          (b?.[0] ?? 0) < (a?.[2] ?? 0) &&
+          (a?.[1] ?? 0) < (b?.[3] ?? 0) &&
+          (b?.[1] ?? 0) < (a?.[3] ?? 0),
+      ).toBe(false);
   await shot(page, "m02-graph");
 
   // Moving about changes the viewport and nothing else: every node keeps its place.
@@ -185,19 +200,25 @@ test("show the map on a recorded log: counts, a cell, an item, live moves, and a
   });
   // Where each node is, as a percentage of the panel, by what it is.
   const places = () =>
-    graph.locator('[data-testid^="graph-"][style*="left"]').evaluateAll((els) =>
-      Object.fromEntries(
-        els.map((e) => {
-          const at = (e.getAttribute("style") ?? "").match(/left:\s*([\d.]+)%.*?top:\s*([\d.]+)%/);
-          const key = [
-            e.getAttribute("data-testid"),
-            e.getAttribute("data-kind"),
-            e.getAttribute("data-item") ?? e.getAttribute("data-state"),
-          ].join("|");
-          return [key, [Number(at?.[1]), Number(at?.[2])]];
-        }),
-      ),
-    );
+    graph
+      .locator(
+        '[data-testid="graph-cluster"][style*="left"], [data-testid="graph-item"][style*="left"]',
+      )
+      .evaluateAll((els) =>
+        Object.fromEntries(
+          els.map((e) => {
+            const at = (e.getAttribute("style") ?? "").match(
+              /left:\s*([\d.]+)%.*?top:\s*([\d.]+)%/,
+            );
+            const key = [
+              e.getAttribute("data-testid"),
+              e.getAttribute("data-kind"),
+              e.getAttribute("data-item") ?? e.getAttribute("data-state"),
+            ].join("|");
+            return [key, [Number(at?.[1]), Number(at?.[2])]];
+          }),
+        ),
+      );
   // The map may gain nodes while it is open, and a neighbour that grows can nudge a node a little
   // (never more than the layout's own limit); a viewport moves none of them.
   const samePlaces = (now: Record<string, number[]>, was: Record<string, number[]>) => {

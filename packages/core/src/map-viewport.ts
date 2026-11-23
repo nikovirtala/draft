@@ -1,4 +1,5 @@
 import type { Graph } from "./map-graph.ts";
+import type { Labels } from "./map-labels.ts";
 import { type Layout, type Point, radiusOf, WORLD } from "./map-layout.ts";
 
 /**
@@ -121,7 +122,7 @@ export function keepInReach(v: Viewport, bounds: Rect, frame: Rect = FRAME): Vie
 }
 
 /** The space a graph takes: every node's circle, and a cluster's name under it. */
-export function boundsOf(graph: Graph, layout: Layout): Rect {
+export function boundsOf(graph: Graph, layout: Layout, labels: Labels = {}): Rect {
   let b: Rect | null = null;
   const take = (left: number, top: number, right: number, bottom: number) => {
     b =
@@ -138,16 +139,19 @@ export function boundsOf(graph: Graph, layout: Layout): Rect {
     const p = layout[n.id];
     if (p === undefined) continue;
     const r = radiusOf(n) + (n.type === "cluster" ? 6 : 2);
-    take(p.x - r, p.y - r, p.x + r, p.y + r + (n.type === "cluster" ? 18 : 14));
+    take(p.x - r, p.y - r, p.x + r, p.y + r);
   }
+  // A name takes room too, wherever it was put.
+  for (const l of Object.values(labels))
+    take(l.x - l.w / 2, l.y - l.h / 2, l.x + l.w / 2, l.y + l.h / 2);
   // The states of a kind view are named along the top.
   if (graph.zoom.level === "kind" && graph.lanes.length > 0) take(0, 0, WORLD.width, 22);
   return b ?? FRAME;
 }
 
 /** The viewport for a graph at its layout, fitted; the whole world when there is nothing to fit. */
-export const fitGraph = (graph: Graph, layout: Layout): Viewport =>
-  graph.nodes.length === 0 ? IDENTITY : fitTo(boundsOf(graph, layout));
+export const fitGraph = (graph: Graph, layout: Layout, labels: Labels = {}): Viewport =>
+  graph.nodes.length === 0 ? IDENTITY : fitTo(boundsOf(graph, layout, labels));
 
 /** Whether two viewports show the same thing, give or take a rounding. */
 export const sameViewport = (a: Viewport, b: Viewport): boolean =>

@@ -48,6 +48,51 @@ export function radiusOf(n: GraphNode): number {
 /** The room a node takes when placing: its circle, and for a cluster the name under it. */
 const footprint = (n: GraphNode): number => radiusOf(n) + (n.type === "cluster" ? 16 : 0);
 
+/** A box by its middle and its size, in world units. */
+export interface Room {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/** A name broken onto two lines at the space nearest its middle; null when it has no space. */
+export function wrapName(text: string): string[] | null {
+  const mid = text.length / 2;
+  let at = -1;
+  for (let i = 0; i < text.length; i++)
+    if (text[i] === " " && (at < 0 || Math.abs(i - mid) < Math.abs(at - mid))) at = i;
+  return at < 0 ? null : [text.slice(0, at), text.slice(at + 1)];
+}
+
+/**
+ * The room kept for a cluster's name under it when clusters are placed, so the names (map-labels.ts)
+ * have a place that no node of the layout takes. It is the name on two lines where it has a space,
+ * as a panel a little narrower than the world would draw it.
+ */
+export function nameRoom(n: GraphNode, p: Point): Room | null {
+  if (n.type !== "cluster") return null;
+  const lines = wrapName(n.label) ?? [n.label];
+  const chars = Math.max(...lines.map((l) => l.length));
+  const w = (chars * 6.4) / 0.8 + 4;
+  const h = (lines.length * 14) / 0.8 + 4;
+  return { x: p.x, y: p.y + radiusOf(n) + 7 + 4 + h / 2, w, h };
+}
+
+const roomInWorld = (r: Room): boolean =>
+  r.x - r.w / 2 >= MARGIN &&
+  r.x + r.w / 2 <= WORLD.width - MARGIN &&
+  r.y + r.h / 2 <= WORLD.height - MARGIN;
+
+const roomsApart = (a: Room, b: Room): boolean =>
+  Math.abs(a.x - b.x) >= (a.w + b.w) / 2 + GAP || Math.abs(a.y - b.y) >= (a.h + b.h) / 2 + GAP;
+
+function discClearOfRoom(p: Point, r: number, room: Room): boolean {
+  const nx = Math.max(room.x - room.w / 2, Math.min(p.x, room.x + room.w / 2));
+  const ny = Math.max(room.y - room.h / 2, Math.min(p.y, room.y + room.h / 2));
+  return Math.hypot(nx - p.x, ny - p.y) >= r + GAP;
+}
+
 /** FNV-1a of a string, as a number in [0, 1). A second `salt` gives a second, independent number. */
 export function seedOf(id: string, salt = 0): number {
   let h = 0x811c9dc5;
@@ -149,16 +194,35 @@ interface Disc {
 const free = (p: Point, r: number, discs: readonly Disc[]): boolean =>
   discs.every((d) => distance(p, d.p) >= r + d.r + GAP);
 
-/** The first free place around a seed, along a spiral. */
-function nearestFree(seed: Point, r: number, discs: readonly Disc[]): Point {
+/**
+ * The first free place around a seed, along a spiral. A cluster also keeps the room for its name:
+ * the place must leave that room clear of every disc and room placed, and its own circle clear
+ * of their rooms.
+ */
+function nearestFree(
+  seed: Point,
+  r: number,
+  discs: readonly Disc[],
+  rooms: readonly Room[],
+  n: GraphNode,
+): Point {
   const golden = 2.399963229728653;
+  const nodeR = radiusOf(n);
   for (let k = 0; k < 4000; k++) {
     const radius = k === 0 ? 0 : 5 * Math.sqrt(k);
     const p = inside(
       { x: seed.x + Math.cos(k * golden) * radius, y: seed.y + Math.sin(k * golden) * radius },
       r,
     );
-    if (free(p, r, discs)) return p;
+    if (!free(p, r, discs)) continue;
+    if (!rooms.every((room) => discClearOfRoom(p, nodeR, room))) continue;
+    const mine = nameRoom(n, p);
+    if (mine !== null) {
+      if (!roomInWorld(mine)) continue;
+      if (!rooms.every((room) => roomsApart(mine, room))) continue;
+      if (!discs.every((d) => discClearOfRoom(d.p, d.r - GAP, mine))) continue;
+    }
+    return p;
   }
   return inside(seed, r);
 }
@@ -178,6 +242,7 @@ export function layoutGraph(graph: Graph, previous: Layout | null = null): Layou
   const order = placementOrder(graph.nodes);
   const placed = new Map<string, Point>();
   const discs: Disc[] = [];
+  const rooms: Room[] = [];
   const kept = order.filter((n) => previous?.[n.id] !== undefined);
 
   // The old ones first, largest first, each pushed off those before it by at most MAX_SHIFT.
@@ -204,15 +269,19 @@ export function layoutGraph(graph: Graph, previous: Layout | null = null): Layou
       p = { x: was.x + (dx / moved) * MAX_SHIFT, y: was.y + (dy / moved) * MAX_SHIFT };
     placed.set(n.id, p);
     discs.push({ p, r });
+    const room = nameRoom(n, p);
+    if (room !== null) rooms.push(room);
   }
 
   // The new ones, in order, at their seeds or the nearest free place around them.
   for (const n of order) {
     if (placed.has(n.id)) continue;
     const r = footprint(n);
-    const p = nearestFree(inside(seedFor(n, graph, placed), r), r, discs);
+    const p = nearestFree(inside(seedFor(n, graph, placed), r), r, discs, rooms, n);
     placed.set(n.id, p);
     discs.push({ p, r });
+    const room = nameRoom(n, p);
+    if (room !== null) rooms.push(room);
   }
   return Object.fromEntries(order.map((n) => [n.id, placed.get(n.id) as Point]));
 }
