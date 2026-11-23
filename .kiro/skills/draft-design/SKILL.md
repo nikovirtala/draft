@@ -34,13 +34,13 @@ A fill that is not on this list is a bug.
 
 - **`moved-selected`:** the chosen option in a list or a control (the current context row, the "on" option of a switch `.map-range label.on`, the chosen map cell `.map-cell.selected`) and the main action button `.primary-button`. Words on it are `ink`. Built.
 - **`moved-fill`:** a row or control under the pointer (`:hover`), and a "moved" chip or cell (`.where`, `.thread-chip.new`, `.pending.moved`, `.map-cell.active`). Built.
-- **Never purple on** a block (`.stub`, `.thread-stub`, `.block-full`), a block's header (`.block-header`, `.stub-line`), the panel (`.panel`) or a window header (`.titlebar`), whether it is selected, clicked, expanded, focused or open in the panel. A thread open in the panel says so with the `.where` chip. Built, held for blocks by `test/renderer/no-purple-blocks.test.tsx`; the title bar in focus mode breaks it (drift D1).
-- **Keyboard focus:** a 1.5px `moved-mark` outline, no fill, through `:focus-visible` only (never `:focus` or `:focus-within`). Built for blocks; copy `:is(.stub, .thread-stub, .block-full):focus-visible`, not the 2px rules (drift D2, D3).
+- **Never purple on** a block (`.stub`, `.thread-stub`, `.block-full`), a block's header (`.block-header`, `.stub-line`), the panel (`.panel`) or a window header (`.titlebar`), whether it is selected, clicked, expanded, focused or open in the panel. A thread open in the panel says so with the `.where` chip. Built, held by the **fills** check.
+- **Keyboard focus:** a 1.5px `moved-mark` outline, no fill, through `:focus-visible` only (never `:focus` or `:focus-within`). Built: one rule at the top of `styles.css` covers every element; do not write another `outline`. Held by the **focus** check and `test/design-focus.test.ts`.
 - **State fills** are chips, map cells and the notices that ask the person: `waiting-fill` (waits on you, failure), `done-fill`, `review-fill`, `moved-fill`. A whole block takes a state fill only when it asks the person for something, and only `waiting-fill` (`.prompt`, `.interrupt`, `.error`). Built.
 - **Chips** join the one rule (`.pending, .chip, .thread-chip, .where, …`): pastel fill, word in the same hue, a transparent border, `--radius-chip`, weight 500 at 12.5px. Not started is a hairline with no fill; a failure is the dashed chip with a cross. Never write a chip's geometry again. Built.
 - **Hairlines** around boxes, in `line` or `line-strong`. Boxes are told apart by fill and ground, not by a frame. Built.
 - **Strong colour** (`*-mark`, `moved-strong`) only in marks (dots, rings, arcs, arrows, disc outlines, a check or a cross) and in words, never as an area. Built.
-- **Marking a fill:** every element that carries a state fill has `data-fill="<allowed place>"`, and an app-wide e2e check reads it. **Planned**: no `data-fill` exists yet. Until the check lands, write the fill only on a selector the list above names, and say so in the pull request.
+- **Marking a fill:** every element that carries a fill has `data-fill="<place>"` (`chosen`, `action`, `pointer`, `chip`, `cell`, `notice`, `ask`; two separated by a space), and the **fills** check fails one without a place that allows its colour. The table is `src/shared/fills.ts`, equal to the spec's A1. The main action button is `action`. Built.
 
 ## Anatomy, as built
 
@@ -60,7 +60,7 @@ Use the component that draws a part; do not draw it again.
 ## Motion
 
 - Small. The only motion is the working ring, the caret and the actions' fade. No animation library.
-- Every animation or transition goes in the one `@media (prefers-reduced-motion: reduce)` block at the end of `styles.css`. The caret and the actions' fade are not in it yet (drift D4); do not add another outside it.
+- Every animation or transition goes in the one `@media (prefers-reduced-motion: reduce)` block at the end of `styles.css`. The ring, the caret and the actions' fade are in it; a new animation or transition adds its stop there, and `test/design-motion.test.ts` fails without it.
 - The indicator waits `WORKING_DELAY_MS`; a part that loads keeps its size (planned).
 
 ## Accessibility checklist
@@ -84,8 +84,8 @@ Use the component that draws a part; do not draw it again.
 ## Pre-merge checklist
 
 - [ ] Tokens only: no hard-coded colour, line width or font family; `palette:sync` leaves no diff.
-- [ ] Fills only where the allow-list says, marked with `data-fill` once that check exists (planned); no purple on a block, a header, the panel or a window header.
-- [ ] The app-wide e2e checks pass: the window never scrolls, and purple fills only where `data-fill` allows (planned in the harness; until they land, `e2e/map.spec.ts` and `test/renderer/no-purple-blocks.test.tsx` are what exist). Link their names here when they land.
+- [ ] Fills only where the allow-list says, marked with `data-fill`; no purple on a block, a header, the panel or a window header.
+- [ ] The app-wide e2e checks pass (`e2e/design-checks.ts`, run after every test): **window** (the window never scrolls), **fills** (a fill only where `data-fill` allows) and **focus** (one 1.5px ring, none after a click); and the unit tests `test/design-fills.test.ts` (hover), `test/design-focus.test.ts` and `test/design-motion.test.ts`. Do not add a narrower test for the same rule.
 - [ ] Every screenshot in CI's comment on the pull request is compared with its design preview, and the differences are listed in the pull request description.
 - [ ] A rule that changes starts in the design system's preview and is accepted from the picture first; the spec and this skill are updated in the same pull request.
 - [ ] The accessibility and layout checklists above pass.

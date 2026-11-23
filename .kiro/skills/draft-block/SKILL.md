@@ -53,7 +53,7 @@ In `apps/desktop/e2e` (a commit of its own):
 
 - A spec that drives the real app through the harness: `import { launchApp, shot, shotOf, test } from "./harness.ts"`, never `_electron`. Use the fake agent (`fake-acp-script-<kind>.json`, `test/fake-acp-agent.ts`) and the fake services in `@nikovirtala/draft-core/testing` (`FakeGithub`, the fake Kiro Remote) so nothing real is called. Check the states by their `data-testid`.
 - Take a named screenshot per state (`shot(page, "k01-two-checks-need-you")`, `shotOf(locator, "fw02-…")`) and add each to `e2e/states.json` with the state's name, the screenshot, the design preview that draws it (the one from step 1) and its width. `test/e2e-states.test.ts` fails when a listed screenshot is not taken or a preview does not exist. The checks' `k01` to `k04` are taken but not listed yet (drift D7): do better.
-- The app-wide checks (the window never scrolls; purple fills only where `data-fill` allows) run after every test once the harness has them (planned); a new part has to pass them without an exception.
+- The app-wide checks (**window**: the window never scrolls; **fills**: a fill only where `data-fill` allows; **focus**: one 1.5px ring) run after every e2e test (`e2e/design-checks.ts`); a new part has to pass them without an exception, so mark each fill it carries with `data-fill`.
 
 ## 6. Docs and issue
 
