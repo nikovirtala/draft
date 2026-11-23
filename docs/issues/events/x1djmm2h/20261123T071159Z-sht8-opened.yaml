@@ -1,0 +1,17 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M83KYM7JPBT3F6S57XZ6SHT8
+subject: x1djmm2h
+type: opened
+at: 2026-11-23T07:11:59Z
+actor:
+  kind: agent
+  name: claude
+  email: null
+  agent: claude
+  on_behalf_of: niko.virtala@hey.com
+data:
+  title: Run a real Kiro in CI with an API key
+  template: task
+  template_version: 1
