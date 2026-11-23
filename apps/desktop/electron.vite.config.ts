@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "electron-vite";
@@ -10,14 +11,16 @@ const build = buildInfo();
 // only to client builds and which some third-party packages also publish. Its own dependencies
 // are dependencies of this package and stay external.
 const core = { exclude: ["@nikovirtala/draft-core"] };
-const coreSource = (path: string) =>
-  fileURLToPath(new URL(`../../packages/core/src/${path}`, import.meta.url));
-const alias = [
-  { find: /^@nikovirtala\/draft-core$/, replacement: coreSource("index.ts") },
-  { find: /^@nikovirtala\/draft-core\/view$/, replacement: coreSource("view.ts") },
-  { find: /^@nikovirtala\/draft-core\/map-graph$/, replacement: coreSource("map-graph.ts") },
-  { find: /^@nikovirtala\/draft-core\/map-layout$/, replacement: coreSource("map-layout.ts") },
-];
+// Every subpath core exports gets an alias to its "source" file, read from core's package.json, so
+// adding an export can't leave the app unable to resolve it in development.
+const coreDir = new URL("../../packages/core/", import.meta.url);
+const coreExports = JSON.parse(readFileSync(new URL("package.json", coreDir), "utf8"))
+  .exports as Record<string, { source: string }>;
+const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const alias = Object.entries(coreExports).map(([subpath, target]) => ({
+  find: new RegExp(`^${escapeRegExp(`@nikovirtala/draft-core${subpath.slice(1)}`)}$`),
+  replacement: fileURLToPath(new URL(target.source, coreDir)),
+}));
 
 export default defineConfig({
   main: {
