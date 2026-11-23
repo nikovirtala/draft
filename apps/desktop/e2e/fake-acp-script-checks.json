@@ -1,0 +1,14 @@
+{
+  "agent": { "name": "fake-acp-agent", "version": "1.0.0", "model": "fake-model-1" },
+  "starts": "kiro",
+  "style": "kiro",
+  "usage": { "inputTokens": 300, "outputTokens": 20, "totalTokens": 320 },
+  "credits": 0.01,
+  "turns": [
+    {
+      "match": "Look at",
+      "steps": [{ "text": "Both are on screen.", "chunk": 5, "delayMs": 5 }]
+    }
+  ],
+  "fallback": "I have nothing scripted for that."
+}
