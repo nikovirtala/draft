@@ -1,0 +1,16 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M84NDJFAZ938GQDN3GSAWXNH
+subject: adr4w0ds
+type: labeled
+at: 2026-11-23T16:56:52Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: 244629292+kiro-agent@users.noreply.github.com
+data:
+  set:
+    - type:feature
