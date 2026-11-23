@@ -26,6 +26,7 @@ export {
   type RecordedRequest,
 } from "./fake-github.ts";
 export {
+  type FakeFeedEvent,
   FakeKiroRemote,
   type FakeKiroRemoteOptions,
   type FakePermission,
@@ -33,6 +34,7 @@ export {
   type FakeSessionSeed,
   KIRO_REMOTE_TOOLS,
   type ReceivedCall,
+  type ReceivedRest,
   type ToolListEntry,
 } from "./fake-kiro-remote.ts";
 export { GITHUB_ENVIRONMENTS_RESPONSE } from "./github-environments.ts";

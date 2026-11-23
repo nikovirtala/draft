@@ -56,7 +56,45 @@ export interface FakeSession {
   updatedAt: string;
   permissions: FakePermission[];
   transcript: string[];
+  /** Pull requests linked to the session, and the ones it waits for: what GET /v1/sessions/{id} returns. */
+  links: {
+    pr: string;
+    repo: string;
+    number: number;
+    linkedBy: string;
+    linkedAt: string;
+    prState: string;
+    headSha: string | null;
+  }[];
+  waits: { pr: string; repo: string; number: number; source: string; createdAt: string }[];
 }
+
+/** One event of the change feed, as GET /v1/events returns it (kiro-remote docs/github.md). */
+export interface FakeFeedEvent {
+  v: number;
+  id: string;
+  seq: number;
+  ts: string;
+  type: string;
+  effect: string;
+  sessionId: string;
+  pr: string | null;
+  source: string;
+  payload: Record<string, unknown>;
+}
+
+/** The effect of each type of the contract; any other type says its own. */
+const FEED_EFFECTS: Record<string, "state" | "annotation"> = {
+  "link.added": "state",
+  "link.removed": "state",
+  "link.state_changed": "state",
+  "wait.registered": "state",
+  "wait.removed": "state",
+  "wake.queued": "annotation",
+  "wake.delivered": "annotation",
+  "wake.released": "annotation",
+  "wake.dropped": "annotation",
+};
 
 export interface FakeSessionSeed {
   id: string;
@@ -86,6 +124,13 @@ export interface FakeKiroRemoteOptions {
 export interface ReceivedCall {
   tool: string;
   args: Record<string, unknown>;
+  authorized: boolean;
+}
+
+/** A REST read the fake received. */
+export interface ReceivedRest {
+  method: string;
+  path: string;
   authorized: boolean;
 }
 
@@ -120,6 +165,8 @@ function seedSession(s: FakeSessionSeed, now: string): FakeSession {
     updatedAt: now,
     permissions: Array.from({ length: s.pendingPermissions ?? 0 }, (_, i) => permission(i + 1)),
     transcript: s.transcript ?? [],
+    links: [],
+    waits: [],
   };
 }
 
@@ -170,6 +217,13 @@ export class FakeKiroRemote {
   readonly hang = new Set<string>();
   /** Calls that ran, by tool, so a test can tell a replayed call from one that ran. */
   readonly executed: ReceivedCall[] = [];
+  /** The change feed, in order, as the real one keeps it for its owner. */
+  readonly feed: FakeFeedEvent[] = [];
+  /** The REST reads the fake answered. */
+  readonly rest: ReceivedRest[] = [];
+  private feedSeq = 0;
+  /** Fail the next n REST reads with a 503, to test a reader that must back off. */
+  failRest = 0;
   /** First results by tool and key, for 24 hours in the real one and for the life of this fake. */
   private readonly keyed = new Map<string, { input: string; result: Record<string, unknown> }>();
   /** Called as each tool call arrives, before it is answered. */
@@ -286,6 +340,142 @@ export class FakeKiroRemote {
     return s;
   }
 
+  /**
+   * Appends one event to the change feed, numbered as the real service numbers them: 1, 2, 3, with
+   * no gap. A type of the contract takes its effect; any other type says its own, as a type draft
+   * has never heard of would.
+   */
+  emit(e: {
+    type: string;
+    sessionId: string;
+    pr?: string | null;
+    payload?: Record<string, unknown>;
+    source?: string;
+    effect?: string;
+    ts?: string;
+    v?: number;
+  }): FakeFeedEvent {
+    const event: FakeFeedEvent = {
+      v: e.v ?? 1,
+      id: fakeUlid(),
+      seq: ++this.feedSeq,
+      ts: e.ts ?? new Date().toISOString(),
+      type: e.type,
+      effect: e.effect ?? FEED_EFFECTS[e.type] ?? "state",
+      sessionId: e.sessionId,
+      pr: e.pr ?? null,
+      source: e.source ?? "rest",
+      payload: e.payload ?? {},
+    };
+    this.feed.push(event);
+    return event;
+  }
+
+  /** The sequence number of the last event of the feed. */
+  get feedHead(): number {
+    return this.feedSeq;
+  }
+
+  /** Drops the events before `seq`, as the service's retention does: a reader with an older cursor sees a gap. */
+  expireBefore(seq: number): void {
+    this.feed.splice(
+      0,
+      this.feed.findIndex((e) => e.seq >= seq) < 0
+        ? this.feed.length
+        : this.feed.findIndex((e) => e.seq >= seq),
+    );
+  }
+
+  private session(id: string): FakeSession {
+    const s = this.sessions.get(id);
+    if (s === undefined) throw new Error(`no fake session ${id}`);
+    return s;
+  }
+
+  /** A session starts waiting for a pull request: the session says so, and the feed does. */
+  startWaiting(id: string, pr: string, source = "mcp"): void {
+    const s = this.session(id);
+    const [repo, number] = pr.split("#") as [string, string];
+    if (!s.waits.some((w) => w.pr === pr))
+      s.waits.push({
+        pr,
+        repo,
+        number: Number(number),
+        source,
+        createdAt: new Date().toISOString(),
+      });
+    this.emit({
+      type: "wait.registered",
+      sessionId: id,
+      pr,
+      source,
+      payload: { waitSource: source },
+    });
+  }
+
+  /**
+   * A wait ends. `merged`, `closed` and `unreadable` fired it, so Kiro Remote queues the wake they
+   * caused in the same commit (its id is returned); `stopped` and `registration_failed` did not.
+   */
+  endWait(
+    id: string,
+    pr: string,
+    reason: "merged" | "closed" | "unreadable" | "stopped" | "registration_failed",
+  ): string | null {
+    const s = this.session(id);
+    s.waits = s.waits.filter((w) => w.pr !== pr);
+    const source =
+      reason === "stopped" ? "rest" : reason === "registration_failed" ? "sweep" : "webhook";
+    this.emit({ type: "wait.removed", sessionId: id, pr, source, payload: { reason } });
+    if (reason !== "merged" && reason !== "closed" && reason !== "unreadable") return null;
+    const itemId = `wake-${this.feedSeq}`;
+    this.emit({
+      type: "wake.queued",
+      sessionId: id,
+      pr,
+      source,
+      payload: { itemId, kind: `pr_wait_${reason}`, cause: "wait", merged: false },
+    });
+    return itemId;
+  }
+
+  /** The wake queued for an item is sent to the session as a turn. */
+  deliverWake(id: string, itemId: string): void {
+    const q = [...this.feed]
+      .reverse()
+      .find((e) => e.type === "wake.queued" && e.payload.itemId === itemId && e.sessionId === id);
+    if (q === undefined) throw new Error(`no queued wake ${itemId}`);
+    this.emit({
+      type: "wake.delivered",
+      sessionId: id,
+      pr: q.pr,
+      source: q.source,
+      payload: { itemId, kind: q.payload.kind, cause: q.payload.cause, turnId: fakeUlid() },
+    });
+  }
+
+  /** A session's pull request is linked: the session says so, and the feed does. */
+  link(id: string, pr: string, linkedBy = "manual"): void {
+    const s = this.session(id);
+    const [repo, number] = pr.split("#") as [string, string];
+    s.links.push({
+      pr,
+      repo,
+      number: Number(number),
+      linkedBy,
+      linkedAt: new Date().toISOString(),
+      prState: "open",
+      headSha: null,
+    });
+    this.emit({
+      type: "link.added",
+      sessionId: id,
+      pr,
+      source: "rest",
+      payload: { method: linkedBy, prState: "open" },
+    });
+  }
+
   /** The same scripted tools in process, without HTTP, for unit tests. */
   asTools(): {
     call(
@@ -323,7 +513,7 @@ export class FakeKiroRemote {
 
   private view(s: FakeSession) {
     const { permissions: _p, transcript: _t, ...rest } = s;
-    return { ...rest, links: [] };
+    return { ...rest };
   }
 
   /** The scripted behaviour behind each tool, returning kiro-remote's result shapes. */
@@ -348,7 +538,7 @@ export class FakeKiroRemote {
           .filter((s) => args.status === undefined || s.status === args.status)
           .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
           .map((s) => {
-            const { links: _l, ...v } = this.view(s);
+            const { links: _l, waits: _w, ...v } = this.view(s);
             return v;
           });
         return { sessions: list.slice(0, Number(args.limit ?? 20)) };
@@ -502,6 +692,8 @@ export class FakeKiroRemote {
 
     if (path.startsWith("/__control/")) return this.control(req, res, path);
 
+    if (path.startsWith("/v1/")) return this.restRoute(req, res, url);
+
     if (path === "/mcp") {
       const authorized = this.checkBearer(req);
       if (this.o.auth === true && !authorized) {
@@ -532,6 +724,47 @@ export class FakeKiroRemote {
 
     if (this.o.auth !== true) return json(res, 404, { error: "not found" });
     return this.oauth(req, res, url);
+  }
+
+  /** The REST reads of the change feed: GET /v1/events and GET /v1/sessions/{id}. */
+  private restRoute(req: IncomingMessage, res: ServerResponse, url: URL): ReturnType<typeof json> {
+    const authorized = this.checkBearer(req);
+    this.rest.push({
+      method: req.method ?? "GET",
+      path: `${url.pathname}${url.search}`,
+      authorized,
+    });
+    if (this.o.auth === true && !authorized)
+      return json(
+        res,
+        401,
+        { type: "unauthorized", status: 401 },
+        {
+          "www-authenticate": `Bearer resource_metadata="${this.baseUrl}/.well-known/oauth-protected-resource/mcp"`,
+        },
+      );
+    if (this.failRest > 0) {
+      this.failRest--;
+      return json(res, 503, { type: "unavailable", status: 503 });
+    }
+    if (req.method !== "GET") return json(res, 405, { status: 405 });
+    if (url.pathname === "/v1/events") {
+      const after = Math.max(0, Number(url.searchParams.get("after") ?? 0) || 0);
+      const limit = Math.min(200, Math.max(1, Number(url.searchParams.get("limit") ?? 50) || 50));
+      const later = this.feed.filter((e) => e.seq > after);
+      const events = later.slice(0, limit);
+      return json(res, 200, {
+        events,
+        nextCursor: events.at(-1)?.seq ?? after,
+        hasMore: later.length > events.length,
+      });
+    }
+    const m = /^\/v1\/sessions\/([^/]+)$/.exec(url.pathname);
+    if (m !== null) {
+      const s = this.sessions.get(decodeURIComponent(m[1] as string));
+      return s === undefined ? json(res, 404, { status: 404 }) : json(res, 200, this.view(s));
+    }
+    return json(res, 404, { status: 404 });
   }
 
   private checkBearer(req: IncomingMessage): boolean {
