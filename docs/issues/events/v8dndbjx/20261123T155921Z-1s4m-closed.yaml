@@ -1,0 +1,16 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M84J48VVZNYR5HBB5B4V1S4M
+subject: v8dndbjx
+type: closed
+at: 2026-11-23T15:59:21Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: 244629292+kiro-agent@users.noreply.github.com
+reason: "After a pull request merges, each After deploy item is a check waiting on the person, opens to its steps and records passed or failed: tests 'a pull request seen to merge' and 'a person's answer to a check' (packages/core/test/check.test.ts), the parser tests (after-deploy.test.ts), 'a check that is answered' (apps/desktop/test/renderer/check-view.test.tsx) and the e2e 'a merged pull request's After deploy items wait on you as checks, and passing one offers its ADR' (apps/desktop/e2e/checks.spec.ts). A check linked to a proposed ADR offers its acceptance once passed, never when failed: 'a check that names a proposed decision' (check.test.ts), the renderer test 'a check that names a decision' and the same e2e."
+data:
+  resolution: done
