@@ -2115,11 +2115,24 @@ div.map-item {
   }
 }
 
-/* Without motion the ring stays, half drawn: still there, never turning. */
+/*
+ * Every animation and transition stops here, in this one block. Without motion the ring stays, half
+ * drawn: still there, never turning; the caret stays, not blinking; the actions appear at once.
+ */
 @media (prefers-reduced-motion: reduce) {
   .working-ring {
     animation: none;
     border-right-color: var(--moved-mark);
+  }
+
+  /* The caret stays, drawn and not blinking. */
+  .caret {
+    animation: none;
+  }
+
+  /* The message's actions appear at once. */
+  .message-actions {
+    transition: none;
   }
 }
 
