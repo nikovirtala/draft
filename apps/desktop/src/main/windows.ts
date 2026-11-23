@@ -1,6 +1,7 @@
 import { join } from "node:path";
 import { app, BrowserWindow, screen, shell } from "electron";
 import { CHANNELS, type Change } from "../shared/ipc.ts";
+import { PAGE_BACKGROUND } from "../shared/palette.ts";
 import type { Layout } from "../shared/placement.ts";
 import type { ViewStateStore } from "./view-state.ts";
 
@@ -57,7 +58,7 @@ export class WindowManager {
     return {
       minWidth: 360,
       minHeight: 240,
-      backgroundColor: "#f9f1e1",
+      backgroundColor: PAGE_BACKGROUND,
       show: false,
       webPreferences: {
         preload: this.o.preload,

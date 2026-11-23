@@ -17,7 +17,12 @@ interface Answer {
   inverse: { kind: string; step?: string; reason?: string };
 }
 
-const MARK: Record<Evidence["status"], string> = { green: "Green", red: "Red", pending: "Waiting" };
+/** The word for each status: the colour is never the only cue, so the words say it. */
+const MARK: Record<Evidence["status"], string> = {
+  green: "Passed",
+  red: "Failed",
+  pending: "Waiting",
+};
 
 function inverseText(i: Answer["inverse"]): string {
   if (i.kind === "irreversible") return `can’t be undone: ${i.reason ?? ""}`;
@@ -53,10 +58,7 @@ export function AcceptanceBody({ block }: { block: Interrupt }) {
       <ul className="evidence" data-testid="evidence">
         {evidence.map((e) => (
           <li key={e.id} className={`evidence-${e.status}`} data-testid={`evidence-${e.id}`}>
-            <span className="evidence-mark" aria-hidden="true">
-              {MARK[e.status]}
-            </span>{" "}
-            <strong>{e.label}</strong>
+            <span className="evidence-mark">{MARK[e.status]}</span> <strong>{e.label}</strong>
             {e.detail !== null && <span className="secondary"> · {e.detail}</span>}
           </li>
         ))}

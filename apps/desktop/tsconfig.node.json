@@ -11,11 +11,13 @@
   "include": [
     "src/main",
     "src/preload",
+    "scripts",
     "src/shared",
     "test",
     "e2e",
     "build-info.ts",
     "electron.vite.config.ts",
     "playwright.config.ts"
-  ]
+  ],
+  "exclude": ["test/renderer"]
 }
