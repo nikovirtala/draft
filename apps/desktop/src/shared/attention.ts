@@ -12,6 +12,7 @@ export const CAUSE_LABELS: Record<InterruptCause, string> = {
   conclusion: "Conclusion to confirm",
   "review-requested": "Review requested",
   acceptance: "Ready for you to accept",
+  check: "Check for you",
 };
 
 /** The words on the button for each way to settle something. */

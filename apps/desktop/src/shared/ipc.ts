@@ -2,6 +2,7 @@
  * The bridge between the renderer and the main process. The renderer only ever sees view state:
  * no API key, no token and no file system access crosses it.
  */
+import type { UiCheck } from "@nikovirtala/draft-core/check-types";
 import type { MapItem, MapSnapshot, OpenTarget } from "@nikovirtala/draft-core/map-types";
 import type { BlockInfo, Focus, FocusTarget, Layout, Move, Refusal } from "./placement.ts";
 
@@ -111,6 +112,8 @@ export type Block =
       at: string;
     }
   | { kind: "note"; id: string; what: string; text: string; at: string }
+  /** Something only the person can check, asked for by a merged pull request's After deploy. */
+  | { kind: "check"; id: string; at: string; check: UiCheck }
   /** The map, asked for by the message with this address. */
   | { kind: "map"; id: string; at: string };
 
@@ -125,7 +128,8 @@ export type InterruptCause =
   | "unfinished-step"
   | "conclusion"
   | "review-requested"
-  | "acceptance";
+  | "acceptance"
+  | "check";
 
 export type ThreadStateName = "open" | "concluding" | "wrapped-up" | "superseded" | "withdrawn";
 
@@ -343,6 +347,18 @@ export interface DraftBridge {
     outcome: string,
     input?: { note?: string; reason?: string },
   ): Promise<void>;
+  /**
+   * Passes or fails a check as the person. Failing needs a note saying what they saw; passing may
+   * have one.
+   */
+  answerCheck(
+    conversation: string,
+    key: string,
+    outcome: "passed" | "failed",
+    note?: string,
+  ): Promise<void>;
+  /** Puts text on the system clipboard exactly as given. */
+  copyText(text: string): Promise<void>;
   /** Asks a thread's agent to draft its conclusion. */
   wrapUp(conversation: string): Promise<void>;
   confirmConclusion(conversation: string): Promise<void>;
@@ -389,6 +405,8 @@ export const CHANNELS = {
   previewSwitch: "draft:preview-switch",
   switchAgent: "draft:switch-agent",
   settleInterrupt: "draft:settle-interrupt",
+  answerCheck: "draft:answer-check",
+  copyText: "draft:copy-text",
   wrapUp: "draft:wrap-up",
   confirmConclusion: "draft:confirm-conclusion",
   declineConclusion: "draft:decline-conclusion",

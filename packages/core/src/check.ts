@@ -1,4 +1,5 @@
 import { type AfterDeployItem, parseAfterDeploy } from "./after-deploy.ts";
+import type { CheckState } from "./check-types.ts";
 import {
   type CheckSource,
   type DraftEvent,
@@ -9,8 +10,8 @@ import {
 import { defineMachine, type Machine } from "./machine.ts";
 
 /**
- * Checks: what a merged pull request still leaves for a person, as a kind (docs/model.md,
- * "Checks"). A check is requested, then a person passes or fails it. Its facts are events of
+ * Checks: what a merged pull request still leaves for a person, as a kind (docs/implementation.md,
+ * "What a merged pull request leaves for the person"). A check is requested, then a person passes or fails it. Its facts are events of
  * draft's own log (`check.requested`, `check.passed`, `check.failed`, `check.reminded`), so a later
  * step can publish them, and no reader keeps a state of its own: the fold of the log is the state.
  *
@@ -20,8 +21,6 @@ import { defineMachine, type Machine } from "./machine.ts";
 
 /** How long a check waits on a person before it is raised again, and again after each reminder. */
 export const CHECK_REMINDER_MS = 24 * 60 * 60 * 1000;
-
-export type CheckState = "requested" | "passed" | "failed";
 
 let machine: Machine<CheckState> | null = null;
 
@@ -192,23 +191,4 @@ export function requestsOfMerge(target: Target, state: Record<string, unknown>):
     parsed: item.parsed,
     candidates: item.adrCandidates,
   }));
-}
-
-/** A check as a window shows it. */
-export interface UiCheck {
-  key: string;
-  state: CheckState;
-  title: string;
-  reason: string;
-  steps: CheckRequested["steps"];
-  tail: string | null;
-  raw: string;
-  parsed: boolean;
-  source: CheckSource;
-  /** The proposed decisions it is about: passing it offers their acceptance. */
-  gates: { target: Target; title: string | null }[];
-  requestedAt: string;
-  raisedAt: string;
-  reminders: number;
-  answer: CheckFold["answer"];
 }

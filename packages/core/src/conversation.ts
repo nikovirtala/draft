@@ -26,8 +26,8 @@ import {
   dueReminders,
   foldChecks,
   requestsOfMerge,
-  type UiCheck,
 } from "./check.ts";
+import type { UiCheck } from "./check-types.ts";
 import { CONTEXT_ITEM, type ContextItemSnapshot, contextItemKey } from "./cross-context.ts";
 import {
   type Actor,
