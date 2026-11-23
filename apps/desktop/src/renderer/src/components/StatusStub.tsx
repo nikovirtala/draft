@@ -327,6 +327,7 @@ function Line({ p, children }: { p: StatusProps; children?: React.ReactNode }) {
       />
       <span
         className={`stub-status${s.kind === KINDS["pull-request"] ? ` pr-state pr-${s.status}` : ""}`}
+        data-fill={s.kind === KINDS["pull-request"] ? "chip" : undefined}
         data-testid="stub-status"
         data-state={s.status}
       >
@@ -336,6 +337,7 @@ function Line({ p, children }: { p: StatusProps; children?: React.ReactNode }) {
         <span
           key={`${c.testid}:${c.text}`}
           className={`pending ${c.tone ?? ""}`}
+          data-fill="chip"
           data-testid={c.testid}
         >
           {c.text}
@@ -395,7 +397,7 @@ export function StatusStub(p: StatusProps) {
     >
       <Line p={p}>
         {away ? (
-          <span className="where" data-testid="stub-where">
+          <span className="where" data-fill="chip" data-testid="stub-where">
             {WHERE[placement]}
           </span>
         ) : (

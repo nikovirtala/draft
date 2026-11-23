@@ -152,7 +152,7 @@ function Mermaid({ source }: { source: string }) {
     );
   }
   return (
-    <figure className="mermaid pending">
+    <figure className="mermaid source">
       <pre className="code">
         <code className="language-mermaid">{source}</code>
       </pre>

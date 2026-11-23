@@ -27,7 +27,9 @@ export function AgentState({
         {agentLabel(agent)}
         {model === null ? "" : <span className="agent-model"> · {model}</span>}
       </span>
-      <span className={`agent-badge ${agent.state}`}>{paused ? "Paused" : "Active"}</span>
+      <span className={`agent-badge ${agent.state}`} data-fill="chip">
+        {paused ? "Paused" : "Active"}
+      </span>
       <button
         type="button"
         className="agent-toggle"

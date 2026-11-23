@@ -127,6 +127,7 @@ export function PanelDivider({
     // biome-ignore lint/a11y/useSemanticElements: an <hr> can't take focus or a value; a splitter is a focusable separator.
     <div
       className="panel-divider"
+      data-fill="pointer"
       data-testid="panel-divider"
       role="separator"
       aria-orientation="vertical"

@@ -21,6 +21,7 @@ function BranchControl({ message }: { message: Message }) {
       <button
         type="button"
         className="icon branch-icon"
+        data-fill="pointer"
         aria-label="Branch a thread"
         title="Branch a thread off this message"
         data-testid="branch"
@@ -36,6 +37,7 @@ function BranchControl({ message }: { message: Message }) {
               type="button"
               role="menuitem"
               className="branch-agent"
+              data-fill="pointer"
               data-agent={a.id}
               onClick={() => {
                 setChoosing(false);
@@ -65,6 +67,7 @@ function CopyReference({ message }: { message: Message }) {
     <button
       type="button"
       className="icon copy-reference"
+      data-fill="pointer"
       data-testid="copy-reference"
       data-reference={address}
       aria-label="Copy reference"

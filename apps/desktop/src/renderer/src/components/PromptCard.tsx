@@ -28,6 +28,7 @@ export function PromptCard({
   return (
     <section
       className="prompt"
+      data-fill="ask"
       data-testid="prompt"
       data-key={prompt.id}
       aria-label="The agent asks for permission"
@@ -40,7 +41,12 @@ export function PromptCard({
         <button type="button" className="secondary-button" onClick={() => onAnswer(false)}>
           Don’t allow
         </button>
-        <button type="button" className="primary-button" onClick={() => onAnswer(true)}>
+        <button
+          type="button"
+          className="primary-button"
+          data-fill="action"
+          onClick={() => onAnswer(true)}
+        >
           Allow
         </button>
       </div>

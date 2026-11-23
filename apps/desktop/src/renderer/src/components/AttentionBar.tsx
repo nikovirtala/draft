@@ -48,14 +48,17 @@ export function AttentionBar() {
                 <button
                   type="button"
                   className="attention-open"
+                  data-fill="pointer"
                   data-testid="attention-open"
                   onClick={() => {
                     if (list.current !== null) list.current.open = false;
                     void ws.openAttention(a);
                   }}
                 >
-                  <span className="chip">{CAUSE_LABELS[a.cause]}</span> {nameOf(a.conversation)}{" "}
-                  <span className="secondary">· {ageText(a.at)}</span>
+                  <span className="chip" data-fill="chip">
+                    {CAUSE_LABELS[a.cause]}
+                  </span>{" "}
+                  {nameOf(a.conversation)} <span className="secondary">· {ageText(a.at)}</span>
                 </button>
               </li>
             ))}
