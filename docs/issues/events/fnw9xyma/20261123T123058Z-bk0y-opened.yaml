@@ -1,0 +1,17 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M8466PBJH4XZJGNRZCGCBK0Y
+subject: fnw9xyma
+type: opened
+at: 2026-11-23T12:30:58Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: niko.virtala@hey.com
+data:
+  title: Reset the thread column to its default width
+  template: task
+  template_version: 1
