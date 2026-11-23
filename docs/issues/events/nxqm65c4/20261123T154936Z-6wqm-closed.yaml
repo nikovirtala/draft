@@ -1,0 +1,16 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M84HJDJ7WPKMXDTPVRKA6WQM
+subject: nxqm65c4
+type: closed
+at: 2026-11-23T15:49:36Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: 244629292+kiro-agent@users.noreply.github.com
+reason: "Selected or focused blocks and the row you are on are drawn on moved-selected with ink or text words; the moved-mark hairline is gone. Test: test/renderer/selected-block.test.tsx lists the pairs (ink and text on moved-selected, chips on their own fills) and fails under 4.5:1; e2e checks computed colours (frame.spec f10, f11; attention.spec a11)."
+data:
+  resolution: done
