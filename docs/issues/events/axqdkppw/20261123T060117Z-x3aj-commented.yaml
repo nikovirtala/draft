@@ -1,0 +1,15 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M83FX5Q94VGWVPM7BCVKX3AJ
+subject: axqdkppw
+type: commented
+at: 2026-11-23T06:01:17Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: niko.virtala@hey.com
+data:
+  text: "Moved the agent state, Pause, folder chip and sign-ins line to a footer (frame.spec.ts checks the split and keyboard access). Left open: the Done when asks for before and after screenshots at 1280 px with a long context name, which the CI end-to-end run produces (f01-top-bar-and-footer.png) and nobody has looked at yet."
