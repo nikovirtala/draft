@@ -1,0 +1,16 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M852E9R5SQF67BA6WWRBNCAD
+subject: et9q20vm
+type: labeled
+at: 2026-11-23T20:44:27Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: 244629292+kiro-agent@users.noreply.github.com
+data:
+  set:
+    - bug
