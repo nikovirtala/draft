@@ -1,0 +1,120 @@
+<!-- @dsCard group="Acceptance" height=1500 subtitle="Requested, passed, failed with its note" -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>A check</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:var(--font-sans);background:var(--page);color:var(--text);font-size:13px;line-height:20px}
+.wrap{padding:16px;display:grid;gap:22px}
+.k{margin:0 0 6px;color:var(--muted);font-size:12px;line-height:16px;font-weight:400}
+.k b{color:var(--ink);font-weight:600}
+.chip,.pending,.where{display:inline-flex;align-items:center;gap:var(--space-1);font-size:12.5px;line-height:1;font-weight:500;padding:7px var(--space-3);border-radius:var(--radius-chip);border:1px solid transparent;white-space:nowrap}
+.chip i{font-style:normal;font-size:11px}
+.moved,.where{background:var(--moved-fill);color:var(--moved-strong)}
+.done{background:var(--done-fill);color:var(--done-word)}
+.review{background:var(--review-fill);color:var(--review-word)}
+.waiting{background:var(--waiting-fill);color:var(--waiting-word)}
+.failed{background:var(--waiting-fill);color:var(--waiting-word);border:var(--hairline-dashed) dashed var(--waiting-mark)}
+.idle{background:transparent;color:var(--muted);border:var(--hairline) solid var(--idle-line)}
+.row{display:flex;flex-wrap:wrap;gap:var(--space-2);align-items:center}
+.primary-button,.secondary-button{font:inherit;font-weight:560;border-radius:9px;padding:7px 16px;cursor:default;color:var(--ink)}
+.primary-button{background:var(--moved-selected);border:var(--hairline) solid var(--line-strong)}
+.primary-button.off{opacity:.45}
+.secondary-button{background:var(--raised);border:var(--hairline) solid var(--line)}
+.small{padding:3px 10px;font-size:12px;font-weight:500;border-radius:6px}
+.focus{outline:1.5px solid var(--moved-mark);outline-offset:1px}
+.working{display:inline-flex;align-items:center;gap:8px;color:var(--moved-word);font-weight:500}
+.working-ring{width:14px;height:14px;border-radius:var(--radius-round);border:2px solid color-mix(in srgb,var(--moved-mark) 25%,transparent);border-top-color:var(--moved-mark);flex:none}
+.working-ring.s{width:10px;height:10px}
+@media (prefers-reduced-motion:no-preference){.working-ring{animation:turn .9s linear infinite}}
+@keyframes turn{to{transform:rotate(360deg)}}
+.caret{display:inline-block;width:.5em;height:1.05em;margin-left:2px;vertical-align:text-bottom;background:var(--moved-mark)}
+.dot{width:8px;height:8px;border-radius:var(--radius-round);flex:none;background:var(--idle-line)}
+.dot.run{background:var(--moved-mark)}.dot.open{background:var(--review-mark)}.dot.merged{background:var(--done-mark)}.dot.wait{background:var(--waiting-mark)}
+.ref{color:var(--muted);font-family:var(--font-mono);font-size:12px}
+.t{color:var(--ink);font-weight:600}
+.secondary{color:var(--muted)}
+.stub,.thread-stub{display:flex;align-items:center;gap:10px;flex-wrap:wrap;min-height:40px;background:var(--raised);border:var(--hairline) solid var(--line-strong);border-radius:var(--radius-card);padding:6px 12px}
+.thread-mark{color:var(--moved-strong);font-weight:700}
+.stub .grow,.thread-stub .grow{flex:1}
+.win{display:flex;flex-direction:column;background:var(--page);border:var(--hairline) solid var(--line-strong);border-radius:var(--radius-card);overflow:hidden;color:var(--text)}
+.titlebar{display:flex;align-items:baseline;gap:12px;padding:10px 20px;background:var(--titlebar);border-bottom:var(--hairline) solid var(--line);position:relative}
+.titlebar b{color:var(--ink);font-weight:650}
+.titlebar .ctx{color:var(--ink)}
+.titlebar .title{color:var(--muted)}
+.titlebar .spacer{flex:1}
+.attention{font-weight:560;color:var(--waiting-word)}
+.footer{display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px;padding:6px 12px;border-top:var(--hairline) solid var(--line);font-size:12px;color:var(--muted)}
+.footer.on-titlebar{background:var(--titlebar)}
+.footer .agent-state{margin-left:auto;display:flex;gap:8px;align-items:center}
+.footer .chip{padding:6px 9px}
+.footer .agent-state .who{color:var(--ink)}
+.workspace{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr)}
+.workspace.with-panel{grid-template-columns:minmax(0,1fr) 8px 44%}
+.divider{border-left:var(--hairline) solid var(--line)}
+.left,.panel{min-height:0;min-width:0;display:flex;flex-direction:column;background:var(--page)}
+.conversation{flex:1;min-height:0;overflow:hidden;position:relative}
+.column{max-width:950px;margin:0 auto;padding:20px 24px 12px;display:flex;flex-direction:column;gap:14px}
+.empty{color:var(--muted);text-align:center;margin:44px 0 0}
+.notice{background:var(--raised);border:var(--hairline-dashed) dashed var(--line-strong);border-radius:var(--radius-card);color:var(--muted);padding:10px 14px}
+.message.user{align-self:flex-end;max-width:78%}
+.message.user .body{background:var(--surface);border-radius:14px 14px 4px 14px;padding:9px 14px}
+.message.agent{align-self:stretch;font-family:var(--font-serif);font-size:15px;line-height:24px}
+.message.agent p,.message.user p{margin:0 0 .6em}.message.agent p:last-child{margin:0}
+.message.agent code{font-family:var(--font-mono);font-size:12px}
+.message.aside{align-self:flex-end}
+.message.aside .audience{margin:0 0 3px;font-size:11.5px;color:var(--muted);text-align:right}
+.message.aside .body{background:transparent;border:var(--hairline-dashed) dashed var(--line-strong);border-radius:var(--radius-card);padding:8px 14px}
+.composer-wrap{padding:10px 24px 12px;width:100%;max-width:950px;margin:0 auto}
+.composer{display:flex;gap:10px;align-items:flex-end}
+.composer .field{flex:1;background:var(--surface);color:var(--ink);border:var(--hairline) solid var(--line-strong);border-radius:12px;padding:9px 12px;min-height:40px}
+.composer .field.ph{color:var(--muted)}
+.composer-hint{margin:6px 2px 0;color:var(--muted);font-size:12px}
+kbd{font:11px var(--font-sans);border:var(--hairline) solid var(--line-strong);border-radius:4px;padding:0 4px;background:var(--raised)}
+.panel-head{padding:12px 16px 10px;border-bottom:var(--hairline) solid var(--line);display:grid;gap:8px;background:var(--page)}
+.panel-head .name{color:var(--ink);font-weight:700}
+.panel-body{flex:1;padding:16px;overflow:hidden}
+.prompt,.interrupt{background:var(--waiting-fill);border:var(--hairline) solid var(--line-strong);border-radius:12px;padding:12px 14px;max-width:900px}
+.interrupt-label{margin:0 0 8px;display:flex;gap:12px;align-items:baseline;color:var(--waiting-word)}
+.interrupt-label .age{color:var(--muted)}
+.prompt-title{margin:0 0 8px;color:var(--ink)}
+.prompt-title strong{color:var(--waiting-word)}
+.prompt-input{margin:0 0 10px;padding:8px 10px;background:var(--surface);border:var(--hairline) solid var(--line-strong);border-radius:8px;font:12.5px/18px var(--font-mono);white-space:pre-wrap}
+.prompt-actions{display:flex;justify-content:flex-end;gap:8px}
+.error{display:flex;align-items:center;gap:var(--space-3);color:var(--waiting-word);background:var(--waiting-fill);border:var(--hairline-dashed) dashed var(--waiting-mark);border-radius:var(--radius-card);padding:10px 14px}
+.error::before{content:"✕";font-weight:600}
+.col{max-width:620px;display:grid;gap:14px}.check{background:var(--waiting-fill);border:var(--hairline) solid var(--line-strong);border-radius:12px;padding:12px 14px}.check .interrupt-label{margin-bottom:6px}.check summary{color:var(--muted)}.check ol{margin:8px 0;padding-left:22px}.check li{margin:0 0 10px}.check .cmd{display:flex;gap:8px;align-items:flex-start;margin:6px 0}.check .cmd .prompt-input{flex:1;margin:0}.check .see{color:var(--muted)}.note{width:100%;margin:8px 0;color:var(--muted);background:var(--raised);border:var(--hairline) solid var(--line);border-radius:8px;padding:6px 8px;min-height:44px}.note.typed{color:var(--text)}.gate{margin:8px 0}.attention-list{padding:10px 14px;background:var(--surface);border:var(--hairline) solid var(--line-strong);border-radius:12px;color:var(--ink)}.attention-list ol{margin:6px 0 0;padding-left:20px}.attention-list li{margin:6px 0}.attention-list li .chip{margin-right:6px}.nested{margin-top:8px}.pending.good{background:var(--done-fill);color:var(--done-word)}.pending.bad{background:var(--waiting-fill);color:var(--waiting-word);border:var(--hairline-dashed) dashed var(--waiting-mark)}.pending.bad::before{content:"✕";font-size:11px}.pending.good::before{content:"✓";font-size:11px}</style></head>
+<body>
+<div class="wrap">
+<div class="col">
+<section data-draws="k01-two-checks-need-you">
+<p class="k"><b>Two checks need you.</b> Each is a wait item in what-needs-you list; the count says "2 need you".</p>
+<div class="attention-list"><span class="secondary">Main conversation: 2</span><ol><li><span class="chip waiting">Check for you</span>Look at the palette <span class="secondary">· Main conversation · just now</span></li><li><span class="chip waiting">Check for you</span>Sign in once <span class="secondary">· Main conversation · just now</span></li></ol></div>
+</section>
+<section data-draws="k02-a-check-opened-to-its-steps">
+<p class="k"><b>Requested, opened to its steps.</b> A check that asks for you is <code>waiting-fill</code> as a whole, with a wait chip. Reason, then steps with every command copyable and what you should see; the decision it gates; a note; Failed and Passed (Passed is the one main action).</p>
+<div class="check"><p class="interrupt-label"><span class="pending waiting">Waiting for you</span><strong style="color:var(--ink)">Look at the palette</strong><span class="age">after nikovirtala/draft#8 merged · waiting just now</span></p>
+<details open><summary>Reason and steps</summary><p>Why no test can show it: whether it looks right is a person's judgement.</p>
+<ol><li>In a terminal, run this command.<div class="cmd"><pre class="prompt-input">pnpm --filter @nikovirtala/draft-desktop dev -- "$HOME/src/github.com/nikovirtala/draft"</pre><span class="secondary-button small">Copy</span></div><div class="see">You should see a draft window open on cream.</div></li><li>Type <code>show the map</code> and press Enter.<div class="see">You should see a graph of pale discs.</div></li></ol></details>
+<div class="gate secondary">Gates the decision <strong style="color:var(--ink)">Accept only as the person</strong>: its acceptance is offered when this passes.</div>
+<div class="note">What you saw. Needed to fail it, optional to pass it.</div>
+<div class="prompt-actions"><span class="secondary-button">Failed</span><span class="primary-button focus">Passed</span></div></div>
+</section>
+<section data-draws="k03-a-failed-check-with-its-note">
+<p class="k"><b>Failed, with its note.</b> The chip is the failure chip (dashed <code>waiting-mark</code> hairline, a cross, the word); the answer is one line of words. Nothing offers the decision it gates.</p>
+<div class="check"><p class="interrupt-label"><span class="pending bad">Failed</span><strong style="color:var(--ink)">Sign in once</strong><span class="age">after nikovirtala/draft#8 merged</span></p>
+<details><summary>Reason and steps</summary></details>
+<p class="secondary" style="margin:6px 0 0">Failed by niko, 11/23/2026, 7:12:04 PM: No browser tab opened.</p></div>
+<div class="check nested"><p class="error" style="margin:0">Say what you saw, so whoever fixes it knows.</p><p class="k" style="margin:6px 0 0">Failing without a note shows this, in place.</p></div>
+</section>
+<section data-draws="k04-a-passed-check-offers-its-adr-acceptance">
+<p class="k"><b>Passed.</b> A done chip, a line of words, and no green block. The decision it gated now offers its acceptance inside the check, as the usual request.</p>
+<div class="check"><p class="interrupt-label"><span class="pending good">Passed</span><strong style="color:var(--ink)">Look at the palette</strong><span class="age">after nikovirtala/draft#8 merged</span></p>
+<details><summary>Reason and steps</summary></details>
+<p class="secondary" style="margin:6px 0">Passed by niko, 11/23/2026, 7:12:40 PM: It looks right.</p>
+<div class="gate"><p class="secondary" style="margin:0 0 6px">Gates the decision <strong style="color:var(--ink)">Accept only as the person</strong></p>
+<div class="interrupt"><p class="interrupt-label"><span>Ready for you to accept</span><span class="age">waiting just now</span></p><p class="prompt-title">nikovirtala/draft:zncxmp4x: “Accept only as the person” is ready to accept <u>Open</u></p><div class="row" style="display:grid;grid-template-columns:78px 1fr;gap:8px 10px;align-items:center"><span class="chip done">✓ Passed</span><b style="color:var(--ink)">adr verify <span class="secondary" style="font-weight:400">· no findings</span></b></div><p class="secondary">Accept: Commit the acceptance of nikovirtala/draft:zncxmp4x as you, signed, and push it.</p><div class="prompt-actions"><span class="primary-button">Accept</span><span class="secondary-button">Request changes</span><span class="secondary-button">Reject</span></div></div></div></div>
+</section></div>
+</div>
+</body>
+</html>
