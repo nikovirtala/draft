@@ -189,7 +189,7 @@ function Shapes({ graph, layout, arrow }: { graph: Graph; layout: Layout; arrow:
         const p = at(n);
         const r = radiusOf(n);
         if (n.type === "cluster") {
-          const ring = r + 5;
+          const ring = r;
           const length = 2 * Math.PI * ring;
           return (
             <g key={n.id} className="graph-cluster-shape" transform={`translate(${p.x} ${p.y})`}>
@@ -197,13 +197,14 @@ function Shapes({ graph, layout, arrow }: { graph: Graph; layout: Layout; arrow:
                 className={`graph-disc${n.waitingOnPerson > 0 ? " waiting" : ""}${n.external ? " external" : ""}`}
                 r={r}
               />
-              <circle className="graph-ring-track" r={ring} />
-              <circle
-                className="graph-ring"
-                r={ring}
-                strokeDasharray={`${(n.share * length).toFixed(2)} ${length.toFixed(2)}`}
-                transform="rotate(-90)"
-              />
+              {n.share > 0 && (
+                <circle
+                  className="graph-ring"
+                  r={ring}
+                  strokeDasharray={`${(n.share * length).toFixed(2)} ${length.toFixed(2)}`}
+                  transform="rotate(-90)"
+                />
+              )}
             </g>
           );
         }
@@ -359,45 +360,49 @@ function Focus({ graph }: { graph: Graph }) {
 function Legend() {
   return (
     <ul className="graph-legend" aria-label="Legend" data-testid="graph-legend">
-      <li>
-        <svg width="18" height="18" viewBox="-9 -9 18 18" aria-hidden="true">
+      <li className="moved">
+        <svg width="14" height="14" viewBox="-9 -9 18 18" aria-hidden="true">
           <circle className="graph-dot moved" r="6" />
         </svg>
         Moved: changed state in the window shown
       </li>
-      <li>
-        <svg width="18" height="18" viewBox="-9 -9 18 18" aria-hidden="true">
+      <li className="waiting">
+        <svg width="14" height="14" viewBox="-9 -9 18 18" aria-hidden="true">
           <circle className="graph-dot waiting" r="6" />
         </svg>
         Waiting: needs you
       </li>
-      <li>
-        <svg width="18" height="18" viewBox="-9 -9 18 18" aria-hidden="true">
-          <circle className="graph-dot" r="4.5" />
-          <circle className="graph-loop" r="8" />
+      <li className="done">
+        <svg width="14" height="14" viewBox="-9 -9 18 18" aria-hidden="true">
+          <circle className="graph-dot settled" r="6" />
+        </svg>
+        Settled: done
+      </li>
+      <li className="loop">
+        <svg width="14" height="14" viewBox="-9 -9 18 18" aria-hidden="true">
+          <circle className="graph-loop" r="7" />
         </svg>
         Open loop: something settled leads to it and it is not settled
       </li>
-      <li>
-        <svg width="28" height="18" viewBox="0 0 28 18" aria-hidden="true">
-          <path className="graph-edge cascade" d="M2 9H22" strokeWidth="2" />
-          <path className="graph-arrowhead" d="M21 5L27 9L21 13z" />
+      <li className="moved">
+        <svg width="28" height="14" viewBox="0 0 28 14" aria-hidden="true">
+          <path className="graph-edge cascade" d="M2 7H22" />
+          <path className="graph-arrowhead" d="M21 3L27 7L21 11z" />
         </svg>
         Cascade: a reference between items that moved
       </li>
-      <li>
-        <svg width="28" height="18" viewBox="0 0 28 18" aria-hidden="true">
-          <path className="graph-edge" d="M2 5H26" strokeWidth={edgeWidth(1)} />
-          <path className="graph-edge" d="M2 13H26" strokeWidth={edgeWidth(4)} />
-        </svg>
-        Edge width: the references it carries, one against four
-      </li>
-      <li>
-        <svg width="18" height="18" viewBox="-9 -9 18 18" aria-hidden="true">
-          <circle className="graph-ring-track" r="6" />
+      <li className="done">
+        <svg width="14" height="14" viewBox="-9 -9 18 18" aria-hidden="true">
           <circle className="graph-ring" r="6" strokeDasharray="25 38" transform="rotate(-90)" />
         </svg>
         Ring: the share that has settled
+      </li>
+      <li className="idle">
+        <svg width="28" height="14" viewBox="0 0 28 14" aria-hidden="true">
+          <path className="graph-edge" d="M2 4H26" strokeWidth={edgeWidth(1)} />
+          <path className="graph-edge" d="M2 10H26" strokeWidth={edgeWidth(4)} />
+        </svg>
+        Edge width: the references it carries, one against four
       </li>
     </ul>
   );

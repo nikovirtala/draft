@@ -163,6 +163,31 @@ One pattern for every human gate (docs/model.md, "Acceptance"), built on the int
 
 A thread is open, concluding (its agent drafted a conclusion and it waits for a yes), wrapped up, superseded or withdrawn. "Wrap this up" (or the Wrap up button) makes the thread's agent draft a conclusion; draft records it as `thread.conclusion_proposed` with citations (the thread, its branch point, its message count and what it produced). One confirmation, `thread.wrapped_up` as the person, returns it to the conversation the thread branched off, shown at the thread's stub and given to that conversation's agent. Declining reopens the thread. Superseded and withdrawn need a reason. Closing on production use comes later.
 
+## Colour
+
+A colour means one thing everywhere, so a person learns it once. The palette is the one in [docs/design-system](design-system/README.md): `docs/design-system/tokens.json` is the source of truth for the colours, the type families, the spacing, the radii and the line widths, and `apps/desktop/src/shared/palette.ts` reads it (it adds only the job of each colour token). `pnpm --filter @nikovirtala/draft-desktop palette:sync` writes the tokens into the `:root` of `renderer/src/styles.css` and the table below, and a test fails when either differs from the file, when a rule outside `:root` writes a colour, or when a component names a custom property the `:root` doesn't define. `docs/design-system/components/*/preview.html` show how each part should look; the app is checked against them by eye, with the same previews beside the app's screenshots in the pull request.
+
+States are pastel fills; the strong colour appears only in small, thin marks and in words. A failure has no colour of its own: it is the waiting fill with a dashed hairline, a cross and its words, and an open loop is a dashed ring and its words, so meaning never rests on colour alone. Purple is layered, after the Wisteria Lily theme: `moved-fill` for what moved or is under the pointer, `moved-selected` for the selected option (with ink words), `moved-mark` for icons, arcs, arrows and the working ring, `moved-word` for pastel words on the page, and `moved-strong` for a small count badge and a moved chip's word.
+
+Each token has a job, and a test fails when one is used for another: words (`color`) take text tokens, hairlines and marks (`border`, `outline`, `stroke`, shadows) take line tokens, areas (`background`, `fill`) take fill tokens, and a mark may also fill a dot. Every line around a box is the hairline (`--hairline`, 0.5px) and every dashed one the dashed hairline (`--hairline-dashed`, 0.75px); a strong mark is never thicker than 2.5px. Every text pair reaches 4.5:1 except the two the README accepts on purpose, which the contrast test allows by name: `moved-word` on the page and `moved-strong` on `moved-fill`.
+
+<!-- palette:start -->
+| Meaning | Fill | Mark | Words |
+| --- | --- | --- | --- |
+| Moved, the agent's activity | `moved-fill` #ebe2fd, `moved-selected` #d7c5fb | `moved-mark` #9e6ef7 | `moved-word` #b18bf8, `moved-strong` #8c42f6 |
+| Done, settled | `done-fill` #d7f2e4 | `done-mark` #009456 | `done-word` #007a47 |
+| Under way elsewhere | `review-fill` #dcefff | `review-mark` #0a7fd1 | `review-word` #0069b0 |
+| Waits on you, and a failure | `waiting-fill` #fbecc9 | `waiting-mark` #b87700 | `waiting-word` #8a5a00 |
+| Not started, an open loop | | `idle-line` #b9c4c4, `loop-mark` #929ea0 | `muted` #5d6b6d |
+| The ground and its hairlines | `page` #fef8ec, `surface` #f9f1e1, `raised` #fffdf7, `titlebar` #f0e9d6 | `line` #ece2cc, `line-strong` #e6d7b2, `edge` #cdcbb2 | `ink` #005661, `text` #44585a |
+<!-- palette:end -->
+
+The board's word colours are 3.2 to 3.8:1 on their fills, so words use the same hues darkened only as far as 4.5:1 needs (`*-word`); the board's own values stay for marks (`*-mark`), which aren't text. A word token is listed only for the surfaces it is drawn on.
+
+In the graph, a cluster is a disc in `surface` with a `line-strong` hairline and, when something waits on you, `waiting-fill` with a `waiting-mark` hairline; the settled share is a thin `done-mark` arc; items are small discs in their state's fill with a hairline in its mark; an open loop is a dashed `loop-mark` ring; edges and tethers are `edge`; a cascade is a `moved-mark` arrow. The map's legend is chips, and its switches follow the Switch preview: the selected option is `moved-selected` with ink words.
+
+**The chip.** Every state pill and chip is the design system's StateChip: a pastel fill, the word in the same hue, no outline (a transparent border), `radius-chip` corners, the `chip` type style (500 weight at 12.5px/1) in draft's own font, and a hover that darkens it a little and outlines it in its own colour. The one rule in `styles.css` that gives the geometry (`.pending, .chip, .thread-chip, …`) is shared, so a pill cannot drift from another, and a test reads the type style, the padding and the corners from `tokens.json`. Only "not started" has a solid hairline (`idle-line`: a closed pull request, a thread's plain chip, an empty cell of the map), an open loop a dashed one (`loop-mark`), and a failure a dashed one (`waiting-mark`) with its word and a cross. The map's cells follow the recipe by state class (purple active, green terminal, amber waiting on you). A pull request's state in its stub is such a chip: open is blue with a ring, merged is green with a check, and closed without merging is "not started" (no fill, a hairline) with a cross.
+
 ## The state machine module
 
 `machine.ts` declares a machine as data: states (active, waiting with an owner and a timeout, terminal), transitions with a trigger and the actors who may fire each, and standard ends (`dismissed`, `superseded`, `withdrawn`) that need a person and a reason. `checkMachine` refuses a machine with an unreachable state, an open end, a wait without an owner or timeout, a way out of a terminal state or a transition nobody may fire. `Machine.next` checks the trigger, the actor and the reason, and `replay` runs a log through a machine and reports what it didn't allow (counted as `draft.machine.violations`). The interrupt machine of each kind and the thread machine are built on it; kinds will be.

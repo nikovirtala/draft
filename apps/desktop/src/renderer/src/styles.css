@@ -1,24 +1,46 @@
-/* Wisteria Lily */
+/* Wisteria Lily. Colours, line widths, radii and type families are tokens; none is written out below :root. */
 :root {
+  /* The tokens of docs/design-system/tokens.json: `pnpm palette:sync` writes them, a test holds them. */
+  /* palette:start */
+  --page: #fef8ec;
+  --surface: #f9f1e1;
+  --raised: #fffdf7;
   --titlebar: #f0e9d6;
-  --background: #f9f1e1;
-  --card: #fef8ec;
-  --border: #e6d7b2;
-  --bubble: #f2e7ca;
-  --text: #005661;
-  --secondary: #5d6b6d;
-  --accent-border: #a66bff;
-  --accent-text: #7442c8;
-  --accent-tint: #ede1ff;
-  --primary: #973cff;
-  --primary-text: #fef8ec;
-  --waiting: #8a5200;
-  --waiting-bg: #fdefd3;
-  --running: #00b368;
-  /* Apple's system faces: SF Pro through system-ui, New York and SF Mono from fonts.ts. */
-  --sans: system-ui, -apple-system, "Segoe UI", sans-serif;
-  --serif: "New York", ui-serif, Georgia, serif;
-  --mono: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+  --line: #ece2cc;
+  --line-strong: #e6d7b2;
+  --edge: #cdcbb2;
+  --ink: #005661;
+  --text: #44585a;
+  --muted: #5d6b6d;
+  --moved-fill: #ebe2fd;
+  --moved-selected: #d7c5fb;
+  --moved-mark: #9e6ef7;
+  --moved-word: #b18bf8;
+  --moved-strong: #8c42f6;
+  --done-fill: #d7f2e4;
+  --done-mark: #009456;
+  --done-word: #007a47;
+  --review-fill: #dcefff;
+  --review-mark: #0a7fd1;
+  --review-word: #0069b0;
+  --waiting-fill: #fbecc9;
+  --waiting-mark: #b87700;
+  --waiting-word: #8a5a00;
+  --idle-line: #b9c4c4;
+  --loop-mark: #929ea0;
+  --hairline: 0.5px;
+  --hairline-dashed: 0.75px;
+  --radius-chip: 7px;
+  --radius-card: 12px;
+  --radius-round: 999px;
+  --space-1: 4px;
+  --space-2: 6px;
+  --space-3: 8px;
+  --space-4: 16px;
+  --font-sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-serif: "New York", ui-serif, Georgia, serif;
+  --font-mono: "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+  /* palette:end */
   color-scheme: light;
 }
 
@@ -34,16 +56,31 @@ body,
 }
 
 body {
-  background: var(--background);
+  background: var(--page);
   color: var(--text);
-  font-family: var(--sans);
+  font-family: var(--font-sans);
   font-size: 13px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
 }
 
-a {
-  color: var(--accent-text);
+/* Words are slate; titles, names and links are teal. */
+h1,
+h2,
+h3,
+h4,
+strong,
+a,
+.brand,
+.stub-title,
+.context-name,
+.agent-name,
+.map-row-title,
+.map-item-label,
+.map-move-label,
+.context-recent-name,
+.prompt-title {
+  color: var(--ink);
 }
 
 .app {
@@ -59,7 +96,7 @@ a {
   gap: 12px;
   padding: 10px 20px;
   background: var(--titlebar);
-  border-bottom: 1px solid var(--border);
+  border-bottom: var(--hairline) solid var(--line);
   user-select: none;
 }
 
@@ -73,7 +110,7 @@ a {
 }
 
 .title {
-  color: var(--secondary);
+  color: var(--muted);
   font-size: 13px;
 }
 
@@ -92,7 +129,7 @@ a {
 }
 
 .empty {
-  color: var(--secondary);
+  color: var(--muted);
   text-align: center;
   margin-top: 30vh;
 }
@@ -112,15 +149,15 @@ a {
 }
 
 .message.user .body {
-  background: var(--bubble);
+  background: var(--surface);
   border-radius: 14px 14px 4px 14px;
   padding: 9px 14px;
-  font-family: var(--sans);
+  font-family: var(--font-sans);
 }
 
 .message.agent {
   align-self: stretch;
-  font-family: var(--serif);
+  font-family: var(--font-serif);
   font-size: 14px;
   line-height: 1.55;
 }
@@ -130,15 +167,15 @@ a {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  font-family: var(--sans);
+  font-family: var(--font-sans);
   font-size: 13px;
 }
 
 code.id,
 code {
-  font-family: var(--mono);
+  font-family: var(--font-mono);
   font-size: 0.82em;
-  color: var(--accent-text);
+  color: var(--muted);
 }
 
 /* Markdown in messages. Blocks share one rhythm; the first and last sit flush with the body. */
@@ -175,44 +212,44 @@ code {
   margin-bottom: 0.2em;
 }
 .markdown li::marker {
-  color: var(--secondary);
+  color: var(--muted);
 }
 .markdown blockquote {
   padding-left: 0.9em;
-  border-left: 3px solid var(--border);
-  color: var(--secondary);
+  border-left: var(--hairline) solid var(--edge);
+  color: var(--muted);
 }
 .markdown hr {
   border: 0;
-  border-top: 1px solid var(--border);
+  border-top: var(--hairline) solid var(--line);
 }
 .markdown pre.code {
   padding: 10px 12px;
   overflow-x: auto;
-  background: var(--card);
-  border: 1px solid var(--border);
+  background: var(--raised);
+  border: var(--hairline) solid var(--line-strong);
   border-radius: 8px;
   line-height: 1.45;
 }
 .markdown pre.code code {
   font-size: 12px;
-  color: var(--text);
+  color: var(--ink);
   white-space: pre;
 }
 .markdown table {
   display: block;
   overflow-x: auto;
   border-collapse: collapse;
-  font-family: var(--sans);
+  font-family: var(--font-sans);
   font-size: 13px;
 }
 .markdown :is(th, td) {
   padding: 5px 10px;
-  border: 1px solid var(--border);
+  border: var(--hairline) solid var(--line);
   text-align: left;
 }
 .markdown th {
-  background: var(--card);
+  background: var(--raised);
   font-weight: 600;
 }
 .markdown li.task-list-item {
@@ -233,9 +270,9 @@ code {
   margin: 0 auto;
 }
 .markdown figure.mermaid figcaption {
-  font-family: var(--sans);
+  font-family: var(--font-sans);
   font-size: 13px;
-  color: var(--secondary);
+  color: var(--muted);
 }
 .caret {
   display: inline-block;
@@ -243,7 +280,7 @@ code {
   height: 1.05em;
   margin-left: 2px;
   vertical-align: text-bottom;
-  background: var(--accent-border);
+  background: var(--moved-mark);
   animation: blink 1s steps(2, start) infinite;
 }
 
@@ -255,8 +292,8 @@ code {
 
 /* Status stub */
 .stub {
-  background: var(--card);
-  border: 1px solid var(--border);
+  background: var(--raised);
+  border: var(--hairline) solid var(--line-strong);
   border-radius: 10px;
   padding: 6px 8px 6px 12px;
 }
@@ -266,53 +303,106 @@ code {
   align-items: center;
   gap: 10px;
   min-height: 28px;
-  white-space: nowrap;
+  flex-wrap: wrap;
+  row-gap: var(--space-1);
 }
 
 .stub .dot {
   width: 8px;
   height: 8px;
-  border-radius: 50%;
-  background: var(--secondary);
+  border-radius: var(--radius-round);
+  background: var(--idle-line);
   flex: none;
 }
 
 .stub.status-running .dot {
-  background: var(--running);
+  background: var(--moved-mark);
 }
 
-.stub.status-awaiting_permission .dot {
-  background: var(--waiting);
+.stub.status-awaiting_permission .dot,
+.stub.status-failed .dot {
+  background: var(--waiting-mark);
+}
+
+.stub.status-merged .dot {
+  background: var(--done-mark);
+}
+
+.stub.status-open .dot {
+  background: var(--review-mark);
+}
+
+.stub-ref {
+  color: var(--muted);
+  font-weight: 400;
 }
 
 .stub-title {
   font-weight: 560;
   overflow: hidden;
   text-overflow: ellipsis;
+  /* Beside its dot, and under it only when the chips need the line. */
+  max-width: calc(100% - 18px);
+  white-space: nowrap;
 }
 
 .stub-status {
-  color: var(--secondary);
+  color: var(--muted);
   font-size: 13px;
+  white-space: nowrap;
 }
 
 .stub.status-running .stub-status {
-  color: var(--running);
+  color: var(--moved-strong);
   font-weight: 560;
 }
 
 .stub.status-awaiting_permission .stub-status {
-  color: var(--waiting);
+  color: var(--waiting-word);
   font-weight: 560;
 }
 
+/*
+ * One chip for every state pill, as on the delivery board: a pastel fill, the word in the same hue,
+ * no outline (a transparent border), 7px corners. Only "not started" has a hairline, and a failure a
+ * dashed one. The board's weight and size; draft's own font.
+ */
+.pending,
+.chip,
+.thread-chip,
+.where,
+.context-badge,
+.agent-badge,
+.evidence-mark,
+.map-stale,
+.stub-status.pr-state,
+.graph-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font: 500 12.5px / 1 var(--font-sans);
+  padding: 7px var(--space-3);
+  border-radius: var(--radius-chip);
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.pending:hover,
+.chip:hover,
+.thread-chip:hover,
+.where:hover,
+.context-badge:hover,
+.agent-badge:hover,
+.evidence-mark:hover,
+.map-stale:hover,
+.stub-status.pr-state:hover {
+  filter: brightness(0.96);
+  box-shadow: 0 0 0 1px currentColor inset;
+}
+
 .pending {
-  color: var(--waiting);
-  background: var(--waiting-bg);
-  border-radius: 999px;
-  padding: 1px 9px;
-  font-size: 12.5px;
-  font-weight: 560;
+  color: var(--waiting-word);
+  background: var(--waiting-fill);
 }
 
 .spacer {
@@ -327,18 +417,18 @@ button.icon {
   border: none;
   border-radius: 7px;
   background: transparent;
-  color: var(--secondary);
+  color: var(--muted);
   cursor: pointer;
 }
 
 button.icon:hover {
-  background: var(--accent-tint);
-  color: var(--accent-text);
+  background: var(--moved-fill);
+  color: var(--ink);
 }
 
 button:focus-visible,
 textarea:focus-visible {
-  outline: 2px solid var(--accent-border);
+  outline: 2px solid var(--moved-mark);
   outline-offset: 1px;
 }
 
@@ -351,7 +441,7 @@ textarea:focus-visible {
 }
 
 .stub-details dt {
-  color: var(--secondary);
+  color: var(--muted);
 }
 
 .stub-details dd {
@@ -360,9 +450,9 @@ textarea:focus-visible {
 
 /* Permission prompt */
 .prompt {
-  font-family: var(--sans);
-  background: var(--accent-tint);
-  border: 1px solid var(--accent-border);
+  font-family: var(--font-sans);
+  background: var(--waiting-fill);
+  border: var(--hairline) solid var(--line-strong);
   border-radius: 12px;
   padding: 12px 14px;
 }
@@ -374,8 +464,8 @@ textarea:focus-visible {
 .prompt-input {
   margin: 0 0 10px;
   padding: 8px 10px;
-  background: var(--card);
-  border: 1px solid var(--border);
+  background: var(--surface);
+  border: var(--hairline) solid var(--line-strong);
   border-radius: 8px;
   font-size: 12.5px;
   white-space: pre-wrap;
@@ -399,9 +489,9 @@ textarea:focus-visible {
 }
 
 .primary-button {
-  background: var(--primary);
-  color: var(--primary-text);
-  border: 1px solid var(--primary);
+  background: var(--moved-selected);
+  color: var(--ink);
+  border: var(--hairline) solid var(--line-strong);
 }
 
 .primary-button:disabled {
@@ -410,9 +500,9 @@ textarea:focus-visible {
 }
 
 .secondary-button {
-  background: var(--card);
-  color: var(--text);
-  border: 1px solid var(--border);
+  background: var(--raised);
+  color: var(--ink);
+  border: var(--hairline) solid var(--line);
 }
 
 /* Composer */
@@ -431,19 +521,19 @@ textarea:focus-visible {
 
 .composer-hint {
   margin: 6px 2px 0;
-  color: var(--secondary);
+  color: var(--muted);
   font-size: 12px;
 }
 
 .composer-hint kbd {
-  font-family: var(--sans);
+  font-family: var(--font-sans);
   font-size: 11px;
-  border: 1px solid var(--border);
+  border: var(--hairline) solid var(--line-strong);
   border-bottom-width: 2px;
   border-radius: 4px;
   padding: 0 4px;
   margin-right: 2px;
-  background: var(--card);
+  background: var(--raised);
 }
 
 /* The agent's name, its state and the pause/play control. */
@@ -459,9 +549,9 @@ textarea:focus-visible {
 /* The line that says which sign-ins are withheld from the agent, with the names on demand. */
 .agent-environment {
   font-size: 12px;
-  color: var(--secondary);
+  color: var(--muted);
   padding: 2px 16px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: var(--hairline) solid var(--line);
 }
 
 .agent-environment summary {
@@ -474,24 +564,21 @@ textarea:focus-visible {
 }
 
 .agent-model {
-  color: var(--secondary);
+  color: var(--muted);
 }
 
 .agent-badge {
-  font-size: 11.5px;
-  font-weight: 560;
-  border-radius: 999px;
-  padding: 1px 8px;
+  display: inline-block;
 }
 
 .agent-badge.active {
-  color: #00663c;
-  background: #d8f3e4;
+  color: var(--moved-strong);
+  background: var(--moved-fill);
 }
 
 .agent-badge.paused {
-  color: var(--waiting);
-  background: var(--waiting-bg);
+  color: var(--waiting-word);
+  background: var(--waiting-fill);
 }
 
 .agent-toggle {
@@ -501,23 +588,23 @@ textarea:focus-visible {
   padding: 0 9px;
   height: 22px;
   border-radius: 6px;
-  border: 1px solid var(--border);
-  background: var(--card);
-  color: var(--text);
+  border: var(--hairline) solid var(--line-strong);
+  background: var(--surface);
+  color: var(--ink);
   cursor: pointer;
 }
 
 /* A message for people only. */
 .message.aside .body {
   background: transparent;
-  border: 1px dashed var(--border);
+  border: var(--hairline-dashed) dashed var(--line-strong);
 }
 
 .message .audience {
   margin: 0 0 3px;
-  font-family: var(--sans);
+  font-family: var(--font-sans);
   font-size: 11.5px;
-  color: var(--secondary);
+  color: var(--muted);
   text-align: right;
 }
 
@@ -525,9 +612,9 @@ textarea:focus-visible {
   flex: 1;
   resize: none;
   font: inherit;
-  color: var(--text);
-  background: var(--card);
-  border: 1px solid var(--border);
+  color: var(--ink);
+  background: var(--surface);
+  border: var(--hairline) solid var(--line-strong);
   border-radius: 12px;
   padding: 9px 12px;
   min-height: 40px;
@@ -536,26 +623,35 @@ textarea:focus-visible {
 }
 
 .composer textarea::placeholder {
-  color: var(--secondary);
+  color: var(--muted);
 }
 
 .fallback {
-  font-family: var(--mono);
+  font-family: var(--font-mono);
   font-size: 12.5px;
   white-space: pre-wrap;
-  color: var(--secondary);
-  background: var(--card);
-  border: 1px dashed var(--border);
+  color: var(--muted);
+  background: var(--raised);
+  border: var(--hairline-dashed) dashed var(--line-strong);
   border-radius: 8px;
   padding: 8px 10px;
 }
 
 .error {
-  color: var(--waiting);
-  background: var(--waiting-bg);
-  border-radius: 8px;
-  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  color: var(--waiting-word);
+  background: var(--waiting-fill);
+  border: var(--hairline-dashed) dashed var(--waiting-mark);
+  border-radius: var(--radius-card);
+  padding: 10px 14px;
   font-size: 13px;
+}
+
+.error::before {
+  content: "✕";
+  font-weight: 600;
 }
 
 .refused {
@@ -565,30 +661,30 @@ textarea:focus-visible {
 }
 
 .refused h1 {
-  font-family: var(--serif);
+  font-family: var(--font-serif);
   font-weight: 600;
   font-size: 26px;
 }
 
 .refused pre {
   white-space: pre-wrap;
-  background: var(--card);
-  border: 1px solid var(--accent-border);
+  background: var(--raised);
+  border: var(--hairline) solid var(--line-strong);
   border-radius: 10px;
   padding: 12px 14px;
   font-size: 13px;
 }
 
 .secondary {
-  color: var(--secondary);
+  color: var(--muted);
   font-size: 13px;
 }
 
 /* An event this build keeps without understanding it. */
 .generic {
-  font-family: var(--sans);
-  background: var(--card);
-  border: 1px dashed var(--border);
+  font-family: var(--font-sans);
+  background: var(--raised);
+  border: var(--hairline-dashed) dashed var(--line-strong);
   border-radius: 10px;
   padding: 8px 12px;
 }
@@ -596,7 +692,7 @@ textarea:focus-visible {
 .generic-title {
   margin: 0 0 2px;
   font-weight: 560;
-  color: var(--secondary);
+  color: var(--muted);
 }
 
 .generic .secondary {
@@ -605,16 +701,15 @@ textarea:focus-visible {
 
 /* A step that started and never finished. */
 .interrupt {
-  font-family: var(--sans);
-  background: var(--waiting-bg);
-  border: 1px solid var(--waiting);
+  font-family: var(--font-sans);
+  background: var(--waiting-fill);
+  border: var(--hairline) solid var(--line-strong);
   border-radius: 12px;
   padding: 12px 14px;
-  color: var(--text);
 }
 
 .interrupt .prompt-title strong {
-  color: var(--waiting);
+  color: var(--waiting-word);
 }
 
 .interrupt .secondary {
@@ -623,7 +718,7 @@ textarea:focus-visible {
 
 /* Blocks, placements, the panel and focus */
 .app.window-app {
-  background: var(--background);
+  background: var(--page);
 }
 
 .titlebar .spacer {
@@ -650,8 +745,8 @@ textarea:focus-visible {
 }
 
 .panel {
-  border-left: 1px solid var(--border);
-  background: var(--background);
+  border-left: var(--hairline) solid var(--line);
+  background: var(--page);
 }
 
 .conversation-pane {
@@ -679,8 +774,8 @@ textarea:focus-visible {
 
 .block-header {
   padding: 8px 14px 6px 16px;
-  border-bottom: 1px solid var(--border);
-  background: var(--card);
+  border-bottom: var(--hairline) solid var(--line);
+  background: var(--raised);
 }
 
 .block-full:not(.thread-view) .block-header {
@@ -705,9 +800,9 @@ textarea:focus-visible {
 .thread-agent-row select {
   font: inherit;
   font-size: 13px;
-  color: var(--text);
-  background: var(--card);
-  border: 1px solid var(--border);
+  color: var(--ink);
+  background: var(--surface);
+  border: var(--hairline) solid var(--line-strong);
   border-radius: 6px;
   padding: 2px 6px;
 }
@@ -724,18 +819,14 @@ textarea:focus-visible {
 }
 
 .where {
-  color: var(--accent-text);
-  background: var(--accent-tint);
-  border-radius: 999px;
-  padding: 1px 9px;
-  font-size: 12.5px;
-  font-weight: 560;
+  color: var(--moved-strong);
+  background: var(--moved-fill);
 }
 
 .stub[data-selected="true"],
 .thread-stub[data-selected="true"],
 .block-full.thread-view:focus-within {
-  border-color: var(--accent-border);
+  border-color: var(--moved-mark);
 }
 
 .threads {
@@ -743,58 +834,52 @@ textarea:focus-visible {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  font-family: var(--sans);
+  font-family: var(--font-sans);
   font-size: 13px;
 }
 
 .thread-stub {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-left: 3px solid var(--accent-border);
+  background: var(--raised);
+  border: var(--hairline) solid var(--line-strong);
   border-radius: 10px;
   padding: 6px 8px 6px 12px;
 }
 
 .thread-stub.waiting {
-  border-left-color: var(--waiting);
+  border-left-color: var(--waiting-mark);
 }
 
 .thread-mark {
-  color: var(--accent-text);
+  color: var(--moved-strong);
   font-weight: 700;
 }
 
 .thread-agent {
-  color: var(--secondary);
+  color: var(--muted);
   font-size: 13px;
 }
 
 .thread-chip {
-  color: var(--secondary);
-  background: var(--bubble);
-  border-radius: 999px;
-  padding: 1px 9px;
-  font-size: 12.5px;
-  font-weight: 560;
+  color: var(--muted);
+  background: transparent;
+  border: var(--hairline) solid var(--idle-line);
 }
 
 .thread-chip.new {
-  color: var(--accent-text);
-  background: var(--accent-tint);
+  color: var(--moved-strong);
+  background: var(--moved-fill);
+  border-color: transparent;
 }
 
 .thread-chip.waiting {
-  color: var(--waiting);
-  background: var(--waiting-bg);
-}
-
-.thread-chip.working {
-  color: var(--running);
+  color: var(--waiting-word);
+  background: var(--waiting-fill);
+  border-color: transparent;
 }
 
 .thread-preview {
   margin: 4px 0 4px 18px;
-  color: var(--secondary);
+  color: var(--muted);
   font-size: 13.5px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -806,7 +891,7 @@ textarea:focus-visible {
   height: 28px;
   opacity: 0;
   transition: opacity 0.1s;
-  font-family: var(--sans);
+  font-family: var(--font-sans);
 }
 
 .message:hover .message-actions,
@@ -831,14 +916,14 @@ textarea:focus-visible {
   font-size: 12.5px;
   padding: 2px 9px;
   border-radius: 999px;
-  border: 1px solid var(--border);
-  background: var(--card);
-  color: var(--text);
+  border: var(--hairline) solid var(--line-strong);
+  background: var(--surface);
+  color: var(--ink);
   cursor: pointer;
 }
 
 .branch-agent:hover {
-  background: var(--accent-tint);
+  background: var(--moved-fill);
 }
 
 /* Attention, and focus */
@@ -849,19 +934,19 @@ textarea:focus-visible {
   align-items: baseline;
   font-size: 13px;
   font-weight: 560;
-  color: var(--waiting);
+  color: var(--waiting-word);
 }
 
 .attention[data-focused="true"] .focus-mark {
-  color: var(--accent-text);
+  color: var(--moved-strong);
 }
 
 .app[data-focused="true"] .titlebar {
-  background: var(--accent-tint);
+  background: var(--moved-fill);
 }
 
 .window-bar .title {
-  color: var(--text);
+  color: var(--ink);
   font-weight: 560;
 }
 
@@ -870,25 +955,41 @@ textarea:focus-visible {
   display: contents;
 }
 
+/*
+ * What a status line says about its target, as the board's chips. Amber is what waits on a person,
+ * green what is done and blue what is in review. A failure has no colour yet: it is the waiting
+ * fill with a dashed hairline and a cross, so it reads without colour.
+ */
 .pending.bad {
-  color: #8a1c1c;
-  background: #fbe3e0;
+  color: var(--waiting-word);
+  background: var(--waiting-fill);
+  border: var(--hairline-dashed) dashed var(--waiting-mark);
+}
+
+.pending.bad::before {
+  content: "✕";
+  font-size: 11px;
 }
 
 .pending.good {
-  color: #00663c;
-  background: #daf3e6;
+  color: var(--done-word);
+  background: var(--done-fill);
+}
+
+.pending.good::before {
+  content: "✓";
+  font-size: 11px;
+}
+
+.pending.review {
+  color: var(--review-word);
+  background: var(--review-fill);
 }
 
 .chip {
   display: inline-block;
-  color: var(--waiting);
-  background: var(--card);
-  border: 1px solid var(--waiting);
-  border-radius: 999px;
-  padding: 0 9px;
-  font-size: 12px;
-  font-weight: 600;
+  color: var(--waiting-word);
+  background: var(--waiting-fill);
 }
 
 .interrupt-label {
@@ -898,9 +999,15 @@ textarea:focus-visible {
   margin: 0 0 6px;
 }
 
+/* The label sits on the interrupt's own fill: no chip of its own there. */
+.interrupt-label .chip {
+  background: transparent;
+  padding-left: 0;
+}
+
 .interrupt.closed {
   background: transparent;
-  border-color: var(--border);
+  border-color: var(--line-strong);
   padding: 6px 12px;
 }
 
@@ -925,11 +1032,11 @@ textarea:focus-visible {
   min-width: 340px;
   margin-top: 6px;
   padding: 10px 14px;
-  background: var(--card);
-  border: 1px solid var(--border);
+  background: var(--surface);
+  border: var(--hairline) solid var(--line-strong);
   border-radius: 12px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
-  color: var(--text);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--line) 80%, transparent);
+  color: var(--ink);
   font-weight: 400;
 }
 
@@ -945,10 +1052,10 @@ textarea:focus-visible {
 .thread-conclusion {
   margin: 6px 0 0 20px;
   padding: 8px 12px;
-  background: var(--card);
-  border: 1px solid var(--border);
+  background: var(--raised);
+  border: var(--hairline) solid var(--line-strong);
   border-radius: 10px;
-  font-family: var(--serif);
+  font-family: var(--font-serif);
 }
 
 .conclusion-card {
@@ -971,9 +1078,9 @@ textarea:focus-visible {
 .ended-note {
   margin: 0;
   padding: 12px 20px;
-  color: var(--secondary);
-  font-family: var(--sans);
-  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-family: var(--font-sans);
+  border-top: var(--hairline) solid var(--line);
 }
 
 /* Contexts: the bar in the title, the trust step, a proposal, a reference into another context */
@@ -986,29 +1093,28 @@ textarea:focus-visible {
 }
 
 .context-name {
-  font-weight: 600;
-  color: var(--accent-text);
+  font-weight: 560;
 }
 
 .context-folder {
-  font-family: var(--mono);
+  font-family: var(--font-mono);
   font-size: 12px;
-  color: var(--secondary);
-  background: var(--card);
-  border: 1px solid var(--border);
+  color: var(--muted);
+  background: var(--raised);
+  border: var(--hairline) solid var(--line-strong);
   border-radius: 999px;
   padding: 0 8px;
 }
 
 .context-folder.missing {
-  color: var(--waiting);
-  border-color: var(--waiting);
+  color: var(--waiting-word);
+  border: var(--hairline-dashed) dashed var(--waiting-mark);
 }
 
 .contexts-button {
   font: inherit;
   font-size: 12px;
-  color: var(--text);
+  color: var(--ink);
   background: transparent;
   border: 0;
   cursor: pointer;
@@ -1023,10 +1129,10 @@ textarea:focus-visible {
   min-width: 380px;
   margin-top: 6px;
   padding: 8px;
-  background: var(--card);
-  border: 1px solid var(--border);
+  background: var(--surface);
+  border: var(--hairline) solid var(--line-strong);
   border-radius: 12px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--line) 80%, transparent);
 }
 
 .contexts-list ul {
@@ -1041,7 +1147,7 @@ textarea:focus-visible {
   width: 100%;
   text-align: left;
   font: inherit;
-  color: var(--text);
+  color: var(--ink);
   background: transparent;
   border: 0;
   border-radius: 8px;
@@ -1051,7 +1157,7 @@ textarea:focus-visible {
 
 .context-item-button:hover,
 .context-item-button[data-current="true"] {
-  background: var(--accent-tint);
+  background: var(--moved-fill);
 }
 
 .context-recent-name {
@@ -1062,13 +1168,19 @@ textarea:focus-visible {
   font-size: 12px;
 }
 
+/* Soft purple is read with ink or text, never with muted. */
+.context-item-button:hover .context-recent-meta,
+.context-item-button[data-current="true"] .context-recent-meta {
+  color: var(--text);
+}
+
 .contexts-actions {
   display: flex;
   gap: 8px;
   justify-content: flex-end;
   margin-top: 8px;
   padding-top: 8px;
-  border-top: 1px solid var(--border);
+  border-top: var(--hairline) solid var(--line);
 }
 
 .trust {
@@ -1078,7 +1190,7 @@ textarea:focus-visible {
 }
 
 .trust h1 {
-  font-family: var(--serif);
+  font-family: var(--font-serif);
   font-weight: 600;
   font-size: 26px;
 }
@@ -1089,13 +1201,13 @@ textarea:focus-visible {
   gap: 6px 14px;
   margin: 14px 0;
   padding: 12px 14px;
-  background: var(--card);
-  border: 1px solid var(--accent-border);
+  background: var(--raised);
+  border: var(--hairline) solid var(--line-strong);
   border-radius: 10px;
 }
 
 .trust-facts dt {
-  color: var(--secondary);
+  color: var(--muted);
 }
 
 .trust-facts dd {
@@ -1104,16 +1216,12 @@ textarea:focus-visible {
 }
 
 .context-item {
-  border-color: var(--accent-border);
+  border-color: var(--line);
 }
 
 .context-badge {
-  font-weight: 600;
-  color: var(--accent-text);
-  background: var(--accent-tint);
-  border-radius: 999px;
-  padding: 0 9px;
-  font-size: 12px;
+  color: var(--moved-strong);
+  background: var(--moved-fill);
 }
 
 .snapshot-note {
@@ -1130,7 +1238,7 @@ textarea:focus-visible {
   white-space: nowrap;
   font: inherit;
   font-size: 12px;
-  color: var(--secondary);
+  color: var(--muted);
   background: transparent;
   border: 0;
   cursor: pointer;
@@ -1143,7 +1251,7 @@ textarea:focus-visible {
   padding: 0;
   display: grid;
   gap: 2px;
-  font-family: var(--sans);
+  font-family: var(--font-sans);
 }
 
 .evidence li {
@@ -1153,23 +1261,37 @@ textarea:focus-visible {
 }
 
 .evidence-mark {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   min-width: 4.5em;
-  font-size: 12px;
-  font-weight: 700;
-  text-transform: uppercase;
 }
 
 .evidence-green .evidence-mark {
-  color: #00663c;
+  color: var(--done-word);
+  background: var(--done-fill);
 }
 
+.evidence-green .evidence-mark::before {
+  content: "✓";
+  font-size: 11px;
+}
+
+/* A failed check is the waiting fill with a dashed hairline and a cross, as a failing chip is. */
 .evidence-red .evidence-mark {
-  color: #a8071a;
+  color: var(--waiting-word);
+  background: var(--waiting-fill);
+  border: var(--hairline-dashed) dashed var(--waiting-mark);
+}
+
+.evidence-red .evidence-mark::before {
+  content: "✕";
+  font-size: 11px;
 }
 
 .evidence-pending .evidence-mark {
-  color: var(--waiting);
+  color: var(--waiting-word);
+  background: var(--waiting-fill);
 }
 
 .acceptance-words {
@@ -1181,10 +1303,10 @@ textarea:focus-visible {
 .acceptance-words textarea {
   font: inherit;
   padding: 6px 8px;
-  border: 1px solid var(--border);
+  border: var(--hairline) solid var(--line-strong);
   border-radius: 8px;
-  background: var(--card);
-  color: var(--text);
+  background: var(--surface);
+  color: var(--ink);
   resize: vertical;
 }
 
@@ -1215,24 +1337,34 @@ textarea:focus-visible {
 
 .map-range {
   margin: 0 0 0 auto;
-  padding: 0;
-  border: 0;
-  display: flex;
-  gap: 4px;
+  display: inline-flex;
+  gap: var(--space-1);
+  padding: 3px;
+  border: var(--hairline) solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
 }
 
 .map-range label {
-  color: var(--secondary);
-  border-radius: 999px;
-  padding: 1px 10px;
-  font-size: 12.5px;
+  color: var(--muted);
+  border-radius: var(--radius-chip);
+  padding: 6px 12px;
+  font-weight: 500;
   cursor: pointer;
 }
 
 .map-range label.on {
-  color: var(--accent-text);
-  background: var(--accent-tint);
-  font-weight: 560;
+  color: var(--ink);
+  background: var(--moved-selected);
+}
+
+.map-range label:hover {
+  color: var(--ink);
+  background: var(--moved-fill);
+}
+
+.map-range label.on:hover {
+  background: var(--moved-selected);
 }
 
 .map-range input {
@@ -1242,12 +1374,12 @@ textarea:focus-visible {
 }
 
 .map-range label:focus-within {
-  outline: 2px solid var(--accent-border);
+  outline: 2px solid var(--moved-mark);
   outline-offset: 1px;
 }
 
 .empty-map {
-  color: var(--secondary);
+  color: var(--muted);
   margin: 4px 0 0;
 }
 
@@ -1265,15 +1397,15 @@ textarea:focus-visible {
 }
 
 .map-row-total {
-  color: var(--secondary);
+  color: var(--muted);
   font-weight: 500;
 }
 
 .map-derived {
-  color: var(--secondary);
+  color: var(--muted);
   font-size: 11.5px;
   font-weight: 500;
-  border-bottom: 1px dotted var(--secondary);
+  border-bottom: var(--hairline) dotted var(--line);
 }
 
 .map-row-scroll {
@@ -1287,7 +1419,16 @@ textarea:focus-visible {
 
 .map-arrows {
   display: block;
-  color: var(--accent-text);
+}
+
+.map-arrows path {
+  stroke: var(--moved-mark);
+  fill: none;
+}
+
+.map-arrows marker path {
+  stroke: none;
+  fill: var(--moved-mark);
 }
 
 .map-cells {
@@ -1296,11 +1437,11 @@ textarea:focus-visible {
 
 .map-cell {
   font: inherit;
-  color: var(--text);
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  margin: 0 -1px 0 0;
+  color: var(--ink);
+  background: var(--surface);
+  border: var(--hairline) solid transparent;
+  border-radius: 7px;
+  margin: 0 2px 0 0;
   padding: 4px 6px 4px;
   display: flex;
   flex-direction: column;
@@ -1311,29 +1452,33 @@ textarea:focus-visible {
   flex: none;
 }
 
-.map-cell:disabled {
-  cursor: default;
-  color: var(--secondary);
-  background: transparent;
-  border-style: dashed;
+/* A cell is the board's chip: by state class a pastel fill and the word in its hue, and "not started" a hairline. */
+.map-cell.active:not(:disabled) {
+  color: var(--moved-strong);
+  background: var(--moved-fill);
 }
 
 .map-cell.terminal:not(:disabled) {
-  background: var(--bubble);
+  color: var(--done-word);
+  background: var(--done-fill);
+}
+
+.map-cell:disabled {
+  cursor: default;
+  color: var(--muted);
+  background: transparent;
+  border: var(--hairline) solid var(--idle-line);
 }
 
 .map-cell.lit {
-  color: var(--waiting);
-  background: var(--waiting-bg);
-  border-color: var(--waiting);
-  border-width: 2px;
-  padding: 3px 5px 3px;
+  color: var(--waiting-word);
+  background: var(--waiting-fill);
   position: relative;
   z-index: 1;
 }
 
 .map-cell.selected {
-  outline: 2px solid var(--accent-border);
+  outline: 2px solid var(--moved-mark);
   outline-offset: 1px;
   position: relative;
   z-index: 2;
@@ -1341,7 +1486,7 @@ textarea:focus-visible {
 
 .map-cell:focus-visible,
 .map-item:focus-visible {
-  outline: 2px solid var(--accent-border);
+  outline: 2px solid var(--moved-mark);
   outline-offset: 1px;
 }
 
@@ -1349,11 +1494,7 @@ textarea:focus-visible {
   font-size: 11.5px;
   line-height: 1.25;
   min-height: 2.5em;
-  color: var(--secondary);
-}
-
-.map-cell.lit .map-cell-label {
-  color: var(--waiting);
+  color: inherit;
 }
 
 .map-cell-count {
@@ -1368,8 +1509,8 @@ textarea:focus-visible {
 }
 
 .map-items {
-  background: var(--card);
-  border: 1px solid var(--border);
+  background: var(--raised);
+  border: var(--hairline) solid var(--line-strong);
   border-radius: 10px;
   padding: 8px 12px 10px;
 }
@@ -1399,21 +1540,21 @@ textarea:focus-visible {
 
 .map-item {
   font: inherit;
-  color: var(--text);
+  color: var(--ink);
   width: 100%;
   display: flex;
   align-items: baseline;
   gap: 10px;
   text-align: left;
-  background: var(--background);
-  border: 1px solid var(--border);
+  background: var(--page);
+  border: var(--hairline) solid var(--line-strong);
   border-radius: 8px;
   padding: 5px 10px;
   cursor: pointer;
 }
 
 .map-item.lit {
-  border-color: var(--waiting);
+  border-color: var(--line);
 }
 
 .map-item-label {
@@ -1426,13 +1567,13 @@ textarea:focus-visible {
 
 .map-item-since,
 .map-item-where {
-  color: var(--secondary);
+  color: var(--muted);
   font-size: 12px;
   white-space: nowrap;
 }
 
 .map-item:hover .map-item-where {
-  color: var(--accent-text);
+  color: var(--moved-strong);
 }
 
 .map-moves li {
@@ -1444,12 +1585,8 @@ textarea:focus-visible {
 }
 
 .map-stale {
-  color: var(--waiting);
-  background: var(--waiting-bg);
-  border-radius: 999px;
-  padding: 0 8px;
-  font-size: 11.5px;
-  font-weight: 560;
+  color: var(--waiting-word);
+  background: var(--waiting-fill);
 }
 
 .map-cell-wait {
@@ -1460,7 +1597,7 @@ textarea:focus-visible {
 }
 
 .map-cell:not(.lit) .map-cell-wait {
-  color: var(--secondary);
+  color: var(--muted);
   font-weight: 500;
 }
 
@@ -1504,13 +1641,13 @@ div.map-item {
 
 .graph-crumbs li + li::before {
   content: "›";
-  color: var(--secondary);
+  color: var(--muted);
   margin-right: 4px;
 }
 
 .graph-crumbs button {
   font: inherit;
-  color: var(--accent-text);
+  color: var(--ink);
   background: none;
   border: 0;
   padding: 0;
@@ -1531,11 +1668,11 @@ div.map-item {
   margin: 0;
   font-size: 13px;
   font-weight: 600;
-  color: var(--secondary);
+  color: var(--muted);
 }
 
 .graph-heading:focus-visible {
-  outline: 2px solid var(--accent-border);
+  outline: 2px solid var(--moved-mark);
   outline-offset: 2px;
 }
 
@@ -1543,9 +1680,9 @@ div.map-item {
   position: relative;
   width: 100%;
   min-width: 0;
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 12px;
+  background: var(--raised);
+  border: var(--hairline) solid var(--line-strong);
+  border-radius: var(--radius-card);
   overflow: hidden;
 }
 
@@ -1558,91 +1695,84 @@ div.map-item {
 
 .graph-edge {
   fill: none;
-  stroke: var(--secondary);
-  stroke-opacity: 0.4;
+  stroke: var(--edge);
   stroke-linecap: round;
 }
 
 .graph-edge.cascade {
-  stroke: var(--primary);
-  stroke-opacity: 0.85;
+  stroke: var(--moved-mark);
+  stroke-width: 1.6px;
 }
 
 .graph-arrowhead {
-  fill: var(--primary);
+  fill: var(--moved-mark);
 }
 
 .graph-tether {
-  stroke: var(--secondary);
-  stroke-width: 1.6;
+  stroke: var(--edge);
+  stroke-width: 1;
   stroke-linecap: round;
-  stroke-dasharray: 0.5 4.5;
+  stroke-dasharray: 1 3;
 }
 
 .graph-disc {
-  fill: var(--bubble);
-  stroke: var(--border);
-  stroke-width: 1.5;
+  fill: var(--surface);
+  stroke: var(--line-strong);
+  stroke-width: 0.6;
 }
 
 .graph-disc.external {
-  fill: var(--background);
+  fill: var(--page);
   stroke-dasharray: 3 3;
 }
 
 .graph-disc.waiting {
-  stroke: var(--waiting);
-  stroke-width: 2.5;
-}
-
-.graph-ring-track {
-  fill: none;
-  stroke: var(--border);
-  stroke-width: 4;
+  fill: var(--waiting-fill);
+  stroke: var(--waiting-mark);
 }
 
 .graph-ring {
   fill: none;
-  stroke: #00663c;
-  stroke-width: 4;
-  stroke-linecap: butt;
+  stroke: var(--done-mark);
+  stroke-width: 2.5;
+  stroke-linecap: round;
 }
 
 .graph-dot {
-  fill: var(--card);
-  stroke: var(--secondary);
-  stroke-width: 1.5;
+  fill: var(--surface);
+  stroke: var(--idle-line);
+  stroke-width: 0.75;
 }
 
 .graph-dot.settled {
-  fill: var(--bubble);
+  fill: var(--done-fill);
+  stroke: var(--done-mark);
 }
 
 .graph-dot.moved {
-  fill: var(--accent-tint);
-  stroke: var(--primary);
-  stroke-width: 2.5;
+  fill: var(--moved-fill);
+  stroke: var(--moved-mark);
 }
 
 .graph-dot.waiting {
-  fill: var(--waiting-bg);
-  stroke: var(--waiting);
-  stroke-width: 2.5;
+  fill: var(--waiting-fill);
+  stroke: var(--waiting-mark);
 }
 
 .graph-dot.moved.waiting {
-  stroke: var(--primary);
+  stroke: var(--moved-mark);
 }
 
 .graph-dot.focus {
-  stroke-width: 3;
+  stroke-width: 1.5;
 }
 
+/* An open loop is a dashed ring and the words "open loop": its shape says it, not a colour. */
 .graph-loop {
   fill: none;
-  stroke: #a8071a;
-  stroke-width: 2;
-  stroke-dasharray: 4 3;
+  stroke: var(--loop-mark);
+  stroke-width: 0.75;
+  stroke-dasharray: 3 2;
 }
 
 .graph-node {
@@ -1653,7 +1783,7 @@ div.map-item {
   border: 0;
   border-radius: 50%;
   background: transparent;
-  color: var(--text);
+  color: var(--ink);
   font: inherit;
   display: flex;
   align-items: center;
@@ -1666,12 +1796,12 @@ div.map-item {
 }
 
 .graph-node:focus-visible {
-  outline: 2px solid var(--accent-border);
+  outline: 2px solid var(--moved-mark);
   outline-offset: 3px;
 }
 
 .graph-node:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--accent-tint) 55%, transparent);
+  background: color-mix(in srgb, var(--moved-fill) 55%, transparent);
 }
 
 .graph-count {
@@ -1681,7 +1811,7 @@ div.map-item {
 }
 
 .graph-node.cluster.waiting .graph-count {
-  color: var(--waiting);
+  color: var(--waiting-word);
 }
 
 .graph-name {
@@ -1694,7 +1824,7 @@ div.map-item {
   line-height: 1.2;
   text-align: center;
   white-space: nowrap;
-  color: var(--secondary);
+  color: var(--muted);
   pointer-events: none;
 }
 
@@ -1704,7 +1834,7 @@ div.map-item {
 }
 
 .graph-node.item.waiting .graph-name {
-  color: var(--waiting);
+  color: var(--waiting-word);
 }
 
 .graph-lane {
@@ -1712,19 +1842,19 @@ div.map-item {
   top: 6px;
   transform: translateX(-50%);
   font-size: 11.5px;
-  color: var(--secondary);
+  color: var(--muted);
   white-space: nowrap;
   pointer-events: none;
 }
 
 .graph-lane.waiting {
-  color: var(--waiting);
+  color: var(--waiting-word);
 }
 
 .graph-focus {
   padding: 8px 12px;
-  background: var(--card);
-  border: 1px solid var(--border);
+  background: var(--raised);
+  border: var(--hairline) solid var(--line-strong);
   border-radius: 10px;
 }
 
@@ -1751,22 +1881,78 @@ div.map-item {
 .graph-words summary {
   cursor: pointer;
   font-size: 13px;
-  color: var(--secondary);
+  color: var(--muted);
 }
 
 .graph-legend {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 16px;
+  gap: var(--space-2);
   list-style: none;
   margin: 0;
   padding: 0;
   font-size: 12px;
-  color: var(--secondary);
+  color: var(--muted);
 }
 
-.graph-legend li {
-  display: flex;
-  align-items: center;
-  gap: 6px;
+/* The legend is chips, as on the board: each says its word, and its mark is the sample inside. */
+.graph-legend li.moved {
+  color: var(--moved-strong);
+  background: var(--moved-fill);
+}
+
+.graph-legend li.waiting {
+  color: var(--waiting-word);
+  background: var(--waiting-fill);
+}
+
+.graph-legend li.done {
+  color: var(--done-word);
+  background: var(--done-fill);
+}
+
+.graph-legend li.loop {
+  color: var(--muted);
+  background: transparent;
+  border: var(--hairline-dashed) dashed var(--loop-mark);
+}
+
+.graph-legend li.idle {
+  color: var(--muted);
+  background: transparent;
+  border: var(--hairline) solid var(--idle-line);
+}
+
+/* A pull request's state, drawn at the weight of "8/8 checks passed": a pill with a mark and the word. */
+
+.pr-state.pr-open {
+  color: var(--review-word);
+  background: var(--review-fill);
+}
+
+.pr-state.pr-open::before {
+  content: "○";
+  font-size: 11px;
+}
+
+.pr-state.pr-merged {
+  color: var(--done-word);
+  background: var(--done-fill);
+}
+
+.pr-state.pr-merged::before {
+  content: "✓";
+  font-size: 11px;
+}
+
+/* Closed without merging is "not started" on the board: no fill, a hairline, and a cross. */
+.pr-state.pr-closed {
+  color: var(--muted);
+  background: transparent;
+  border: var(--hairline) solid var(--idle-line);
+}
+
+.pr-state.pr-closed::before {
+  content: "✕";
+  font-size: 11px;
 }

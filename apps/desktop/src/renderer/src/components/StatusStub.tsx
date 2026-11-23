@@ -26,7 +26,7 @@ function pendingText(n: number): string {
 interface Chip {
   text: string;
   testid: string;
-  tone?: "bad" | "good" | "wait";
+  tone?: "bad" | "good" | "wait" | "review";
 }
 
 interface Summary {
@@ -35,6 +35,8 @@ interface Summary {
   status: string;
   statusLabel: string;
   title: string;
+  /** The reference, shown beside the title in mono: `repo#12`. */
+  ref?: string;
   chips: Chip[];
   kind: string;
   details: [string, string][];
@@ -59,7 +61,7 @@ function pullRequest(state: Record<string, unknown>, id: string): Summary {
   if ((sum.failed ?? 0) > 0)
     chips.push({ text: `${sum.failed} failing`, testid: "stub-checks", tone: "bad" });
   else if ((sum.pending ?? 0) > 0)
-    chips.push({ text: `${sum.pending} running`, testid: "stub-checks", tone: "wait" });
+    chips.push({ text: `${sum.pending} running`, testid: "stub-checks", tone: "review" });
   else if ((sum.total ?? 0) > 0)
     chips.push({
       text: `${sum.passed}/${sum.total} checks passed`,
@@ -81,6 +83,7 @@ function pullRequest(state: Record<string, unknown>, id: string): Summary {
     status: st,
     statusLabel: `${state.draft === true ? "Draft · " : ""}${st[0]?.toUpperCase() ?? ""}${st.slice(1)}`,
     title: `${repo}#${num(state.number) ?? ""} ${str(state.title) ?? ""}`.trim(),
+    ref: `${repo}#${num(state.number) ?? ""}`,
     chips,
     kind: KINDS["pull-request"] as string,
     url: str(state.url),
@@ -276,8 +279,21 @@ function Line({ p, children }: { p: StatusProps; children?: React.ReactNode }) {
   return (
     <div className="stub-line">
       <span className="dot" aria-hidden="true" />
-      <span className="stub-title">{s.title}</span>
-      <span className="stub-status" data-testid="stub-status">
+      <span className="stub-title">
+        {s.ref !== undefined && s.title.startsWith(s.ref) ? (
+          <>
+            <code className="stub-ref">{s.ref}</code>
+            {s.title.slice(s.ref.length)}
+          </>
+        ) : (
+          s.title
+        )}
+      </span>
+      <span
+        className={`stub-status${s.kind === KINDS["pull-request"] ? ` pr-state pr-${s.status}` : ""}`}
+        data-testid="stub-status"
+        data-state={s.status}
+      >
         {s.statusLabel}
       </span>
       {s.chips.map((c) => (
