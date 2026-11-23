@@ -13,6 +13,7 @@ export const CAUSE_LABELS: Record<InterruptCause, string> = {
   "review-requested": "Review requested",
   acceptance: "Ready for you to accept",
   check: "Check for you",
+  "wait-ended": "Wait ended",
 };
 
 /** The words on the button for each way to settle something. */
@@ -26,6 +27,7 @@ export const OUTCOME_LABELS: Record<string, string> = {
   accepted: "Accept",
   "changes-requested": "Request changes",
   rejected: "Reject",
+  dismissed: "Dismiss",
 };
 
 /** What a settled interrupt says it was settled as. */
@@ -39,6 +41,7 @@ export const SETTLED_LABELS: Record<string, string> = {
   accepted: "Accepted",
   "changes-requested": "Changes requested",
   rejected: "Rejected",
+  dismissed: "Dismissed",
 };
 
 /** How long something has waited, from the time it arose: "just now", "3 min", "2 h", "1 d". */
