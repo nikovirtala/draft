@@ -386,8 +386,8 @@ export interface DraftBridge {
   setMapVisible(on: boolean): void;
   /** Remembers which cell of a map block is open on this device, or closes it with `null`. */
   selectMapCell(block: string, cell: MapSelection | null): Promise<void>;
-  /** Remembers the width of the thread's column on this device. */
-  setPanelWidth(width: number): Promise<void>;
+  /** Remembers the width of the thread's column on this device, or forgets it with `null`. */
+  setPanelWidth(width: number | null): Promise<void>;
   onChange(cb: (c: Change) => void): () => void;
 }
 

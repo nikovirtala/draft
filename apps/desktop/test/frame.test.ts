@@ -72,4 +72,22 @@ describe("the thread column's width", () => {
     expect(new LayoutService(second).view().panelWidth).toBe(640);
     second.close();
   });
+
+  it("is forgotten with null, and the default holds after a restart", () => {
+    const file = join(mkdtempSync(join(tmpdir(), "draft-width-")), "device.db");
+    const first = new ViewStateStore(file);
+    const layout = new LayoutService(first);
+    layout.setPanelWidth(640);
+    const seen: (number | null)[] = [];
+    layout.onChange((v) => seen.push(v.panelWidth));
+    layout.setPanelWidth(null);
+    layout.setPanelWidth(null);
+    expect(layout.view().panelWidth).toBeNull();
+    expect(seen).toEqual([null]);
+    first.close();
+
+    const second = new ViewStateStore(file);
+    expect(new LayoutService(second).view().panelWidth).toBeNull();
+    second.close();
+  });
 });

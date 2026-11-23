@@ -128,9 +128,12 @@ export class LayoutService {
     this.emit();
   }
 
-  /** Remembers the width of the thread's column on this device. View state: never the log. */
-  setPanelWidth(width: number): void {
-    const px = clampStoredPanelWidth(width);
+  /**
+   * Remembers the width of the thread's column on this device, or with `null` forgets it, so the
+   * default holds again. View state: never the log.
+   */
+  setPanelWidth(width: number | null): void {
+    const px = width === null ? null : clampStoredPanelWidth(width);
     if (px === this.panelWidth) return;
     this.store.setPanelWidth(px);
     this.panelWidth = px;

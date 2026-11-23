@@ -219,7 +219,8 @@ function run(): void {
       runtimeOf(e)?.layout.selectCell(block, parsed.data);
     });
     ipcMain.handle(CHANNELS.setPanelWidth, (e, width: unknown) => {
-      if (typeof width !== "number" || !Number.isFinite(width)) throw new Error("bad request");
+      if (width !== null && (typeof width !== "number" || !Number.isFinite(width)))
+        throw new Error("bad request");
       runtimeOf(e)?.layout.setPanelWidth(width);
     });
     ipcMain.handle(CHANNELS.focus, (e, target: unknown) => {
