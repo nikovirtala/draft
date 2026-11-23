@@ -178,6 +178,17 @@ test("what needs you arrives in its thread, in one order, and a thread wraps up"
   await expect(count).toHaveText("1 needs you");
   await shot(page, "a01-hosted-permission-in-its-thread");
 
+  // An attention item opens what it counts. With the thread closed, it brings the thread back
+  // to the panel and puts the keyboard on the permission request in it.
+  await panel.getByRole("button", { name: "Close" }).click();
+  await expect(panel).toBeHidden();
+  await count.click();
+  await page.getByTestId("attention-open").click();
+  await expect(panel).toBeVisible();
+  await expect(permission).toBeFocused();
+  await expect(permission).toBeInViewport();
+  await expect(page.getByTestId("attention-list")).toBeHidden();
+
   // 4. You allow it: draft calls Kiro Remote as you, and the interrupt shows who settled it.
   await permission.getByTestId("settle-allowed").click();
   await expect(permission).toHaveAttribute("data-state", "settled", { timeout: 20_000 });
@@ -224,7 +235,14 @@ test("what needs you arrives in its thread, in one order, and a thread wraps up"
   await expect(items.nth(0)).toHaveAttribute("data-cause", "failed-check");
   await expect(items.nth(1)).toHaveAttribute("data-cause", "review-requested");
   await shot(page, "a04-attention-count-and-order");
-  await count.click();
+
+  // In the main conversation too: Enter on the failed check goes to its block.
+  await main.getByTestId("message-user").first().scrollIntoViewIfNeeded();
+  await items.nth(0).getByTestId("attention-open").focus();
+  await page.keyboard.press("Enter");
+  await expect(failed).toBeFocused();
+  await expect(failed).toBeInViewport();
+  await expect(page.getByTestId("attention-list")).toBeHidden();
 
   // 8. The check passes: its interrupt clears by itself. The review stays until you've seen it.
   github.updatePull(REPO, 7, {

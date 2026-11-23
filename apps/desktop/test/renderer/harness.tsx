@@ -135,6 +135,7 @@ export function workspace(over: Partial<Workspace> = {}): Workspace {
     mapCell: () => null,
     selectMapCell: () => {},
     open: async () => {},
+    openAttention: async () => {},
     ...over,
   } as Workspace;
 }

@@ -77,6 +77,8 @@ export interface Workspace {
   selectMapCell: (block: string, cell: MapSelection | null) => void;
   /** Goes to where an item of the map lives: its thread or its stub. */
   open: (target: OpenTarget) => Promise<void>;
+  /** Goes to what an attention item counts, the way an item of the map goes to where it lives. */
+  openAttention: (item: Attention) => Promise<void>;
 }
 
 export const WorkspaceContext = createContext<Workspace | null>(null);
@@ -186,7 +188,7 @@ export function WorkspaceProvider({ boot, children }: { boot: Ready; children: R
         if (thread === undefined) {
           // The main conversation: bring it to the front, at the block if it has one.
           setSelection({ block: null, conversation: target.conversation });
-          if (target.anchor !== null) scrollToAnchor(target.anchor);
+          if (target.anchor !== null) void scrollToAnchor(target.anchor);
           return;
         }
         info = {
@@ -201,13 +203,23 @@ export function WorkspaceProvider({ boot, children }: { boot: Ready; children: R
       const known = view.layout.blocks[info.address];
       // A block that was never on screen on this device is made first, where it was made.
       if (known === undefined) await window.draft.ensureBlocks([{ info, initial: "minimized" }]);
-      if (known?.placement === "panel" || known?.placement === "window") return;
-      // Inside a thread the panel is the thread's: such a block opens in a window.
-      const depth = known?.info.depth ?? info.depth;
-      await window.draft.move({
-        type: depth === 0 ? "open-in-panel" : "pop-out",
-        block: info.address,
-      });
+      if (known?.placement !== "panel" && known?.placement !== "window") {
+        // Inside a thread the panel is the thread's: such a block opens in a window.
+        const depth = known?.info.depth ?? info.depth;
+        await window.draft.move({
+          type: depth === 0 ? "open-in-panel" : "pop-out",
+          block: info.address,
+        });
+      }
+      if (target.kind === "conversation" && target.anchor !== null)
+        void scrollToAnchor(target.anchor);
+    };
+    const openAttention = async (item: Attention): Promise<void> => {
+      // Outside the focus an interrupt only counts, and there is nothing on screen to go to: the
+      // person asked to go there, so focus is left first and the layout comes back as it was.
+      if (focus !== null && focus.conversation !== item.conversation)
+        await window.draft.focus(null);
+      await open({ kind: "conversation", conversation: item.conversation, anchor: item.id });
     };
     const resolving = new Set(Object.values(states).flatMap((s) => s.resolving));
     return {
@@ -216,6 +228,7 @@ export function WorkspaceProvider({ boot, children }: { boot: Ready; children: R
       mapCell: (block) => view.cells[block] ?? null,
       selectMapCell: (block, cell) => void window.draft.selectMapCell(block, cell),
       open,
+      openAttention,
       context: boot.context,
       main: boot.main,
       states,
@@ -248,15 +261,25 @@ export function panelEntry(w: Pick<Workspace, "view">): Entry | null {
   return panelBlock(w.view.layout);
 }
 
-/** Scrolls the conversation to the block of an interrupt or step, when it is on screen. */
-function scrollToAnchor(anchor: string): void {
-  for (const key of [anchor, `failed:${anchor}`]) {
-    const el = [...document.querySelectorAll<HTMLElement>("[data-key]")].find(
-      (e) => e.dataset.key === key,
-    );
-    if (el !== undefined) {
-      el.scrollIntoView({ block: "center" });
-      return;
+/**
+ * Scrolls to the block of an interrupt, a permission request, a conclusion or a step, and puts
+ * the keyboard on it. The block may not be on screen yet (a thread was just opened, an interrupt
+ * was just shown), so it looks again for a moment before giving up.
+ */
+async function scrollToAnchor(anchor: string): Promise<boolean> {
+  for (let attempt = 0; attempt < 40; attempt++) {
+    for (const key of [anchor, `failed:${anchor}`]) {
+      const el = [...document.querySelectorAll<HTMLElement>("[data-key]")].find(
+        (e) => e.dataset.key === key,
+      );
+      if (el !== undefined) {
+        if (!el.hasAttribute("tabindex")) el.tabIndex = -1;
+        el.scrollIntoView({ block: "center" });
+        el.focus({ preventScroll: true });
+        return true;
+      }
     }
+    await new Promise((resolve) => setTimeout(resolve, 50));
   }
+  return false;
 }
