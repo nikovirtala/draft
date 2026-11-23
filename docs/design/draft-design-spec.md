@@ -41,6 +41,14 @@ Two habits keep it easy. Every model is simple: a block is inline, minimized, in
 - **P7. One model per thing.** One chip (`StateChip`), one working indicator (`Working`), one ring for focus, one block frame (stub, header, body). A new part reuses these before it adds a rule.
 - **P8. Readable words.** Every text colour is at least 4.5:1 on the surface it is drawn on, except the two pairs the design system accepts by name.
 
+**The checks.** Each rule has one check, named here and in the design system's principles:
+
+- **window** (P6): the window never scrolls. `e2e/design-checks.ts`, in every window of every e2e test.
+- **fills** (P3, A1): a fill appears only where the allow-list says. `e2e/design-checks.ts`, in every window of every e2e test, with the table in `src/shared/fills.ts`.
+- **focus** (A5): keyboard focus is one 1.5px ring and no fill, and a click shows none. `e2e/design-checks.ts`, in every window of every e2e test; `test/design-focus.test.ts` holds the declared ring in the stylesheet.
+- **pointer** (A3): a fill under the pointer is set only on a pointer place. `test/design-fills.test.ts`, because a test cannot put the pointer everywhere.
+- **motion** (M2): every animation and transition stops in the one reduced-motion block. `test/design-motion.test.ts`.
+
 ## Tokens
 
 `docs/design-system/tokens.json` is the source of every value: colours, type families and styles, spacing, radii and line widths. Nothing else holds a value. **Built:**
@@ -89,8 +97,8 @@ This is the allow-list. A fill that is not here is a bug. **Built** lists the se
 
 - **A2. `moved-selected` (fill) is for the chosen option in a list or a control, and for the main action button.** Built: the context you are in in the Contexts menu (`.context-item-button[data-current="true"]`), the "on" option of the map's range and layout switches (`.map-range label.on`), the chosen map cell (`.map-cell.selected`), and the main action button (`.primary-button`, place `action`: Send, Allow, Passed, Accept, Switch; disabled, it is paler and keeps its colour). The words on it are `ink`. A row's chosen option is the place `chosen`; the main action button is the place `action`, whatever it is called.
 - **A3. `moved-fill` is a row or a control under the pointer, and the fill of a "moved" chip or cell.** Built under the pointer: `button.icon:hover`, `.branch-agent:hover`, `.attention-open:hover`, `.context-item-button:hover`, `.map-range label:hover`, `.panel-divider:hover`, `.graph-node:hover` (55% on transparent). Built as a state fill: the chips `.where`, `.thread-chip.new`, `.thread-chip.working`, `.pending.moved`, `.context-badge`, `.agent-badge.active`, the legend chip `.graph-legend li.moved`, the cell `.map-cell.active`, and the item disc `.graph-dot.moved`.
-- **A4. Purple never fills a block, a block's header, a panel or a window header.** A block is a stub (`.stub`), a thread stub (`.thread-stub`), a block in the panel or a window (`.block-full`), their headers (`.block-header`, `.stub-line`), the panel (`.panel`) and the title bar. It stays on its own ground (`raised` for a stub, `page` for a header and a panel, `titlebar` for the title bar) whether it is selected, clicked, expanded, focused or open in the panel. A thread open in the panel says so with its "In the panel" chip (`.where`) and nothing else. A unit test (`test/renderer/no-purple-blocks.test.tsx`) holds this for the block selectors it names, and the e2e test "a selected stub is never filled" for one stub; one place breaks it, see [Drift](#drift) D1.
-- **A5. Keyboard focus is a 1.5px `moved-mark` ring, no fill, through `:focus-visible` only,** so a click shows nothing. Built for blocks (`:is(.stub, .thread-stub, .block-full):focus-visible`, `outline: 1.5px solid var(--moved-mark)` with a 1px offset); the other focus rules are 2px, some use `:focus-within` and two draw a fill: see D2 and D3.
+- **A4. Purple never fills a block, a block's header, a panel or a window header.** A block is a stub (`.stub`), a thread stub (`.thread-stub`), a block in the panel or a window (`.block-full`), their headers (`.block-header`, `.stub-line`), the panel (`.panel`) and the title bar. It stays on its own ground (`raised` for a stub, `page` for a header and a panel, `titlebar` for the title bar) whether it is selected, clicked, expanded, focused or open in the panel. A thread open in the panel says so with its "In the panel" chip (`.where`) and nothing else. The **fills** check (A1) holds it: a block, a header or the title bar with a purple fill has no mark that allows it. D1, the one place that broke it, is fixed.
+- **A5. Keyboard focus is a 1.5px `moved-mark` ring, no fill, through `:focus-visible` only,** so a click shows nothing. Built: one rule, `:focus-visible` (and a switch's label through `:has(input:focus-visible)`, as its radio is hidden), `outline: 1.5px solid var(--moved-mark)` with a 1px offset; it is the only outline in `styles.css`, and nothing draws focus as a fill (D2, D3, fixed). The **focus** check holds it on what is drawn, and `test/design-focus.test.ts` on the stylesheet. A text field shows the ring for any way of focusing it, as the platform defines `:focus-visible`, so a click in the composer shows it; the **focus** check leaves text fields out of the click half, see [Open questions](#open-questions).
 - **A6. `moved-mark` is for icons, arcs, arrows, the caret and the working ring; `moved-word` is pastel words on the page; `moved-strong` is a chip's word and, planned, one small badge with a count in the page colour.** Built: the arrows of the by-state map (`.map-arrows path`), a cascade edge (`.graph-edge.cascade`), the caret (`.caret`), the working ring (`.working-ring`), the working label (`.working-label`, `moved-word`). The count badge is not built.
 
 ### State fills: chips, map cells, notices
@@ -113,7 +121,7 @@ Every part below lists what draws it, its states, and what it may and may not ca
 ### The frame
 
 - **Parts.** `MainWindow` and `BlockWindow` in `App.tsx`: the title bar (`header.titlebar`: the brand, `ContextBar`, the conversation's title, `AttentionBar`), the workspace (`.workspace`: `section.left` with the conversation and, when a block is in the panel, `PanelDivider` and `aside.panel`), and the `Footer`. A window for one block has the title bar (`.window-bar`) and the block.
-- **Scrolling.** Only `.conversation` (`overflow-y: auto`, `position: relative` so hidden radios do not lengthen the document) and the body of a block in the panel or a window (`.block-full:not(.thread-view)`, with its header sticky) scroll. `html`, `body` and `#root` are `height: 100%`; `.app` is a flex column; `.workspace` has `min-height: 0`. Horizontal scroll is allowed inside a code block, a table and a map row (`.map-row-scroll`) only. The test "the window never scrolls" in `e2e/map.spec.ts` holds it for a long conversation and a long map; the app-wide check is **planned**.
+- **Scrolling.** Only `.conversation` (`overflow-y: auto`, `position: relative` so hidden radios do not lengthen the document) and the body of a block in the panel or a window (`.block-full:not(.thread-view)`, with its header sticky) scroll. `html`, `body` and `#root` are `height: 100%`; `.app` is a flex column; `.workspace` has `min-height: 0`. Horizontal scroll is allowed inside a code block, a table and a map row (`.map-row-scroll`) only. The **window** check holds it in every window of every test: the document is no taller than the window, the title bar starts at the top and the footer (or, in a window of one block, the block) ends at the bottom.
 - **Title bar.** `titlebar` ground, `line` hairline below, `-webkit-app-region: drag` with the controls set to no-drag. It carries words and the attention bar and no state fill (D1).
 - **Panel.** 8px divider (`.panel-divider`, resizable by pointer and keyboard, double-click resets) and a column of at least 380px and 44% by default. The panel holds one block at a time, on `page`.
 - **Footer.** See [The footer](#the-footer-and-its-quiet-global-state).
@@ -183,7 +191,7 @@ Every part below lists what draws it, its states, and what it may and may not ca
 ## Motion and loading
 
 - **M1. Built: motion is small and means work.** The only moving things are the working ring (`working-turn`, 0.9s linear), the streaming caret (`blink`, 1s) and the message actions' fade (0.1s). No page transition, no hover motion on blocks, no animation library.
-- **M2. Built in part: every animation stops under `prefers-reduced-motion`, in the one block at the end of `styles.css`.** The block holds the working ring (it stays half drawn: still there, never turning). The caret and the actions' fade are not in it: D4.
+- **M2. Built: every animation and transition stops under `prefers-reduced-motion`, in the one block at the end of `styles.css`.** The block holds the working ring (it stays half drawn: still there, never turning), the caret (still, drawn) and the actions' fade (instant). `test/design-motion.test.ts` lists every animation and transition in `styles.css` and fails on one that block does not stop (D4, fixed).
 - **M3. Built: the working indicator shows `WORKING_DELAY_MS` (500ms) after the work starts and goes the moment it ends,** so quick work never flickers. One constant, every place.
 - **M4. Planned: a part that loads has a loading state that keeps its size,** so nothing jumps when it arrives (the map's "Reading the log…" line, a stub before its first read, a thread before its messages). The Roadmap has the slice.
 - **M5. Built: the window opens on the page colour** (`PAGE_BACKGROUND` from `palette.ts`), before the page is drawn.
@@ -231,12 +239,19 @@ Answers to earlier questions, with the reason, so later work does not reopen the
 4. **2026-11-23, #52: arcs between states start and end on the cells, share one arrowhead and stack (L7).**
 5. **2026-11-23, #51: what Kiro Remote's change feed says shows in the stub, the map and the provenance line,** in wait and moved chips, an edge and a "Built from" line, and nothing rests on colour alone.
 6. **2026-11-23, this PR: a whole block may take `waiting-fill` when it asks the person (A10).** The code does it for interrupts, permission prompts, checks and failure notices, and the design system's NoticeAndWorking preview draws a failure notice that way. The reason is that what waits on you is the one thing the person should not miss. To confirm; the alternative is a chip only.
-7. **2026-11-23, this PR: the state-fill marking and the app-wide checks are written as planned.** #53 says #52 adds the window and purple-fill checks to the e2e harness; `main` has narrower tests (`e2e/map.spec.ts`, `test/renderer/no-purple-blocks.test.tsx`) and no `data-fill`. This spec links the checks by name once they land.
+7. **2026-11-23, this PR: the state fills are marked and the design rules are checked on every window.** Three checks run in the e2e harness (`e2e/design-checks.ts`) when a test closes the app: **window**, **fills** and **focus**. Three unit tests read the stylesheet for what a test cannot reach: `test/design-fills.test.ts` (a `:hover` rule that sets a fill must select a pointer place), `test/design-focus.test.ts` (the one ring) and `test/design-motion.test.ts` (the one reduced-motion block). They replace the narrower ones, so each rule has one check.
 8. **2026-11-23, this PR: the skills are kept identical in `.kiro/skills` and `.claude/skills`, as adr and issues are.**
+9. **2026-11-23, this PR: choices the checks needed, where this spec was silent.**
+   - The main action button is the place `action` and the chosen option the place `chosen`, both `moved-selected` (A2). An element with two roles lists both places (`data-fill="chosen pointer"`).
+   - A place is checked by colour, so a graph disc or dot (an SVG `fill`) is the place `cell`, and a legend entry the place `chip`.
+   - The **fills** check parks the pointer in a corner first, so a hovered row does not need a mark; hover is read from the stylesheet.
+   - The **focus** check accepts a computed outline of 1px to 1.5px, because Chromium draws a width below a device pixel as one pixel at 1x; a 2px ring reads 2px at any scale, and the stylesheet test holds the declared 1.5px.
+   - The **focus** check presses the mouse on each element Tab reached and releases it elsewhere, so nothing is activated. Text fields are left out of that half: see Open questions.
+   - A diagram that is drawing or did not render lost the `pending` chip class it had borrowed, which gave the whole figure the waiting fill; it is plain, with its source and, on failure, the caption. How it should say a failure is an open question.
 
 ## Open questions
 
-1. **`data-fill` values and the app-wide check.** The values in A1 (`chosen`, `pointer`, `chip`, `cell`, `notice`) are this spec's proposal. The design-system session is writing the check; rebase on it and use its names.
+1. **How the title bar says which window has focus.** The title bar no longer takes `moved-fill` in focus mode (D1); the attention bar says "In focus" in words. A picture is needed for how the title bar itself shows which window has focus (a word, a mark, the ring), in `docs/design-system` first.
 2. **A failed Kiro session.** Its stub shows a `waiting-mark` dot and the word "Failed", not the failure chip (A8). Should a failed session be a failure chip?
 3. **Type sizes.** `tokens.json` has four text styles, a message style and a code style; `styles.css` writes 11px, 11.5px, 12px, 12.5px, 13px, 13.5px, 14px, 15px and 26px directly. Should every size be a token?
 4. **Loading text.** "Reading the log…" and "…" are words, not `Working`. Should they be?
@@ -244,36 +259,38 @@ Answers to earlier questions, with the reason, so later work does not reopen the
 6. **Arcs above 2.5px.** A state arc is up to 3px (`strokeOf`), above the 2.5px a strong mark may be. The palette test does not see SVG attributes. Lower the cap or allow it?
 7. **Dark theme.** The window is `color-scheme: light` only. No dark theme is planned.
 8. **A budget for the renderer.** Which numbers (start time, a long conversation, a large map) and how they are measured.
+9. **A click in a text field.** `:focus-visible` always matches a text field, so a click in the composer or a reply box shows the ring, while the rule says a click shows nothing. Keep the platform's behaviour (a field you can type in shows where it is) as the one exception, or suppress it?
+10. **A diagram that did not render.** It shows its source and a caption on the plain ground. Should it be a failure notice (A8)?
 
 ## Drift
 
 Every place the code breaks a rule above today. Each is also an issue (ids from the issues tool; the issue says the same).
 
-| Id | Rule | Where | Issue | Type |
+| Id | Rule | Where | Issue | Status |
 | --- | --- | --- | --- | --- |
-| D1 | A4: purple never fills a window header | `styles.css:1019`, `.app[data-focused="true"] .titlebar` is `moved-fill` while a block is in focus | wgytkvq6 | bug |
-| D2 | A5, C3: the ring is 1.5px through `:focus-visible` | 2px at `styles.css:443`, `:1475` (and `:focus-within`, which shows after a click), `:1588`, `:1774`, `:1789`, `:1945` | tny598kt | bug |
-| D3 | A5: focus is a ring, never a fill | `styles.css:805-807` (`.panel-divider:focus-visible`) and `:1145-1147` (`.attention-open:focus-visible`) | 2s98f7nk | bug |
-| D4 | M2: every animation stops under reduced motion | `.caret` (`styles.css:284-292`) and `.message-actions` (`:967-968`) are outside the block at `:2150` | edenwvc1 | bug |
-| D5 | Meanings: `moved-selected` is not for a block | `docs/design-system/tokens.json`, usage of `moved-selected` says "the block in focus", copied into `palette.ts` | vr20g4rb | chore |
-| D6 | Meanings: the footer is `titlebar` | `tokens.json` says the title bar and the footer; `styles.css:592` draws the footer on `page` | vr20g4rb | chore |
-| D7 | L3: every state has a preview to be compared with | `e2e/states.json` maps the frame, the composer and the map's cells to previews that draw other things, and does not list the checks' screenshots `k01` to `k04` (`e2e/checks.spec.ts`) at all | t9s857yn | chore |
+| D1 | A4: purple never fills a window header | `styles.css:1019`, `.app[data-focused="true"] .titlebar` is `moved-fill` while a block is in focus | wgytkvq6 | fixed |
+| D2 | A5, C3: the ring is 1.5px through `:focus-visible` | 2px at `styles.css:443`, `:1475` (and `:focus-within`, which shows after a click), `:1588`, `:1774`, `:1789`, `:1945` | tny598kt | fixed |
+| D3 | A5: focus is a ring, never a fill | `styles.css:805-807` (`.panel-divider:focus-visible`) and `:1145-1147` (`.attention-open:focus-visible`) | 2s98f7nk | fixed |
+| D4 | M2: every animation stops under reduced motion | `.caret` (`styles.css:284-292`) and `.message-actions` (`:967-968`) are outside the block at `:2150` | edenwvc1 | fixed |
+| D5 | Meanings: `moved-selected` is not for a block | `docs/design-system/tokens.json`, usage of `moved-selected` says "the block in focus", copied into `palette.ts` | vr20g4rb | open |
+| D6 | Meanings: the footer is `titlebar` | `tokens.json` says the title bar and the footer; `styles.css:592` draws the footer on `page` | vr20g4rb | open |
+| D7 | L3: every state has a preview to be compared with | `e2e/states.json` maps the frame, the composer and the map's cells to previews that draw other things, and does not list the checks' screenshots `k01` to `k04` (`e2e/checks.spec.ts`) at all | t9s857yn | open |
 
-Seven items, six issues (D5 and D6 share one).
+Seven items, six issues (D5 and D6 share one). D1 to D4 are fixed in the pull request that added the checks; their rows stay as the record of what the checks caught.
 
 ## Roadmap
 
 The next design slices, one coherent slice each, each a small pull request (a handful of commits), never stacked:
 
-1. **Drift fixes, part 1: focus.** D2 and D3 (one ring rule for the whole renderer, `:focus-visible`, 1.5px) and D4 (the reduced-motion block), with a test that lists every `outline` and every animation in `styles.css`.
-2. **Drift fixes, part 2: the title bar and the tokens.** D1 (say the focus in words on the title bar) and D5, D6 (the design system's usage text), after the picture is accepted.
-3. **The marked fills and the app-wide checks.** `data-fill` on every state fill (A1), read by the harness checks that the design-system session lands; links by name here.
+1. **Drift fixes, part 1: focus.** Done: D2 and D3 (one ring rule, `:focus-visible`, 1.5px) and D4 (the reduced-motion block), with tests that list every `outline` and every animation in `styles.css`.
+2. **Drift fixes, part 2: the title bar and the tokens.** D1's fill is removed (done); the title bar's way of showing focus is an open question for a picture; D5, D6 (the design system's usage text), after the picture is accepted.
+3. **The marked fills and the app-wide checks.** Done: `data-fill` on every state fill (A1), read by the harness checks **window**, **fills** and **focus** (`e2e/design-checks.ts`).
 4. **Previews for what has none.** D7: the frame, the composer, a message, a thread stub, a check, a prompt, the by-state map's cells and arcs; `states.json` names them.
 5. **Loading states.** M4: a part that loads keeps its size (the map before its first snapshot, a stub before its first read), in the preview first.
 6. **The map's by-state lens as a lens.** The by-state layout exists (`state`); the model's lenses (only what is moving, waiting on me, open loops) are planned and each is a switch option (A2) over the same cells.
 7. **The count badge.** The one small `moved-strong` badge with a number (A6), for what changed since the person last looked.
 
-The first slice is the first item.
+The first and third slices are done; the next is the second.
 
 ## Why this is not an ADR
 

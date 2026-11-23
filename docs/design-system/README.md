@@ -12,6 +12,7 @@ draft's palette: pastel states on cream.
 - **Never colour alone.** The word always names the state; a failure is told by its cross and dashed outline, an open loop by its dashed ring. That also serves people who see colour differently.
 - **Hairlines.** Every line around a box is a hairline, half a pixel (one device pixel on a Retina screen), in sand. Boxes are told apart by their fill, not by their frame.
 - **Readable words.** Every text colour is at least 4.5:1 on the surface it is drawn on. Marks are not text and have no such floor.
+- **Checked by the app, not by a person looking.** The e2e harness runs three checks on every window after every test: **window** (the window never scrolls: the title bar stays at the top and the footer at the bottom), **fills** (a fill appears only where an element's `data-fill` allows it: chosen, action, pointer, chip, cell, notice, ask) and **focus** (keyboard focus is one 1.5px ring in the mark purple and never a fill; a click shows none). Two unit tests read the stylesheet for what a pointer does (**pointer**: only a pointer place takes a fill under `:hover`) and for motion (**motion**: every animation and transition stops in the one reduced-motion block). The rules are in `docs/design/draft-design-spec.md`.
 
 ## Meanings
 
