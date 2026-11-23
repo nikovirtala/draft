@@ -1,0 +1,15 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M846JH48K35Q97VPRTC8REW6
+subject: rfpnkk5j
+type: commented
+at: 2026-11-23T12:37:26Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: 244629292+kiro-agent@users.noreply.github.com
+data:
+  text: 'Correction to the notes: "no red and no green" was a misreading. A pastel palette includes pastel green (the delivery board''s #d7f2e4); what goes is the loud red and green the map used. The palette is now the one in docs/design-system: pastel fills carry the state, and the strong colour appears only in small thin marks and in words (purple for what moved, green for done, blue for under way elsewhere, amber for what waits on a person, sand for structure). A failure has no colour of its own: the waiting fill with a dashed outline and a cross. Shape and words still carry the meaning, never colour alone.'
