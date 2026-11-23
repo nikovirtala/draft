@@ -1,0 +1,16 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M83G5PZAQQRCVZ7WPNFYRKJT
+subject: 5h026b6n
+type: closed
+at: 2026-11-23T06:05:57Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: 244629292+kiro-agent@users.noreply.github.com
+reason: Fixtures with one environment, two in sequence and two in parallel (test/map-environments.test.ts) settle a failure only by a success in its own environment, through a supersedes edge from the fixing run that the settled state reads (supersessions in map-ark.ts). The topology is read from GitHub's environments response and deploy.toml in one shape (environments.ts). draft has no standing store yet, so reading it from standing moved to n4kvxrc1, and the Done when above says so.
+data:
+  resolution: done
