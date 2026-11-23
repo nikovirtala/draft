@@ -129,7 +129,8 @@ export type InterruptCause =
   | "conclusion"
   | "review-requested"
   | "acceptance"
-  | "check";
+  | "check"
+  | "wait-ended";
 
 export type ThreadStateName = "open" | "concluding" | "wrapped-up" | "superseded" | "withdrawn";
 
