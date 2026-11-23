@@ -69,7 +69,7 @@ export function workingLabel(turns: number, stubs: number): string {
 
 /**
  * The quiet global place: work anywhere in this window, whether or not its own block is on
- * screen. It sits beside the agent's state until the footer has a place for it.
+ * screen. It sits in the footer's activity slot.
  */
 export function GlobalWorking() {
   const ws = useWorkspace();
