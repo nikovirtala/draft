@@ -9,14 +9,8 @@ import {
   FAKE_GH_PATH,
   FakeGithub,
 } from "@nikovirtala/draft-core/testing";
-import {
-  type ElectronApplication,
-  _electron as electron,
-  expect,
-  type Locator,
-  type Page,
-  test,
-} from "@playwright/test";
+import { type ElectronApplication, expect, type Locator, type Page } from "@playwright/test";
+import { launchApp, shot, test } from "./harness.ts";
 
 /**
  * Acceptance, end to end in Electron: a scripted ACP agent over real stdio, a fake GitHub API
@@ -67,7 +61,7 @@ test.afterAll(async () => {
 
 async function launch(): Promise<{ electronApp: ElectronApplication; page: Page }> {
   const display = process.env.DISPLAY === undefined ? ["--ozone-platform=headless"] : [];
-  const electronApp = await electron.launch({
+  const electronApp = await launchApp({
     args: [join(app, "out/main/index.js"), "--no-sandbox", "--disable-gpu", ...display],
     cwd: app,
     env: {
@@ -99,9 +93,6 @@ async function launch(): Promise<{ electronApp: ElectronApplication; page: Page 
   await page.setViewportSize({ width: 1280, height: 1100 });
   return { electronApp, page };
 }
-
-const shot = (page: Page, name: string) =>
-  page.screenshot({ path: join(artifacts, `${name}.png`) });
 
 // biome-ignore lint/suspicious/noExplicitAny: log events, read in assertions
 const readLog = (): Record<string, any>[] =>

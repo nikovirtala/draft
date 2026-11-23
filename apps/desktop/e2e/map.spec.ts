@@ -11,14 +11,8 @@ import {
   GITHUB_ENVIRONMENTS_RESPONSE,
   seedArk,
 } from "@nikovirtala/draft-core/testing";
-import {
-  type ElectronApplication,
-  _electron as electron,
-  expect,
-  type Locator,
-  type Page,
-  test,
-} from "@playwright/test";
+import { type ElectronApplication, expect, type Locator, type Page } from "@playwright/test";
+import { launchApp, shot, shotOf, test } from "./harness.ts";
 
 /**
  * The map, end to end in Electron: "show the map" opens it from a sentence, a context seeded with
@@ -61,7 +55,7 @@ async function launch(
   writeFileSync(agentLog, "");
   writeFileSync(join(dataDir, "config.json"), JSON.stringify({ arkSources }));
   const display = process.env.DISPLAY === undefined ? ["--ozone-platform=headless"] : [];
-  const electronApp = await electron.launch({
+  const electronApp = await launchApp({
     args: [join(app, "out/main/index.js"), "--no-sandbox", "--disable-gpu", ...display],
     cwd: app,
     env: {
@@ -85,15 +79,6 @@ async function launch(
   const page = await electronApp.firstWindow();
   await page.setViewportSize({ width: 1280, height: 1000 });
   return { electronApp, page };
-}
-
-const shot = (page: Page, name: string) =>
-  page.screenshot({ path: join(artifacts, `${name}.png`) });
-
-/** A screenshot of one element, scrolled into view: the graph, whatever the page is scrolled to. */
-async function shotOf(scope: Locator, name: string): Promise<void> {
-  await scope.scrollIntoViewIfNeeded();
-  await scope.screenshot({ path: join(artifacts, `${name}.png`) });
 }
 
 async function say(scope: Locator, text: string): Promise<void> {

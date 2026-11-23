@@ -5,13 +5,8 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { FileLogStore, Projection, Workspace } from "@nikovirtala/draft-core";
-import {
-  type ElectronApplication,
-  _electron as electron,
-  expect,
-  type Page,
-  test,
-} from "@playwright/test";
+import { type ElectronApplication, expect, type Page } from "@playwright/test";
+import { launchApp, shot, test } from "./harness.ts";
 
 /**
  * Contexts end to end, in Electron, on the scripted fake ACP agent: open a folder from the command
@@ -106,7 +101,7 @@ const flags = (): string[] => [
 ];
 
 async function launch(...args: string[]): Promise<ElectronApplication> {
-  return electron.launch({
+  return launchApp({
     args: [join(app, "out/main/index.js"), ...flags(), ...args],
     cwd: app,
     env: env(),
@@ -128,9 +123,6 @@ async function windowOf(electronApp: ElectronApplication, name: string): Promise
   await page.setViewportSize({ width: 1000, height: 760 });
   return page;
 }
-
-const shot = (page: Page, name: string) =>
-  page.screenshot({ path: join(artifacts, `${name}.png`) });
 
 async function say(page: Page, text: string): Promise<void> {
   const box = page.getByLabel("Message");
