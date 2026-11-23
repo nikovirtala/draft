@@ -667,3 +667,41 @@ test("a selected stub is never filled: a click shows no ring, the keyboard shows
   await electronApp.close();
 });
 
+test("the arcs between states start and end on the cells, share one arrowhead and stack", async () => {
+  const dataDir = mkdtempSync(join(tmpdir(), "draft-e2e-map-arcs-"));
+  const { electronApp, page } = await launch(dataDir);
+  const main = page.locator('[data-testid="conversation"][data-main="true"]');
+  await say(main, "show the map");
+  const map = main.getByTestId("map");
+  await expect(map).toBeVisible();
+  await showGrid(map);
+  const rowOf = (kind: string) => map.locator(`[data-testid="map-row"][data-kind="${kind}"]`);
+  const heads = new Set<string>();
+  for (const [kind, columns] of [
+    ["issue", 3],
+    ["decision", 6],
+  ] as const) {
+    const row = rowOf(kind);
+    await expect(row.getByTestId("map-arrow").first()).toBeVisible();
+    await expect(row.getByTestId("map-cell")).toHaveCount(columns);
+    const strip = (await row.getByTestId("map-arrows").boundingBox()) as {
+      y: number;
+      height: number;
+    };
+    const cells = (await row.getByTestId("map-cell").first().boundingBox()) as { y: number };
+    // The strip ends where the cells begin: the arcs run down to the cells' top edge, and no
+    // part of any arc is below it, over a label.
+    expect(Math.abs(strip.y + strip.height - cells.y)).toBeLessThan(1.5);
+    // Every arrowhead is the same size, in pixels, whatever the arc or its stroke.
+    const marker = await row.locator("marker").evaluate((m) => ({
+      units: m.getAttribute("markerUnits"),
+      width: m.getAttribute("markerWidth"),
+      height: m.getAttribute("markerHeight"),
+    }));
+    expect(marker.units).toBe("userSpaceOnUse");
+    heads.add(`${marker.width}x${marker.height}`);
+    await shotOf(row, kind === "issue" ? "m10-arcs-issues" : "m11-arcs-decisions");
+  }
+  expect(heads.size).toBe(1);
+  await electronApp.close();
+});
