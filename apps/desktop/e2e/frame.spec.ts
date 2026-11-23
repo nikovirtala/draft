@@ -15,8 +15,8 @@ import {
  * The window's frame, end to end in Electron: what the top bar holds and what the footer holds,
  * what the composer says in the main conversation, in a thread and while the agent is paused, the
  * aside hint that waits for a second person, and the divider between the conversation and a
- * thread: dragged, moved with the arrow keys and restored after a restart. Screenshots land in
- * e2e/artifacts.
+ * thread: dragged, moved with the arrow keys and restored after a restart; and the top bar of a
+ * context with a long name. Screenshots land in e2e/artifacts.
  */
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -37,14 +37,16 @@ test.afterAll(async () => {
   await kiro.stop();
 });
 
-async function launch(): Promise<{ electronApp: ElectronApplication; page: Page }> {
+async function launch(
+  data: string = dataDir,
+): Promise<{ electronApp: ElectronApplication; page: Page }> {
   const display = process.env.DISPLAY === undefined ? ["--ozone-platform=headless"] : [];
   const electronApp = await electron.launch({
     args: [join(app, "out/main/index.js"), "--no-sandbox", "--disable-gpu", ...display],
     cwd: app,
     env: {
       ...process.env,
-      DRAFT_DATA_DIR: dataDir,
+      DRAFT_DATA_DIR: data,
       DRAFT_AGENT: "fake",
       DRAFT_AGENT_COMMAND: process.execPath,
       DRAFT_AGENT_ARGS: JSON.stringify([join(app, "test/fake-acp-agent.ts")]),
@@ -247,5 +249,71 @@ test("the frame is quiet: a lean top bar, a footer, plain words, and a thread co
   await expect(hint).toContainText("To people and the agent");
   await expect(hint).toContainText("sends an aside, for people only");
   await shot(page, "f06-aside-hint-with-two-people");
+  await electronApp.close();
+});
+
+/** A context named with 60 characters or more, which no folder's name gives (those stop at 48). */
+const LONG_NAME = "release-readiness-review-of-the-kiro-remote-integration-work";
+
+test("a long context name keeps the top bar on one line at 1280 px", async () => {
+  expect(LONG_NAME.length).toBeGreaterThanOrEqual(60);
+  const longData = mkdtempSync(join(tmpdir(), "draft-e2e-frame-long-"));
+  mkdirSync(join(longData, "contexts", LONG_NAME), { recursive: true });
+  const now = new Date().toISOString();
+  writeFileSync(
+    join(longData, "contexts.json"),
+    JSON.stringify({
+      version: 1,
+      contexts: [
+        {
+          name: LONG_NAME,
+          title: LONG_NAME,
+          logContext: LONG_NAME,
+          dir: join("contexts", LONG_NAME),
+          folder: null,
+          candidate: null,
+          importedFrom: null,
+          createdAt: now,
+          lastActivity: null,
+        },
+      ],
+      open: [LONG_NAME],
+    }),
+  );
+  const { electronApp, page } = await launch(longData);
+  const bar = page.locator("header.titlebar");
+  const name = bar.getByTestId("context-name");
+  await expect(name).toHaveText(LONG_NAME);
+  await expect(bar.getByTestId("contexts-button")).toBeVisible();
+
+  // The bar's height with this name, against its height with a short one (the same page, the
+  // name's text swapped for a moment), and whether anything in it sticks out of it.
+  const measure = () =>
+    bar.evaluate((el) => {
+      const r = el.getBoundingClientRect();
+      const out = [...el.querySelectorAll("*")].filter((c) => {
+        const b = c.getBoundingClientRect();
+        return b.width > 0 && (b.right > r.right + 0.5 || b.left < r.left - 0.5);
+      });
+      return {
+        height: r.height,
+        scrollWidth: el.scrollWidth,
+        clientWidth: el.clientWidth,
+        outside: out.map((c) => c.getAttribute("data-testid") ?? c.className),
+      };
+    });
+  const long = await measure();
+  await name.evaluate((el) => {
+    el.setAttribute("data-long", el.textContent ?? "");
+    el.textContent = "local";
+  });
+  const single = await measure();
+  await name.evaluate((el) => {
+    el.textContent = el.getAttribute("data-long");
+  });
+  expect(long.height).toBe(single.height);
+  expect(long.scrollWidth).toBeLessThanOrEqual(long.clientWidth);
+  expect(long.outside).toEqual([]);
+  await shot(page, "f08-top-bar-long-context-name");
   await electronApp.close();
 });
