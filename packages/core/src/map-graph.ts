@@ -1,5 +1,6 @@
 import type {
   ItemRef,
+  KindOrder,
   MapEdge,
   MapItem,
   MapSnapshot,
@@ -68,6 +69,8 @@ export interface ClusterNode {
   inside: number;
   /** A kind drawn only because the kind in view refers to it. */
   external: boolean;
+  /** Its place in a sequence of kinds, such as a repository's environments; null when it has none. */
+  order: KindOrder | null;
   /** The state's place along the kind's lane, in a kind view. */
   lane: string | null;
   /** Where clicking goes; null when it goes nowhere further. */
@@ -248,6 +251,7 @@ function clusterNode(
     out?: number;
     inside?: number;
     external?: boolean;
+    order?: KindOrder | null;
     lane?: string | null;
     zoom?: GraphZoom | null;
   } = {},
@@ -267,6 +271,7 @@ function clusterNode(
     steppedOut: o.out ?? 0,
     inside: o.inside ?? 0,
     external: o.external ?? false,
+    order: o.order ?? null,
     lane: o.lane ?? null,
     zoom: o.zoom === undefined ? (state === null ? { level: "kind", kind } : null) : o.zoom,
   };
@@ -350,7 +355,10 @@ function contextGraph(map: MapSnapshot, facts: Facts): Graph {
   for (const row of map.rows) {
     const items = row.cells.flatMap((c) => c.items);
     if (items.length === 0) continue;
-    const c = clusterNode(row.kind, row.label, items, { out: out.get(row.kind) ?? 0 });
+    const c = clusterNode(row.kind, row.label, items, {
+      out: out.get(row.kind) ?? 0,
+      order: row.order,
+    });
     clusters.push(c);
     clusterOf.set(row.kind, c.id);
   }

@@ -345,7 +345,8 @@ describe("what a refresh costs", () => {
     const { ark, client, map } = open();
 
     // The first read: the default tree, the open pull requests and the one head that adds
-    // something, every title and resolution once, the deployments and their statuses.
+    // something, every title and resolution once, the deployments and their statuses, and the
+    // repository's environments.
     expect(await ark.tick()).toBe(true);
     const first = paths(github.requests);
     expect(first.filter((p) => p.includes("/git/trees/"))).toEqual([
@@ -356,11 +357,12 @@ describe("what a refresh costs", () => {
     // was superseded, whose event says by what.
     expect(blobs(github.requests)).toBe(17);
     expect(first.filter((p) => p.endsWith("/statuses"))).toHaveLength(3);
-    expect(first).toHaveLength(24);
-    expect(client.requests).toBe(24);
+    expect(first).toHaveLength(25);
+    expect(first.filter((p) => p.endsWith("/environments"))).toHaveLength(1);
+    expect(client.requests).toBe(25);
     const before = github.requests.length;
 
-    // Nothing moved: three conditional requests, all answered "not modified", no file fetched.
+    // Nothing moved: four conditional requests, all answered "not modified", no file fetched.
     const notModified = client.notModified;
     expect(await ark.tick()).toBe(false);
     const again = paths(github.requests, before);
@@ -368,8 +370,9 @@ describe("what a refresh costs", () => {
       `/repos/${ARK_REPO}/git/trees/HEAD`,
       `/repos/${ARK_REPO}/pulls`,
       `/repos/${ARK_REPO}/deployments`,
+      `/repos/${ARK_REPO}/environments`,
     ]);
-    expect(client.notModified - notModified).toBe(3);
+    expect(client.notModified - notModified).toBe(4);
     expect(blobs(github.requests, before)).toBe(0);
     expect(counts(map(), "issue")).toEqual({ open: 2, "in-progress": 1, closed: 3 });
   });

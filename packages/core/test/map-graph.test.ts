@@ -135,6 +135,7 @@ describe("the edges of the map", () => {
       adrs: [],
       issues: [],
       deployments: [],
+      environments: [],
       problems: [],
       ...ark,
     };

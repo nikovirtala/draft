@@ -110,7 +110,23 @@ function seedFor(n: GraphNode, graph: Graph, placed: ReadonlyMap<string, Point>)
         : MARGIN + 30 + seedOf(n.id, 3) * (WORLD.height - 60 - 2 * MARGIN);
     return { x, y };
   }
-  // The context: clusters scattered over an ellipse, from a ring to the middle.
+  // The context. Kinds that come in a sequence (a repository's environments) lie along a line in
+  // that order, a line for each group, left to right.
+  if (n.type === "cluster" && n.order !== null) {
+    const groups = [
+      ...new Set(
+        graph.nodes.flatMap((x) =>
+          x.type === "cluster" && x.order !== null ? [x.order.group] : [],
+        ),
+      ),
+    ].sort();
+    const row = Math.max(0, groups.indexOf(n.order.group));
+    return {
+      x: WORLD.width * (0.15 + (0.7 * (n.order.index + 0.5)) / n.order.of),
+      y: Math.max(WORLD.height * 0.2, WORLD.height * (0.8 - 0.16 * row)),
+    };
+  }
+  // Clusters scattered over an ellipse, from a ring to the middle.
   const spread = 0.35 + 0.65 * Math.sqrt(seedOf(n.id, 3));
   return {
     x: CENTER.x + Math.cos(a) * WORLD.width * 0.36 * spread,

@@ -74,9 +74,22 @@ export interface MapCell {
   items: MapItem[];
 }
 
+/**
+ * Where a kind comes in a sequence of kinds that belong together, such as the environments of one
+ * repository: `index` of `of`, from 0, in the order they are deployed to. Rows and clusters of one
+ * group are drawn in that order.
+ */
+export interface KindOrder {
+  group: string;
+  index: number;
+  of: number;
+}
+
 export interface MapRow {
   kind: string;
   label: string;
+  /** Its place among the kinds of its group, when it is one of a sequence. */
+  order: KindOrder | null;
   source: "machine" | "derived";
   derivation: string;
   columns: (Column & { class: StateClass })[];

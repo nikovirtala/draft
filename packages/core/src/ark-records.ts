@@ -1,5 +1,6 @@
 import { ARK_ID, type ArkIssueEvent, dataField, dataList, parseEventFiles } from "./ark-issue.ts";
 import { canonicalJson } from "./canonical.ts";
+import { type EnvironmentTopology, parseGithubEnvironments, topologyOf } from "./environments.ts";
 import { type GithubClient, GithubError } from "./github.ts";
 
 /**
@@ -18,6 +19,9 @@ import { type GithubClient, GithubError } from "./github.ts";
  *   find decisions that are proposed on a branch and not on the default branch yet.
  * - **Deployments** are listed once; statuses are read only for a deployment that is new, still
  *   moving, or last seen as a success (a newer run may have made it inactive).
+ * - **Environments** are the repository's topology, read as data from where it lives: GitHub's
+ *   list of its environments, and the environment its `deploy.toml` names (a file found in the
+ *   tree already read, fetched once by blob sha). See environments.ts.
  * - Requests carry the ETag of what was seen, so an unchanged answer is a 304, which GitHub doesn't
  *   count against the rate limit. When GitHub says the limit is used up, nothing is asked until it
  *   resets, and the map says its counts are from before.
@@ -113,6 +117,8 @@ export interface ArkSnapshot {
   adrs: AdrRecord[];
   issues: IssueRecord[];
   deployments: DeploymentRecord[];
+  /** The environments of each repository that says which it has, by repository. */
+  environments: EnvironmentTopology[];
   problems: ArkProblem[];
 }
 
@@ -178,6 +184,9 @@ interface RepoData {
   adrs: AdrRecord[];
   issues: IssueRecord[];
   deployments: DeploymentRecord[];
+  topology: EnvironmentTopology | null;
+  /** The blob sha of `deploy.toml` in the default branch's tree; null when it has none. */
+  deployToml: string | null;
   /** What each pull request head's tree held, by head sha: a head's tree is read once. */
   heads: Map<string, Parsed>;
   deploymentIds: string;
@@ -232,6 +241,7 @@ export class ArkRecords {
       adrs: data.flatMap(([, d]) => d.adrs),
       issues: data.flatMap(([, d]) => d.issues),
       deployments: data.flatMap(([, d]) => d.deployments),
+      environments: data.flatMap(([, d]) => (d.topology === null ? [] : [d.topology])),
       problems: data.flatMap(([, d]) => d.problems),
     };
   }
@@ -263,6 +273,8 @@ export class ArkRecords {
         adrs: [],
         issues: [],
         deployments: [],
+        topology: null,
+        deployToml: null,
         heads: new Map<string, Parsed>(),
         deploymentIds: "",
         headKey: "",
@@ -272,7 +284,10 @@ export class ArkRecords {
       this.repos.set(repo, data);
       data.problems = [];
       await this.guard(repo, data, "records", () => this.records(repo, data));
-      await this.guard(repo, data, "deployments", () => this.deployments(repo, data));
+      await this.guard(repo, data, "deployments", async () => {
+        await this.deployments(repo, data);
+        await this.environments(repo, data);
+      });
     }
     this.loaded = true;
     this.readAt = new Date(this.o.now()).toISOString();
@@ -374,6 +389,7 @@ export class ArkRecords {
       data.adrs = [];
       data.issues = [];
       data.treeSha = null;
+      data.deployToml = null;
       data.problems.push({
         repo,
         source: "records",
@@ -387,6 +403,8 @@ export class ArkRecords {
         source: "records",
         message: `${repo} is too large for one tree: some decisions and issues are missing`,
       });
+    data.deployToml =
+      tree.tree.find((e) => e.type === "blob" && e.path === "deploy.toml")?.sha ?? null;
     const heads = await this.pullHeads(repo);
     const headKey = heads.map((h) => `${h.number}@${h.headSha}`).join(",");
     // The same default-branch tree and the same pull request heads: nothing to read again.
@@ -481,6 +499,26 @@ export class ArkRecords {
               },
             ],
       );
+  }
+
+  /**
+   * The repository's environments: the names GitHub lists, and the one `deploy.toml` names. An
+   * answer GitHub won't give (no access to environments) leaves what the deployments say.
+   */
+  private async environments(repo: string, data: RepoData): Promise<void> {
+    let github: string[] = [];
+    try {
+      github = parseGithubEnvironments(
+        await this.o.github.getJson<unknown>(`/repos/${repo}/environments?per_page=100`),
+      );
+    } catch (err) {
+      // Forbidden is not a failure of the map: the environments are as the deployments name them.
+      // A rate limit, or anything else, is the refresh's to report.
+      if (!(err instanceof GithubError) || err.status !== 403 || err.message.includes("rate limit"))
+        throw err;
+    }
+    const deployToml = data.deployToml === null ? null : await this.blob(repo, data.deployToml);
+    data.topology = topologyOf(repo, { github, deployToml });
   }
 
   private async deployments(repo: string, data: RepoData): Promise<void> {
