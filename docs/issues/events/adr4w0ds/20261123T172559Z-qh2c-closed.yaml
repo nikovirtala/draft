@@ -1,0 +1,16 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M84Q2WNV7DAR5FAE7CJWQH2C
+subject: adr4w0ds
+type: closed
+at: 2026-11-23T17:25:59Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: 244629292+kiro-agent@users.noreply.github.com
+reason: A wait is an arrow to the pull request on the map and a chip on the stub, gone on wait.removed (e2e feed.spec.ts, fw01-fw04 in run 45226287254). The stub and the node say why it last woke (fw03, fw04). An unreadable wait is one dismissable item in needs you (fw05, kiro-feed-reader.test.ts). Unknown annotations are skipped, a state type stops the fold with one notice and marks it stale (fw06, kiro-feed-reader.test.ts), a seq gap restarts and says so. kiro-feed-contract.test.ts checks the reader against the vendored schemas.
+data:
+  resolution: done
