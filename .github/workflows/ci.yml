@@ -18,6 +18,9 @@ concurrency:
 # A change that touches only docs/, Markdown files or the license skips typecheck, test, build and
 # e2e: lint still runs (Biome, Markdown, commit messages, adr verify, issues verify), and `check`
 # passes when the skipped jobs were skipped for that reason.
+#
+# The map's counts equal what `adr list` and `issues list` report (?77): the test job runs
+# packages/core/test/map-contract.test.ts on this checkout.
 jobs:
   changes:
     runs-on: ubuntu-latest
