@@ -24,6 +24,7 @@ export * from "./map-ark.ts";
 export * from "./map-graph.ts";
 export * from "./map-kinds.ts";
 export * from "./map-layout.ts";
+export * from "./map-viewport.ts";
 export * from "./oauth.ts";
 export * from "./person-tools.ts";
 export * from "./projection.ts";
