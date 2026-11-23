@@ -6,6 +6,7 @@ import type { Entry, Placement } from "../../../shared/placement.ts";
 import { useWorkspace } from "../workspace.tsx";
 import { BlockControls } from "./Icons.tsx";
 import { LayoutSwitch, MapGraph, type MapLayout } from "./MapGraph.tsx";
+import { CELL, GAP, layoutArcs } from "./map-arcs.ts";
 import { useSelectable } from "./selectable.ts";
 import { Working } from "./Working.tsx";
 
@@ -22,9 +23,6 @@ const RANGES = [
   { id: "all", label: "Everything", ms: null },
 ] as const;
 type RangeId = (typeof RANGES)[number]["id"];
-
-const CELL = 92;
-const ARC = 26;
 
 /** The map of this window's context, asked for again whenever the log moves. */
 function useMap(range: RangeId): MapSnapshot | null {
@@ -95,52 +93,49 @@ function arrowsOf(map: MapSnapshot, row: Row) {
 }
 
 function Arrows({ map, row }: { map: MapSnapshot; row: Row }) {
-  const arrows = arrowsOf(map, row);
-  if (arrows.length === 0) return null;
-  const width = row.columns.length * CELL;
+  const moves = arrowsOf(map, row);
+  if (moves.length === 0) return null;
+  const { arcs, height, width, head } = layoutArcs(row.columns.length, moves);
   const id = `arrow-${row.kind.replace(/[^a-z0-9]/gi, "-")}`;
   return (
     <svg
       className="map-arrows"
       width={width}
-      height={ARC}
-      viewBox={`0 0 ${width} ${ARC}`}
+      height={height}
+      viewBox={`0 0 ${width} ${height}`}
       aria-hidden="true"
       data-testid="map-arrows"
     >
       <defs>
         <marker
           id={id}
-          viewBox="0 0 8 8"
-          refX="7"
-          refY="4"
-          markerWidth="7"
-          markerHeight="7"
+          markerUnits="userSpaceOnUse"
+          viewBox={`0 0 ${head} ${head}`}
+          refX={head}
+          refY={head / 2}
+          markerWidth={head}
+          markerHeight={head}
           orient="auto"
         >
-          <path d="M0 0L8 4L0 8z" fill="currentColor" />
+          <path d={`M0 0L${head} ${head / 2}L0 ${head}z`} fill="currentColor" />
         </marker>
       </defs>
-      {arrows.map((a) => {
-        const x1 = a.from * CELL + CELL / 2;
-        const x2 = a.to * CELL + CELL / 2;
-        const lift = Math.min(ARC - 4, 8 + Math.abs(a.to - a.from) * 5);
-        return (
-          <path
-            key={`${a.from}>${a.to}`}
-            d={`M${x1} ${ARC} C${x1} ${ARC - lift} ${x2} ${ARC - lift} ${x2} ${ARC - 2}`}
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={Math.min(3, 1.2 + a.n * 0.4)}
-            markerEnd={`url(#${id})`}
-            data-testid="map-arrow"
-            data-kind={row.kind}
-            data-from={row.columns[a.from]?.id}
-            data-to={row.columns[a.to]?.id}
-            data-count={a.n}
-          />
-        );
-      })}
+      {arcs.map((a) => (
+        <path
+          key={`${a.from}>${a.to}`}
+          d={a.d}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={a.stroke}
+          markerEnd={`url(#${id})`}
+          data-testid="map-arrow"
+          data-kind={row.kind}
+          data-from={row.columns[a.from]?.id}
+          data-to={row.columns[a.to]?.id}
+          data-count={a.n}
+          data-level={a.level}
+        />
+      ))}
     </svg>
   );
 }
@@ -194,7 +189,7 @@ function MapRowView({
                   key={cell.column}
                   type="button"
                   className={`map-cell ${column.class}${lit ? " lit" : ""}${selected === cell.column ? " selected" : ""}`}
-                  style={{ width: CELL }}
+                  style={{ width: CELL - GAP }}
                   disabled={cell.count === 0}
                   aria-pressed={selected === cell.column}
                   aria-label={cellLabel(

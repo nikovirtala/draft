@@ -1,0 +1,16 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M84VG7YKCN323HQ19VW0QE3H
+subject: gjy2jbkj
+type: closed
+at: 2026-11-23T18:43:11Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: 244629292+kiro-agent@users.noreply.github.com
+reason: layoutArcs (map-arcs.ts) draws every arc from the top edge of a cell to the top edge of another, stacks an arc above the arcs it holds, spreads ends that meet in a cell, and uses one arrowhead in pixels for every arc. The renderer tests in map-arcs.test.ts check no crossing for three and six states (and that two arcs cross only when their ends interleave) and a constant head; the e2e test and screenshots m10 and m11 are in the PR.
+data:
+  resolution: done

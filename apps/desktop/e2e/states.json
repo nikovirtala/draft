@@ -168,6 +168,18 @@
     "width": 720
   },
   {
+    "state": "Map: arcs between the three states of Issues",
+    "screenshot": "m10-arcs-issues.png",
+    "preview": null,
+    "width": 720
+  },
+  {
+    "state": "Map: arcs between the six states of Decisions",
+    "screenshot": "m11-arcs-decisions.png",
+    "preview": null,
+    "width": 720
+  },
+  {
     "state": "A stub with keyboard focus: the focus ring, no fill",
     "screenshot": "m12-stub-with-keyboard-focus.png",
     "preview": "docs/design-system/components/Selection/preview.html",
