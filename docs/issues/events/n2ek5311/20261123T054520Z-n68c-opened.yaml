@@ -1,0 +1,17 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M83EZZ9N0NZRPMBVEP07N68C
+subject: n2ek5311
+type: opened
+at: 2026-11-23T05:45:20Z
+actor:
+  kind: agent
+  name: claude
+  email: null
+  agent: claude
+  on_behalf_of: niko.virtala@hey.com
+data:
+  title: Open the message an attention item points at
+  template: task
+  template_version: 1
