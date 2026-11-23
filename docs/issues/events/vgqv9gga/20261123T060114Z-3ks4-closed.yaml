@@ -1,0 +1,16 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M83FX25CW9PZ1XDYE2PG3KS4
+subject: vgqv9gga
+type: closed
+at: 2026-11-23T06:01:14Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: niko.virtala@hey.com
+reason: Main, thread and paused placeholders come from composerPlaceholder; frame.test.ts and frame.spec.ts check each.
+data:
+  resolution: done
