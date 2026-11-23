@@ -114,8 +114,15 @@ a,
   font-size: 13px;
 }
 
+/*
+ * A scroller is also the containing block of what is positioned inside it. Without that, a
+ * visually hidden radio or label (position: absolute) is placed against the window, escapes the
+ * scroller's clip and lengthens the document, so the whole window scrolls.
+ */
 .conversation {
   flex: 1;
+  min-height: 0;
+  position: relative;
   overflow-y: auto;
 }
 
@@ -823,11 +830,14 @@ textarea:focus-visible {
 
 .block-full.status-running,
 .block-full.status-awaiting_permission {
-  flex: none;
+  flex: 0 1 auto;
 }
 
+/* A block's body scrolls in the panel or its own window; its header stays at the top. */
 .block-full:not(.thread-view) {
   padding: 12px 16px;
+  position: relative;
+  overflow-y: auto;
 }
 
 .block-header {
@@ -837,6 +847,9 @@ textarea:focus-visible {
 }
 
 .block-full:not(.thread-view) .block-header {
+  position: sticky;
+  top: -12px;
+  z-index: 3;
   margin: -12px -16px 8px;
 }
 
