@@ -1,6 +1,8 @@
+import type { FeedProvenance } from "./kiro-feed-types.ts";
+
 /**
  * What the map's projection returns, and what its kinds declare about their states. Plain data and
- * no imports, so the renderer can share the types without reaching into the log.
+ * no imports but other plain data, so the renderer can share the types without reaching into the log.
  */
 
 /** Whom a wait is on, as the actor kinds of an event are named. */
@@ -154,6 +156,8 @@ export interface MapSnapshot {
   transitions: MapTransition[];
   /** The references between the items above, both ends present; see `KindDecl.edges`. */
   edges: MapEdge[];
+  /** The feeds some of it was folded from, and the cursor of each: where the view was built from. */
+  feeds: FeedProvenance[];
   totals: { items: number; open: number; waitingOnPerson: number };
   /** A source is being read now (GitHub, for the repositories the context covers). */
   reading: boolean;

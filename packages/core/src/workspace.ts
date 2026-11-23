@@ -9,9 +9,13 @@ import {
   type UiChange,
   type UiState,
 } from "./conversation.ts";
-import type { Actor, EventDraft, Target } from "./events.ts";
+import { type Actor, type EventDraft, type Target, targetKey } from "./events.ts";
 import { newItemId } from "./ids.ts";
 import { type AttentionItem, orderAttention } from "./interrupts.ts";
+import { sessionFeedView } from "./kiro-feed.ts";
+import { KiroFeedReader } from "./kiro-feed-reader.ts";
+import type { UiSessionFeed } from "./kiro-feed-types.ts";
+import type { KiroFeedApi } from "./kiro-remote-rest.ts";
 import { foldMap, type KindRegistry, type MapQuery, type MapSnapshot } from "./map.ts";
 import { ArkMap, type ArkMapOptions } from "./map-ark.ts";
 import { mapRegistry } from "./map-kinds.ts";
@@ -74,6 +78,11 @@ export interface WorkspaceOptions extends ConversationOptions {
    * Without it the map has draft's own kinds only.
    */
   ark?: ArkMapOptions;
+  /**
+   * Kiro Remote's change feed: what sessions wait for and why they woke, read into this context's
+   * log while the app runs. Without it nothing of the feed is read.
+   */
+  feed?: { api: KiroFeedApi; intervalMs?: number; known?: ReadonlySet<string>; now?: () => number };
 }
 
 function firstLine(text: string, max: number): string {
@@ -94,6 +103,7 @@ export class Workspace {
   private lastMapHead = "";
   private readonly registry: KindRegistry;
   private readonly ark: ArkMap | null;
+  private readonly feed: KiroFeedReader | null;
 
   private constructor(
     private readonly o: WorkspaceOptions & { writer: SerialWriter; agents: AgentDirectory },
@@ -104,6 +114,7 @@ export class Workspace {
     this.registry = mapRegistry.fork();
     this.ark = o.ark === undefined ? null : new ArkMap(this.registry, o.ark);
     if (this.ark !== null) this.ark.onReading = () => this.emitMap();
+    this.feed = o.feed === undefined ? null : this.openFeed(o.feed);
     this.watch(main);
     for (const c of o.projection.conversations()) {
       if (c.parent !== null) this.attach(c.conversation);
@@ -120,6 +131,7 @@ export class Workspace {
       touched: (c: string) => workspace?.touch(c),
       proposedDecisions:
         o.proposedDecisions ?? (async () => (await workspace?.proposedDecisions()) ?? []),
+      feedView: o.feedView ?? ((session: string) => workspace?.feedView(session) ?? null),
     };
     const main = await ConversationService.open(shared);
     workspace = new Workspace(shared, main);
@@ -137,6 +149,56 @@ export class Workspace {
       .snapshot()
       .adrs.filter((a) => foldStatus(a.events) === "proposed")
       .map((a) => ({ repo: a.repo, id: a.id }));
+  }
+
+  /** The change feed's reader, over this workspace's log: what it writes and what it asks of it. */
+  private openFeed(feed: NonNullable<WorkspaceOptions["feed"]>): KiroFeedReader {
+    const p = this.o.projection;
+    const sessionTarget = (id: string): Target => ({ type: "kiro-session", id });
+    return new KiroFeedReader({
+      api: feed.api,
+      ...(feed.intervalMs === undefined ? {} : { intervalMs: feed.intervalMs }),
+      ...(feed.known === undefined ? {} : { known: feed.known }),
+      ...(feed.now === undefined ? {} : { now: feed.now }),
+      host: {
+        context: parseAddress(this.main.conversation).context,
+        events: () => this.o.log.events(),
+        append: (drafts) =>
+          this.o.writer.run(async () => {
+            const sealed = await this.o.log.append(drafts);
+            for (const e of sealed) p.apply(e);
+            return sealed;
+          }),
+        sessions: () =>
+          p
+            .stubs()
+            .filter((s) => s.type === "kiro-session")
+            .map((s) => s.id),
+        ownerOf: (id) => p.ownerOf(sessionTarget(id)),
+        sessionTitle: (id) => {
+          const title = p.stub(targetKey(sessionTarget(id)))?.state.title;
+          return typeof title === "string" && title !== "" ? title : null;
+        },
+        isRaised: (key) => p.latestRaised(key) !== null,
+        note: (what, text) => this.main.note(what, text),
+        changed: () => {
+          this.emitMap();
+          this.emit({ type: "state", state: this.main.state() });
+          for (const s of this.services.values()) this.emit({ type: "state", state: s.state() });
+          this.emitThreads();
+        },
+      },
+    });
+  }
+
+  /** What the change feed says of one Kiro session, for its stub. */
+  feedView(session: string): UiSessionFeed | null {
+    return this.feed === null ? null : sessionFeedView(this.feed.fold(), session);
+  }
+
+  /** The app gained focus: the change feed is read now. */
+  async focus(): Promise<void> {
+    await this.feed?.focus();
   }
 
   get mainConversation(): string {
@@ -422,6 +484,7 @@ export class Workspace {
   /** Polls the visible stubs that are due. The host calls this on a timer. */
   async tick(): Promise<void> {
     await this.main.tick();
+    await this.feed?.tick();
     if (this.ark !== null && (await this.ark.tick())) this.emitMap();
   }
 

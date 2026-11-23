@@ -59,6 +59,7 @@ import {
   summarizeResult,
   toolPermission,
 } from "./kiro.ts";
+import type { UiSessionFeed } from "./kiro-feed-types.ts";
 import type { LogStore } from "./log.ts";
 import { isMapRequest } from "./map.ts";
 import type { Projection } from "./projection.ts";
@@ -103,6 +104,12 @@ export interface UiStub {
   id: string;
   state: Record<string, unknown>;
   observedAt: string;
+  /**
+   * What Kiro Remote's change feed says of a session stub: what it waits for, why it last woke,
+   * which feed and cursor that was read from (kiro-feed.ts). Absent for anything else, and for a
+   * session the feed has said nothing of.
+   */
+  feed?: UiSessionFeed;
 }
 
 export interface UiPrompt {
@@ -336,6 +343,8 @@ export interface ConversationOptions {
    * check that names a decision links to. Without it a check gates nothing.
    */
   proposedDecisions?: () => Promise<readonly { repo: string; id: string }[]>;
+  /** What the change feed says of a Kiro session, for its stub. Without it a stub shows none. */
+  feedView?: (session: string) => UiSessionFeed | null;
   context?: string;
   /** The context's title, written once with `context.created`; "Local" by default. */
   contextTitle?: string;
@@ -385,6 +394,7 @@ export class ConversationService {
   private readonly proposedDecisions:
     | (() => Promise<readonly { repo: string; id: string }[]>)
     | null;
+  private readonly feedView: ((session: string) => UiSessionFeed | null) | null;
   private readonly proposals = new Map<string, UiProposal>();
   private readonly listeners = new Set<(c: UiChange) => void>();
   private readonly prompts = new Map<
@@ -416,6 +426,7 @@ export class ConversationService {
     this.launcher = o.launcher ?? null;
     this.crossContext = o.crossContext ?? null;
     this.proposedDecisions = o.proposedDecisions ?? null;
+    this.feedView = o.feedView ?? null;
     this.now = o.poller?.now ?? Date.now;
     this.conversation = conversation;
     this.context = conversation.split("/")[0] as string;
@@ -705,7 +716,10 @@ export class ConversationService {
       refsByMessage.set(e.from, list);
     }
     const stubs: Record<string, UiStub> = {};
-    for (const s of this.projection.stubs()) stubs[s.target] = s;
+    for (const s of this.projection.stubs()) {
+      const feed = s.type === "kiro-session" ? (this.feedView?.(s.id) ?? null) : null;
+      stubs[s.target] = feed == null ? s : { ...s, feed };
+    }
     const conv = this.projection.conversations().find((c) => c.conversation === this.conversation);
     const messages = this.projection.messages(this.conversation);
     let runtime: AgentRuntime | null = null;
