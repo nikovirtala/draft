@@ -154,5 +154,23 @@
     "screenshot": "w02-block-window-scrolled-to-the-end.png",
     "preview": null,
     "width": 720
+  },
+  {
+    "state": "A selected map stub: nothing is filled",
+    "screenshot": "m08-selected-map-stub.png",
+    "preview": "docs/design-system/components/Selection/preview.html",
+    "width": 720
+  },
+  {
+    "state": "A selected one-line stub: nothing is filled",
+    "screenshot": "m09-selected-one-line-stub.png",
+    "preview": "docs/design-system/components/Selection/preview.html",
+    "width": 720
+  },
+  {
+    "state": "A stub with keyboard focus: the focus ring, no fill",
+    "screenshot": "m12-stub-with-keyboard-focus.png",
+    "preview": "docs/design-system/components/Selection/preview.html",
+    "width": 720
   }
 ]

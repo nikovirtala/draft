@@ -1,0 +1,16 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M84WRGW8XXBD3PBPSD75W7JE
+subject: ynt6qt9k
+type: closed
+at: 2026-11-23T19:05:11Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: 244629292+kiro-agent@users.noreply.github.com
+reason: "The selected-block rule and its muted-to-text overrides are removed: a stub, thread stub, block-full or header is never filled when selected, clicked, expanded, open in the panel or focused; the panel's and a window's header are on the page colour. moved-selected stays on the chosen option of a list or control (Contexts menu, segmented control, chosen map cell). Keyboard focus is a 1.5px moved-mark ring through :focus-visible. no-purple-blocks.test.tsx and the e2e tests hold it; screenshots m08, m09, m12, t04 are in the PR."
+data:
+  resolution: done

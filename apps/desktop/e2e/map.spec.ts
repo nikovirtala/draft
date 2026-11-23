@@ -624,3 +624,46 @@ test("the window never scrolls: a long conversation, and a long map in a window 
   await shot(popped, "w02-block-window-scrolled-to-the-end");
   await electronApp.close();
 });
+
+test("a selected stub is never filled: a click shows no ring, the keyboard shows one", async () => {
+  const dataDir = mkdtempSync(join(tmpdir(), "draft-e2e-map-selected-"));
+  const { electronApp, page } = await launch(dataDir);
+  const main = page.locator('[data-testid="conversation"][data-main="true"]');
+  await say(main, "show the map");
+  const stub = main.getByTestId("map-block");
+  await expect(stub.getByTestId("map")).toBeVisible();
+  await stub.locator(".stub-title").click();
+  await expect(stub).toHaveAttribute("data-selected", "true");
+  const RAISED = "rgb(255, 253, 247)";
+  const CLEAR = "rgba(0, 0, 0, 0)";
+  // Selected by a click: the map stub, its header and its body are on their own ground, and
+  // nothing is drawn around it.
+  await expect(stub).toHaveCSS("background-color", RAISED);
+  await expect(stub.locator(":scope > .stub-line")).toHaveCSS("background-color", CLEAR);
+  await expect(stub.getByTestId("map")).toHaveCSS("background-color", CLEAR);
+  await expect(stub.locator(".stub-title")).toHaveCSS("color", "rgb(0, 86, 97)");
+  await expect(stub).toHaveCSS("outline-style", "none");
+  await shotOf(stub, "m08-selected-map-stub");
+
+  // Minimized, the same stub is one line, and as unfilled.
+  await stub.getByRole("button", { name: "Minimize" }).click();
+  await expect(stub).toHaveAttribute("data-placement", "minimized");
+  await stub.locator(".stub-title").click();
+  await expect(stub).toHaveAttribute("data-selected", "true");
+  await expect(stub).toHaveCSS("background-color", RAISED);
+  await expect(stub.locator(":scope > .stub-line")).toHaveCSS("background-color", CLEAR);
+  await expect(stub).toHaveCSS("outline-style", "none");
+  await shotOf(stub, "m09-selected-one-line-stub");
+
+  // The keyboard: Tab moves into the stub's controls and Shift+Tab back to the stub, which then
+  // shows the focus ring (1.5px moved-mark, no fill).
+  await page.keyboard.press("Tab");
+  await page.keyboard.press("Shift+Tab");
+  await expect(stub).toBeFocused();
+  await expect(stub).toHaveCSS("outline-style", "solid");
+  await expect(stub).toHaveCSS("outline-color", "rgb(158, 110, 247)");
+  await expect(stub).toHaveCSS("background-color", RAISED);
+  await shotOf(stub, "m12-stub-with-keyboard-focus");
+  await electronApp.close();
+});
+
