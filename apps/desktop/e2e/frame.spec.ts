@@ -181,6 +181,26 @@ test("the frame is quiet: a lean top bar, a footer, plain words, and a thread co
   expect(Math.abs(before.value - before.box)).toBeLessThanOrEqual(2);
   await shot(page, "f03-thread-and-divider");
 
+  // The block in focus is drawn on moved-selected (#d7c5fb) with words in text or ink: the
+  // thread in the panel by its header while the keyboard is in it, and the thread's stub in the
+  // conversation once it is selected, with its muted words (the agent's name) in text.
+  const SELECTED = "rgb(215, 197, 251)";
+  const TEXT = "rgb(68, 88, 90)";
+  await panel.getByLabel("Message").click();
+  await expect(panel.locator(".block-header")).toHaveCSS("background-color", SELECTED);
+  await expect(panel.getByTestId("panel-title")).toHaveCSS("color", "rgb(0, 86, 97)");
+  await expect(panel.getByTestId("thread-agent")).toBeVisible();
+  await shot(page, "f10-focused-block-on-moved-selected");
+  const stub = main.getByTestId("thread-stub");
+  await stub.getByTestId("thread-title").click();
+  await expect(stub).toHaveAttribute("data-selected", "true");
+  await expect(stub).toHaveCSS("background-color", SELECTED);
+  await expect(stub).toHaveCSS("opacity", "1");
+  await expect(stub.locator(".thread-agent")).toHaveCSS("color", TEXT);
+  await expect(stub.getByTestId("thread-title")).toHaveCSS("color", "rgb(0, 86, 97)");
+  await shot(page, "f11-selected-thread-stub-on-moved-selected");
+  await panel.getByLabel("Message").click();
+
   // 6. Drag the divider 120 px to the left: the thread's column grows by as much.
   const handle = (await divider.boundingBox()) as {
     x: number;
