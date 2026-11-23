@@ -223,6 +223,7 @@ Answers to earlier questions, with the reason, so later work does not reopen the
 6. **2026-11-23, this PR: a whole block may take `waiting-fill` when it asks the person (A10).** The code does it for interrupts, permission prompts, checks and failure notices, and the design system's NoticeAndWorking preview draws a failure notice that way. The reason is that what waits on you is the one thing the person should not miss. To confirm; the alternative is a chip only.
 7. **2026-11-23, this PR: the state-fill marking and the app-wide checks are written as planned.** #53 says #52 adds the window and purple-fill checks to the e2e harness; `main` has narrower tests (`e2e/map.spec.ts`, `test/renderer/no-purple-blocks.test.tsx`) and no `data-fill`. This spec links the checks by name once they land.
 8. **2026-11-23, this PR: the skills are kept identical in `.kiro/skills` and `.claude/skills`, as adr and issues are.**
+9. **2026-11-23, #55: the causal trace has no lanes.** Events follow the order of causes, not a clock; each carries its source and time beside it. A command (what a person or Claude did) is drawn apart from the states it causes, with no state colour. The chosen event is shown by its lit path, never by filling its chip. ADRs cqwg12zy (record each fact's cause) and p6hx9jdv (record acts as commands) carry the model behind it.
 
 ## Open questions
 

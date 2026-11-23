@@ -1,0 +1,17 @@
+envelope: ledger/v1
+kind: decision
+schema: decision/v1
+id: 01M852VVWSR8X37AAYZD3N9KY3
+subject: p6hx9jdv
+type: proposed
+at: 2026-11-23T20:51:52Z
+actor:
+  kind: agent
+  name: claude
+  email: null
+  agent: claude
+  on_behalf_of: niko.virtala@hey.com
+data:
+  title: Record what a person or an agent does as a command, apart from the states it causes
+  template: nygard
+  template_version: 1
