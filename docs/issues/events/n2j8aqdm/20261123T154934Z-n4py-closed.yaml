@@ -1,0 +1,16 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M84HJASEG0JD8QEA2HNPN4PY
+subject: n2j8aqdm
+type: closed
+at: 2026-11-23T15:49:34Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: 244629292+kiro-agent@users.noreply.github.com
+reason: "The window that is clicked in asks the context's other windows to reveal the block; the window that shows it scrolls, focuses and comes forward. Test: e2e/attention.spec.ts 'an item clicked in one window goes to its block in the window that shows it' (two windows, both directions; shots a09, a10)."
+data:
+  resolution: done
