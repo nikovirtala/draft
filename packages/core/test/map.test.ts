@@ -415,6 +415,7 @@ describe("the registry", () => {
       "interrupt:merge-conflict",
       "interrupt:changes-requested",
       "interrupt:review-requested",
+      "interrupt:wait-ended",
       "acceptance",
       "kiro-session",
       "pull-request",

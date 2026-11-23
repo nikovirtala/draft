@@ -1,5 +1,6 @@
 import { tryParseAddress } from "./address.ts";
 import { type DraftEvent, isUnknown, type LogRecord } from "./events.ts";
+import type { FeedProvenance } from "./kiro-feed-types.ts";
 import type { MachineSpec } from "./machine.ts";
 import type {
   Column,
@@ -114,6 +115,12 @@ export interface KindDecl {
    * drawn as a current one.
    */
   freshness?(input: KindInput): string | null;
+  /**
+   * The feeds this kind's derived state was folded from, and the cursor of each: the map says
+   * which feed and which position it was built from, so a view that disagrees with the feed can
+   * be told by its cursor.
+   */
+  feeds?(input: KindInput): readonly FeedProvenance[];
 }
 
 /** Which column each state of each kind belongs to. */
@@ -406,6 +413,7 @@ export function foldMap(
     });
   }
   const edges = foldEdges(listed, input, present, problems);
+  const feeds = foldFeeds(listed, input);
   // By time, then by place in the log: things that live outside the log have no place in it.
   transitions.sort(
     (a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : a.seq - b.seq) || (a.item < b.item ? -1 : 1),
@@ -421,6 +429,7 @@ export function foldMap(
     rows,
     transitions,
     edges,
+    feeds,
     totals,
     reading: query.reading ?? false,
     problems,
@@ -471,6 +480,19 @@ function foldEdges(
     }
   }
   return [...seen.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).map(([, e]) => e);
+}
+
+/** The feeds the listed kinds were folded from, once each. */
+function foldFeeds(kinds: readonly KindDecl[], input: KindInput): FeedProvenance[] {
+  const seen = new Map<string, FeedProvenance>();
+  for (const kind of kinds) {
+    try {
+      for (const f of kind.feeds?.(input) ?? []) seen.set(f.feed, f);
+    } catch {
+      // What a kind can't say of its feeds is not worth a map that doesn't draw.
+    }
+  }
+  return [...seen.values()].sort((a, b) => (a.feed < b.feed ? -1 : 1));
 }
 
 /** Whether two maps say the same thing. */

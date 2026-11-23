@@ -2,8 +2,17 @@ import { acceptanceSpec, evidenceGreen } from "./acceptance.ts";
 import { tryParseAddress } from "./address.ts";
 import { checkLifecycle, foldChecks } from "./check.ts";
 import { type DraftEvent, type LogRecord, type Target, targetKey } from "./events.ts";
+import { KIRO_FEED, prTargetId } from "./feed.ts";
 import { INTERRUPT_KINDS, type InterruptKind, interruptMachine } from "./interrupts.ts";
 import { bareToolName } from "./kiro.ts";
+import {
+  feedProvenance,
+  feedStale,
+  foldKiroFeed,
+  type KiroFeedFold,
+  lastWake,
+} from "./kiro-feed.ts";
+import { wakeText } from "./kiro-feed-types.ts";
 import {
   type EdgeDraft,
   foldMap,
@@ -312,6 +321,7 @@ const RAISED_KINDS: readonly InterruptKind[] = [
   "merge-conflict",
   "changes-requested",
   "review-requested",
+  "wait-ended",
 ];
 
 function interruptKind(kind: InterruptKind, items: (i: KindInput) => ItemDraft[]): KindDecl {
@@ -511,21 +521,71 @@ export const KIRO_SESSION_STATES: readonly KindDecl["states"][number][] = [
   { id: "deleted", label: "Deleted", class: "terminal" },
 ];
 
+/**
+ * Kiro Remote's change feed, folded from the facts in the log (kiro-feed.ts). A pure function of
+ * the events, so it is folded once for the events a map reads and shared by what asks for it.
+ */
+const feedFolds = new WeakMap<object, KiroFeedFold>();
+function feedOf({ events }: KindInput): KiroFeedFold {
+  let fold = feedFolds.get(events);
+  if (fold === undefined) {
+    fold = foldKiroFeed(events);
+    feedFolds.set(events, fold);
+  }
+  return fold;
+}
+
+const sessionStubs = stubItems(
+  "kiro-session",
+  (_id, s) => {
+    const status = str(s.status);
+    return KIRO_SESSION_STATES.some((x) => x.id === status) ? (status as string) : "unknown";
+  },
+  (id, s) => str(s.title) ?? `Session ${id.slice(0, 8)}`,
+);
+
+/** A session's node says why it last woke, from the feed. */
+function sessionItems(input: KindInput): ItemDraft[] {
+  const fold = feedOf(input);
+  return sessionStubs(input).map((item) => {
+    const w = lastWake(fold.sessions.get(item.id));
+    return w === null ? item : { ...item, note: `woke: ${wakeText(w.cause, w.kind, w.pr)}` };
+  });
+}
+
+/**
+ * A session waits for a pull request: an edge from the session to the pull request, for as long
+ * as the feed says the wait is there. `wait.removed` takes it away.
+ */
+function sessionEdges(input: KindInput): EdgeDraft[] {
+  const to = input.kindOfTarget("pull-request");
+  if (to === null) return [];
+  const out: EdgeDraft[] = [];
+  for (const [session, s] of feedOf(input).sessions)
+    for (const w of s.waits)
+      out.push({
+        from: { kind: "kiro-session", id: session },
+        to: { kind: to, id: prTargetId(w.pr) },
+        rel: "waits-for",
+        at: w.since === "" ? null : w.since,
+      });
+  return out;
+}
+
 export const KIRO_SESSION_KIND: KindDecl = {
   id: "kiro-session",
   label: "Kiro sessions",
   source: "derived",
-  derivation: "the status Kiro Remote reports for the session; a status it doesn't know is unknown",
+  derivation: `the status Kiro Remote reports for the session; a status it doesn't know is unknown. Its waits (an edge to the pull request waited for) and why it last woke come from Kiro Remote's change feed (${KIRO_FEED}), folded from the events draft read`,
   states: KIRO_SESSION_STATES,
   targetType: "kiro-session",
-  items: stubItems(
-    "kiro-session",
-    (_id, s) => {
-      const status = str(s.status);
-      return KIRO_SESSION_STATES.some((x) => x.id === status) ? (status as string) : "unknown";
-    },
-    (id, s) => str(s.title) ?? `Session ${id.slice(0, 8)}`,
-  ),
+  items: sessionItems,
+  edges: sessionEdges,
+  freshness: (input) => feedStale(feedOf(input)),
+  feeds: (input) => {
+    const fold = feedOf(input);
+    return fold.started || fold.stopped !== null ? [feedProvenance(fold)] : [];
+  },
 };
 
 /**

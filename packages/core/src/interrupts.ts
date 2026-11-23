@@ -23,7 +23,8 @@ export type InterruptKind =
   | "conclusion"
   | "review-requested"
   | "acceptance"
-  | "check";
+  | "check"
+  | "wait-ended";
 
 export interface InterruptKindSpec {
   /** Where the kind sits in the attention order: lower comes first. */
@@ -83,6 +84,12 @@ export const INTERRUPT_KINDS: Record<InterruptKind, InterruptKindSpec> = {
    * It ranks with what is left to resolve: nothing is broken, and it stops no one but the person.
    */
   check: { rank: RANKS.resolve, outcomes: ["passed", "failed"], label: "Check" },
+  /**
+   * A session stopped waiting for a pull request because Kiro Remote could not read it (or could
+   * not even ask): nothing will wake the session for it. Kiro Remote's change feed says so
+   * (kiro-feed.ts); a person dismisses it once they have seen it. It ranks with failures.
+   */
+  "wait-ended": { rank: RANKS.failure, outcomes: ["dismissed"], label: "Wait ended" },
 };
 
 export type InterruptState = "open" | "settled" | "cleared";

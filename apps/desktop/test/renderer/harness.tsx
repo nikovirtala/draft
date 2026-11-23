@@ -100,6 +100,7 @@ export function emptyMap(over: Partial<MapSnapshot> = {}): MapSnapshot {
     rows: [],
     transitions: [],
     edges: [],
+    feeds: [],
     totals: { items: 0, open: 0, waitingOnPerson: 0 },
     reading: false,
     problems: [],
