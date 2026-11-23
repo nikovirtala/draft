@@ -1,0 +1,136 @@
+<!-- @dsCard group="Window" height=1900 subtitle="Title bar, conversation, footer, the side panel, what needs you, scrolled windows; and the footer's ground, two ways" -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>The frame</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:var(--font-sans);background:var(--page);color:var(--text);font-size:13px;line-height:20px}
+.wrap{padding:16px;display:grid;gap:22px}
+.k{margin:0 0 6px;color:var(--muted);font-size:12px;line-height:16px;font-weight:400}
+.k b{color:var(--ink);font-weight:600}
+.chip,.pending,.where{display:inline-flex;align-items:center;gap:var(--space-1);font-size:12.5px;line-height:1;font-weight:500;padding:7px var(--space-3);border-radius:var(--radius-chip);border:1px solid transparent;white-space:nowrap}
+.chip i{font-style:normal;font-size:11px}
+.moved,.where{background:var(--moved-fill);color:var(--moved-strong)}
+.done{background:var(--done-fill);color:var(--done-word)}
+.review{background:var(--review-fill);color:var(--review-word)}
+.waiting{background:var(--waiting-fill);color:var(--waiting-word)}
+.failed{background:var(--waiting-fill);color:var(--waiting-word);border:var(--hairline-dashed) dashed var(--waiting-mark)}
+.idle{background:transparent;color:var(--muted);border:var(--hairline) solid var(--idle-line)}
+.row{display:flex;flex-wrap:wrap;gap:var(--space-2);align-items:center}
+.primary-button,.secondary-button{font:inherit;font-weight:560;border-radius:9px;padding:7px 16px;cursor:default;color:var(--ink)}
+.primary-button{background:var(--moved-selected);border:var(--hairline) solid var(--line-strong)}
+.primary-button.off{opacity:.45}
+.secondary-button{background:var(--raised);border:var(--hairline) solid var(--line)}
+.small{padding:3px 10px;font-size:12px;font-weight:500;border-radius:6px}
+.focus{outline:1.5px solid var(--moved-mark);outline-offset:1px}
+.working{display:inline-flex;align-items:center;gap:8px;color:var(--moved-word);font-weight:500}
+.working-ring{width:14px;height:14px;border-radius:var(--radius-round);border:2px solid color-mix(in srgb,var(--moved-mark) 25%,transparent);border-top-color:var(--moved-mark);flex:none}
+.working-ring.s{width:10px;height:10px}
+@media (prefers-reduced-motion:no-preference){.working-ring{animation:turn .9s linear infinite}}
+@keyframes turn{to{transform:rotate(360deg)}}
+.caret{display:inline-block;width:.5em;height:1.05em;margin-left:2px;vertical-align:text-bottom;background:var(--moved-mark)}
+.dot{width:8px;height:8px;border-radius:var(--radius-round);flex:none;background:var(--idle-line)}
+.dot.run{background:var(--moved-mark)}.dot.open{background:var(--review-mark)}.dot.merged{background:var(--done-mark)}.dot.wait{background:var(--waiting-mark)}
+.ref{color:var(--muted);font-family:var(--font-mono);font-size:12px}
+.t{color:var(--ink);font-weight:600}
+.secondary{color:var(--muted)}
+.stub,.thread-stub{display:flex;align-items:center;gap:10px;flex-wrap:wrap;min-height:40px;background:var(--raised);border:var(--hairline) solid var(--line-strong);border-radius:var(--radius-card);padding:6px 12px}
+.thread-mark{color:var(--moved-strong);font-weight:700}
+.stub .grow,.thread-stub .grow{flex:1}
+.win{display:flex;flex-direction:column;background:var(--page);border:var(--hairline) solid var(--line-strong);border-radius:var(--radius-card);overflow:hidden;color:var(--text)}
+.titlebar{display:flex;align-items:baseline;gap:12px;padding:10px 20px;background:var(--titlebar);border-bottom:var(--hairline) solid var(--line);position:relative}
+.titlebar b{color:var(--ink);font-weight:650}
+.titlebar .ctx{color:var(--ink)}
+.titlebar .title{color:var(--muted)}
+.titlebar .spacer{flex:1}
+.attention{font-weight:560;color:var(--waiting-word)}
+.footer{display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px;padding:6px 12px;border-top:var(--hairline) solid var(--line);font-size:12px;color:var(--muted)}
+.footer.on-titlebar{background:var(--titlebar)}
+.footer .agent-state{margin-left:auto;display:flex;gap:8px;align-items:center}
+.footer .chip{padding:6px 9px}
+.footer .agent-state .who{color:var(--ink)}
+.workspace{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr)}
+.workspace.with-panel{grid-template-columns:minmax(0,1fr) 8px 44%}
+.divider{border-left:var(--hairline) solid var(--line)}
+.left,.panel{min-height:0;min-width:0;display:flex;flex-direction:column;background:var(--page)}
+.conversation{flex:1;min-height:0;overflow:hidden;position:relative}
+.column{max-width:950px;margin:0 auto;padding:20px 24px 12px;display:flex;flex-direction:column;gap:14px}
+.empty{color:var(--muted);text-align:center;margin:44px 0 0}
+.notice{background:var(--raised);border:var(--hairline-dashed) dashed var(--line-strong);border-radius:var(--radius-card);color:var(--muted);padding:10px 14px}
+.message.user{align-self:flex-end;max-width:78%}
+.message.user .body{background:var(--surface);border-radius:14px 14px 4px 14px;padding:9px 14px}
+.message.agent{align-self:stretch;font-family:var(--font-serif);font-size:15px;line-height:24px}
+.message.agent p,.message.user p{margin:0 0 .6em}.message.agent p:last-child{margin:0}
+.message.agent code{font-family:var(--font-mono);font-size:12px}
+.message.aside{align-self:flex-end}
+.message.aside .audience{margin:0 0 3px;font-size:11.5px;color:var(--muted);text-align:right}
+.message.aside .body{background:transparent;border:var(--hairline-dashed) dashed var(--line-strong);border-radius:var(--radius-card);padding:8px 14px}
+.composer-wrap{padding:10px 24px 12px;width:100%;max-width:950px;margin:0 auto}
+.composer{display:flex;gap:10px;align-items:flex-end}
+.composer .field{flex:1;background:var(--surface);color:var(--ink);border:var(--hairline) solid var(--line-strong);border-radius:12px;padding:9px 12px;min-height:40px}
+.composer .field.ph{color:var(--muted)}
+.composer-hint{margin:6px 2px 0;color:var(--muted);font-size:12px}
+kbd{font:11px var(--font-sans);border:var(--hairline) solid var(--line-strong);border-radius:4px;padding:0 4px;background:var(--raised)}
+.panel-head{padding:12px 16px 10px;border-bottom:var(--hairline) solid var(--line);display:grid;gap:8px;background:var(--page)}
+.panel-head .name{color:var(--ink);font-weight:700}
+.panel-body{flex:1;padding:16px;overflow:hidden}
+.prompt,.interrupt{background:var(--waiting-fill);border:var(--hairline) solid var(--line-strong);border-radius:12px;padding:12px 14px;max-width:900px}
+.interrupt-label{margin:0 0 8px;display:flex;gap:12px;align-items:baseline;color:var(--waiting-word)}
+.interrupt-label .age{color:var(--muted)}
+.prompt-title{margin:0 0 8px;color:var(--ink)}
+.prompt-title strong{color:var(--waiting-word)}
+.prompt-input{margin:0 0 10px;padding:8px 10px;background:var(--surface);border:var(--hairline) solid var(--line-strong);border-radius:8px;font:12.5px/18px var(--font-mono);white-space:pre-wrap}
+.prompt-actions{display:flex;justify-content:flex-end;gap:8px}
+.error{display:flex;align-items:center;gap:var(--space-3);color:var(--waiting-word);background:var(--waiting-fill);border:var(--hairline-dashed) dashed var(--waiting-mark);border-radius:var(--radius-card);padding:10px 14px}
+.error::before{content:"✕";font-weight:600}
+.win{height:400px}.win.tall{height:600px}.pair{display:grid;grid-template-columns:1fr 1fr;gap:16px}.pair .win{height:230px}.scroll-end{position:absolute;right:2px;top:40px;bottom:6px;width:6px;border-radius:3px;background:var(--line-strong)}.cut{margin-top:-58px}.attention-list{position:absolute;right:20px;top:100%;margin-top:6px;z-index:2;min-width:340px;padding:10px 14px;background:var(--surface);border:var(--hairline) solid var(--line-strong);border-radius:12px;box-shadow:0 8px 24px color-mix(in srgb,var(--line) 80%,transparent);color:var(--ink);font-weight:400}.attention-list ol{margin:6px 0 0;padding-left:20px}.attention-list li{margin:6px 0}.attention-list .secondary{color:var(--muted)}.attention-list li .chip{margin-right:6px}.diff{color:var(--waiting-word)}.stack{display:grid;gap:10px}.block-win-head{padding:10px 16px;border-bottom:var(--hairline) solid var(--line);background:var(--page);display:flex;justify-content:space-between;color:var(--ink);font-weight:650}.map-line{padding:8px 0;color:var(--text)}.map-line b{color:var(--ink)}</style></head>
+<body>
+<div class="wrap">
+
+<section data-draws="f01-top-bar-and-footer">
+<p class="k"><b>The window.</b> Title bar on <code>titlebar</code>, the conversation on <code>page</code> with one column, the composer, and the footer. Nothing in it is filled with purple.</p>
+<div class="win"><header class="titlebar"><b>draft</b><b>local</b><span class="ctx">Contexts ▾</span><span class="title">Conversation</span><span class="spacer"></span></header>
+<div class="workspace"><section class="left"><div class="conversation"><div class="column"><p class="empty">Ask about your Kiro sessions. Every session mentioned here stays live in the conversation.</p><div class="notice">draft has no GitHub token (GITHUB_TOKEN, or <code>gh auth token</code>), so it reads public repositories without one, at GitHub's limit of 60 requests an hour. Private repositories won't show, and a review requested from you can't be told.</div></div></div><div class="composer-wrap"><div class="composer"><div class="field ph">Ask, describe, or type @ to reference anything</div><span class="primary-button off">Send</span></div></div></section></div>
+<footer class="footer "><span>▸ Your GitHub, git, SSH, AWS and npm sign-ins are withheld from the agent</span><span class="agent-state"><span class="who">the agent · fake-model-1</span><span class="chip moved">Active</span><span class="secondary-button small">Pause</span></span></footer></div>
+</section>
+
+<section data-draws="f03-thread-and-divider">
+<p class="k"><b>With the side panel open.</b> The panel is a column on <code>page</code> beside an 8px divider; the thread open in it says so with its "In the panel" chip and is not filled. Keyboard focus is on the divider: a 1.5px <code>moved-mark</code> ring, no fill.</p>
+<div class="win tall"><header class="titlebar"><b>draft</b><b>local</b><span class="ctx">Contexts ▾</span><span class="title">Conversation</span><span class="spacer"></span></header>
+<div class="workspace with-panel"><section class="left"><div class="conversation"><div class="column"><div class="notice">draft has no GitHub token (GITHUB_TOKEN, or <code>gh auth token</code>), so it reads public repositories without one, at GitHub's limit of 60 requests an hour. Private repositories won't show, and a review requested from you can't be told.</div><div class="message user"><div class="body"><p>Let's get going</p></div></div><div class="message agent"><p>Let's get going. Branch a thread off this message and ask it to launch a session.</p></div><div class="thread-stub"><span class="thread-mark">↳</span><span class="t">Let's get going. Branch a thread off this message…</span><span class="secondary">the agent</span><span class="grow"></span><span class="where">In the panel</span></div><div class="message aside"><p class="audience">People only · the agent doesn't read this</p><div class="body">A note to myself</div></div></div></div><div class="composer-wrap"><div class="composer"><div class="field ph">Ask, describe, or type @ to reference anything</div><span class="primary-button off">Send</span></div></div></section>
+<div class="divider"><div class="focus" style="height:100%;width:8px;margin-left:-1px"></div></div>
+<aside class="panel"><div class="panel-head"><div class="row"><span class="thread-mark">↳</span><span class="name">Let's get going. Branch a thread off this message…</span></div><div class="row"><span class="secondary-button small">the agent ▾</span><span class="secondary">the agent · fake-model-1</span><span class="chip moved">Active</span><span class="secondary-button small">Pause</span></div><div class="row"><span class="secondary-button small">Wrap up</span><span class="secondary-button small">End thread…</span></div></div><div class="panel-body"><p class="empty">A thread continues from the message it branched off. Ask it something.</p></div><div class="composer-wrap"><div class="composer"><div class="field ph">Reply in thread…</div><span class="primary-button off">Send</span></div></div></aside></div>
+<footer class="footer "><span>▸ Your GitHub, git, SSH, AWS and npm sign-ins are withheld from the agent</span><span class="agent-state"><span class="who">the agent · fake-model-1</span><span class="chip moved">Active</span><span class="secondary-button small">Pause</span></span></footer></div>
+</section>
+
+<section data-draws="a04-attention-count-and-order">
+<p class="k"><b>What needs you.</b> The count sits at the right of the title bar in <code>waiting-word</code>. Its list opens over the window on <code>surface</code>: each item is a wait chip with the kind, then where and how long, in the order they need you.</p>
+<div class="win tall"><header class="titlebar"><b>draft</b><b>local</b><span class="ctx">Contexts ▾</span><span class="title">Conversation</span><span class="spacer"></span><span class="attention">2 need you</span><div class="attention-list"><div class="secondary">Main conversation: 2</div><ol><li><span class="chip waiting">Failed check</span>Main conversation <span class="secondary">· just now</span></li><li><span class="chip waiting">Review requested</span>Main conversation <span class="secondary">· just now</span></li></ol></div></header>
+<div class="workspace with-panel"><section class="left"><div class="conversation"><div class="column"><div class="message agent"><p>Let's get going. Branch a thread off this message and ask it to launch a session.</p></div><div class="thread-stub"><span class="thread-mark">↳</span><span class="t">Let's get going. Branch a thread off this message…</span><span class="secondary">the agent</span><span class="grow"></span><span class="where">In the panel</span></div><div class="message user"><div class="body"><p>Look at nikovirtala/draft#7, draft:15cxvdep</p></div></div></div></div><div class="composer-wrap"><div class="composer"><div class="field ph">Ask, describe, or type @ to reference anything</div><span class="primary-button off">Send</span></div></div></section><div class="divider"></div><aside class="panel"><div class="panel-head"><div class="row"><span class="thread-mark">↳</span><span class="name">Let's get going. Branch a thread off this message…</span></div><div class="row"><span class="secondary-button small">the agent ▾</span><span class="secondary">the agent · fake-model-1</span><span class="chip moved">Active</span></div></div><div class="panel-body"><div class="message agent"><p>The session is launching.</p></div></div><div class="composer-wrap"><div class="composer"><div class="field ph">Reply in thread…</div><span class="primary-button off">Send</span></div></div></aside></div>
+<footer class="footer "><span>▸ Your GitHub, git, SSH, AWS and npm sign-ins are withheld from the agent</span><span class="agent-state"><span class="who">the agent · fake-model-1</span><span class="chip moved">Active</span><span class="secondary-button small">Pause</span></span></footer></div>
+</section>
+
+<section data-draws="w01-window-scrolled-to-the-end">
+<p class="k"><b>The window scrolled to the end.</b> Only the conversation scrolls, inside its own box with its scrollbar; the title bar, the composer and the footer stay where they are.</p>
+<div class="win"><header class="titlebar"><b>draft</b><b>local</b><span class="ctx">Contexts ▾</span><span class="title">Conversation</span><span class="spacer"></span><span class="attention">6 need you</span></header>
+<div class="workspace"><section class="left"><div class="conversation"><span class="scroll-end"></span><div class="column" style="margin-top:-46px"><div class="stub" style="display:block"><div class="t">Recent moves</div><div>main · 3333333 <span class="secondary">Deployments: draft · staging: In progress → Failed, 6:57:57 PM</span></div><div>main · 2222222 <span class="secondary">Deployments: draft · production: In progress → Succeeded, 6:53:57 PM</span></div></div></div></div><div class="composer-wrap"><div class="composer"><div class="field ph">Ask, describe, or type @ to reference anything</div><span class="primary-button off">Send</span></div></div></section></div>
+<footer class="footer "><span>▸ Your GitHub, git, SSH, AWS and npm sign-ins are withheld from the agent</span><span class="agent-state"><span class="who">the agent · fake-model-1</span><span class="chip moved">Active</span><span class="secondary-button small">Pause</span></span></footer></div>
+</section>
+
+<section data-draws="w02-block-window-scrolled-to-the-end">
+<p class="k"><b>A block's own window scrolled to the end.</b> The window's title bar names the block and where it came from; the block's header stays on <code>page</code> above its scrolling body.</p>
+<div class="win" style="height:240px"><header class="titlebar"><b>The map · from the main conversation</b><span class="spacer"></span><span class="attention">6 need you</span></header>
+<div class="block-win-head"><span>The map</span><span class="secondary">✕</span></div>
+<div style="flex:1;overflow:hidden;padding:0 16px"><p class="t" style="margin:10px 0 4px">Recent moves</p><div>main · 3333333 <span class="secondary">Deployments: draft · staging: In progress → Failed, 6:57:57 PM</span></div><div>Change 1 <span class="secondary">Acceptance requests: Requested → Accepted, 6:55:06 PM</span></div><div>main · 1111111 <span class="secondary">Deployments: draft · production: Succeeded → Inactive, 6:53:57 PM</span></div></div></div>
+</section>
+
+<section id="footer-ground">
+<p class="k"><b>To decide: the footer's ground.</b> The same window twice, only the footer differs.</p>
+<div class="pair">
+<div><p class="k ab"><b>A. Footer on the page</b>, as built (<code>.footer</code> has no background).</p><div class="win"><header class="titlebar"><b>draft</b><b>local</b><span class="ctx">Contexts ▾</span><span class="title">Conversation</span><span class="spacer"></span></header><div class="workspace"><section class="left"><div class="conversation"><div class="column"><p class="empty">Ask about your Kiro sessions.</p></div></div><div class="composer-wrap"><div class="composer"><div class="field ph">Ask, describe, or type @ to reference anything</div><span class="primary-button off">Send</span></div></div></section></div><footer class="footer "><span>▸ Your GitHub, git, SSH, AWS and npm sign-ins are withheld from the agent</span><span class="agent-state"><span class="who">the agent · fake-model-1</span><span class="chip moved">Active</span><span class="secondary-button small">Pause</span></span></footer></div></div>
+<div><p class="k ab"><b>B. Footer on the title bar</b>, as <code>tokens.json</code> says ("The title bar and the footer").</p><div class="win"><header class="titlebar"><b>draft</b><b>local</b><span class="ctx">Contexts ▾</span><span class="title">Conversation</span><span class="spacer"></span></header><div class="workspace"><section class="left"><div class="conversation"><div class="column"><p class="empty">Ask about your Kiro sessions.</p></div></div><div class="composer-wrap"><div class="composer"><div class="field ph">Ask, describe, or type @ to reference anything</div><span class="primary-button off">Send</span></div></div></section></div><footer class="footer on-titlebar"><span>▸ Your GitHub, git, SSH, AWS and npm sign-ins are withheld from the agent</span><span class="agent-state"><span class="who">the agent · fake-model-1</span><span class="chip moved">Active</span><span class="secondary-button small">Pause</span></span></footer></div></div>
+</div>
+</section>
+</div>
+</body>
+</html>

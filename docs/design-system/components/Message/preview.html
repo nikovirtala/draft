@@ -1,0 +1,102 @@
+<!-- @dsCard group="Conversation" height=520 subtitle="The person's, the agent's, streaming" -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>A message</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:var(--font-sans);background:var(--page);color:var(--text);font-size:13px;line-height:20px}
+.wrap{padding:16px;display:grid;gap:22px}
+.k{margin:0 0 6px;color:var(--muted);font-size:12px;line-height:16px;font-weight:400}
+.k b{color:var(--ink);font-weight:600}
+.chip,.pending,.where{display:inline-flex;align-items:center;gap:var(--space-1);font-size:12.5px;line-height:1;font-weight:500;padding:7px var(--space-3);border-radius:var(--radius-chip);border:1px solid transparent;white-space:nowrap}
+.chip i{font-style:normal;font-size:11px}
+.moved,.where{background:var(--moved-fill);color:var(--moved-strong)}
+.done{background:var(--done-fill);color:var(--done-word)}
+.review{background:var(--review-fill);color:var(--review-word)}
+.waiting{background:var(--waiting-fill);color:var(--waiting-word)}
+.failed{background:var(--waiting-fill);color:var(--waiting-word);border:var(--hairline-dashed) dashed var(--waiting-mark)}
+.idle{background:transparent;color:var(--muted);border:var(--hairline) solid var(--idle-line)}
+.row{display:flex;flex-wrap:wrap;gap:var(--space-2);align-items:center}
+.primary-button,.secondary-button{font:inherit;font-weight:560;border-radius:9px;padding:7px 16px;cursor:default;color:var(--ink)}
+.primary-button{background:var(--moved-selected);border:var(--hairline) solid var(--line-strong)}
+.primary-button.off{opacity:.45}
+.secondary-button{background:var(--raised);border:var(--hairline) solid var(--line)}
+.small{padding:3px 10px;font-size:12px;font-weight:500;border-radius:6px}
+.focus{outline:1.5px solid var(--moved-mark);outline-offset:1px}
+.working{display:inline-flex;align-items:center;gap:8px;color:var(--moved-word);font-weight:500}
+.working-ring{width:14px;height:14px;border-radius:var(--radius-round);border:2px solid color-mix(in srgb,var(--moved-mark) 25%,transparent);border-top-color:var(--moved-mark);flex:none}
+.working-ring.s{width:10px;height:10px}
+@media (prefers-reduced-motion:no-preference){.working-ring{animation:turn .9s linear infinite}}
+@keyframes turn{to{transform:rotate(360deg)}}
+.caret{display:inline-block;width:.5em;height:1.05em;margin-left:2px;vertical-align:text-bottom;background:var(--moved-mark)}
+.dot{width:8px;height:8px;border-radius:var(--radius-round);flex:none;background:var(--idle-line)}
+.dot.run{background:var(--moved-mark)}.dot.open{background:var(--review-mark)}.dot.merged{background:var(--done-mark)}.dot.wait{background:var(--waiting-mark)}
+.ref{color:var(--muted);font-family:var(--font-mono);font-size:12px}
+.t{color:var(--ink);font-weight:600}
+.secondary{color:var(--muted)}
+.stub,.thread-stub{display:flex;align-items:center;gap:10px;flex-wrap:wrap;min-height:40px;background:var(--raised);border:var(--hairline) solid var(--line-strong);border-radius:var(--radius-card);padding:6px 12px}
+.thread-mark{color:var(--moved-strong);font-weight:700}
+.stub .grow,.thread-stub .grow{flex:1}
+.win{display:flex;flex-direction:column;background:var(--page);border:var(--hairline) solid var(--line-strong);border-radius:var(--radius-card);overflow:hidden;color:var(--text)}
+.titlebar{display:flex;align-items:baseline;gap:12px;padding:10px 20px;background:var(--titlebar);border-bottom:var(--hairline) solid var(--line);position:relative}
+.titlebar b{color:var(--ink);font-weight:650}
+.titlebar .ctx{color:var(--ink)}
+.titlebar .title{color:var(--muted)}
+.titlebar .spacer{flex:1}
+.attention{font-weight:560;color:var(--waiting-word)}
+.footer{display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px;padding:6px 12px;border-top:var(--hairline) solid var(--line);font-size:12px;color:var(--muted)}
+.footer.on-titlebar{background:var(--titlebar)}
+.footer .agent-state{margin-left:auto;display:flex;gap:8px;align-items:center}
+.footer .chip{padding:6px 9px}
+.footer .agent-state .who{color:var(--ink)}
+.workspace{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr)}
+.workspace.with-panel{grid-template-columns:minmax(0,1fr) 8px 44%}
+.divider{border-left:var(--hairline) solid var(--line)}
+.left,.panel{min-height:0;min-width:0;display:flex;flex-direction:column;background:var(--page)}
+.conversation{flex:1;min-height:0;overflow:hidden;position:relative}
+.column{max-width:950px;margin:0 auto;padding:20px 24px 12px;display:flex;flex-direction:column;gap:14px}
+.empty{color:var(--muted);text-align:center;margin:44px 0 0}
+.notice{background:var(--raised);border:var(--hairline-dashed) dashed var(--line-strong);border-radius:var(--radius-card);color:var(--muted);padding:10px 14px}
+.message.user{align-self:flex-end;max-width:78%}
+.message.user .body{background:var(--surface);border-radius:14px 14px 4px 14px;padding:9px 14px}
+.message.agent{align-self:stretch;font-family:var(--font-serif);font-size:15px;line-height:24px}
+.message.agent p,.message.user p{margin:0 0 .6em}.message.agent p:last-child{margin:0}
+.message.agent code{font-family:var(--font-mono);font-size:12px}
+.message.aside{align-self:flex-end}
+.message.aside .audience{margin:0 0 3px;font-size:11.5px;color:var(--muted);text-align:right}
+.message.aside .body{background:transparent;border:var(--hairline-dashed) dashed var(--line-strong);border-radius:var(--radius-card);padding:8px 14px}
+.composer-wrap{padding:10px 24px 12px;width:100%;max-width:950px;margin:0 auto}
+.composer{display:flex;gap:10px;align-items:flex-end}
+.composer .field{flex:1;background:var(--surface);color:var(--ink);border:var(--hairline) solid var(--line-strong);border-radius:12px;padding:9px 12px;min-height:40px}
+.composer .field.ph{color:var(--muted)}
+.composer-hint{margin:6px 2px 0;color:var(--muted);font-size:12px}
+kbd{font:11px var(--font-sans);border:var(--hairline) solid var(--line-strong);border-radius:4px;padding:0 4px;background:var(--raised)}
+.panel-head{padding:12px 16px 10px;border-bottom:var(--hairline) solid var(--line);display:grid;gap:8px;background:var(--page)}
+.panel-head .name{color:var(--ink);font-weight:700}
+.panel-body{flex:1;padding:16px;overflow:hidden}
+.prompt,.interrupt{background:var(--waiting-fill);border:var(--hairline) solid var(--line-strong);border-radius:12px;padding:12px 14px;max-width:900px}
+.interrupt-label{margin:0 0 8px;display:flex;gap:12px;align-items:baseline;color:var(--waiting-word)}
+.interrupt-label .age{color:var(--muted)}
+.prompt-title{margin:0 0 8px;color:var(--ink)}
+.prompt-title strong{color:var(--waiting-word)}
+.prompt-input{margin:0 0 10px;padding:8px 10px;background:var(--surface);border:var(--hairline) solid var(--line-strong);border-radius:8px;font:12.5px/18px var(--font-mono);white-space:pre-wrap}
+.prompt-actions{display:flex;justify-content:flex-end;gap:8px}
+.error{display:flex;align-items:center;gap:var(--space-3);color:var(--waiting-word);background:var(--waiting-fill);border:var(--hairline-dashed) dashed var(--waiting-mark);border-radius:var(--radius-card);padding:10px 14px}
+.error::before{content:"✕";font-weight:600}
+.col{max-width:620px;display:flex;flex-direction:column;gap:14px}.actions{display:flex;gap:8px;margin-top:6px}.actions .secondary-button{background:transparent;border-color:transparent;color:var(--muted)}</style></head>
+<body>
+<div class="wrap">
+
+<section class="col" data-draws="02-reply-streaming">
+<p class="k"><b>The person's</b> is a <code>surface</code> bubble in sans, at the right. <b>The agent's</b> is on the page in serif, with no box. <b>Streaming</b> adds the caret (<code>moved-mark</code>) and, below, the one working indicator.</p>
+<div class="message user"><div class="body"><p>Which Kiro sessions are open right now?</p></div></div>
+<div class="message agent"><p>Let me check Kiro Remote.</p><p>Two sessions are open. <code>01KAHX7Z1M2N3P4Q5R6S7T8V9W</code> is fixing the flaky end-to-e<span class="caret"></span></p></div>
+<div class="working"><span class="working-ring"></span><span>Kiro is working</span></div>
+<p class="k" style="margin-top:10px"><b>A finished answer</b>, with its action under keyboard focus: a 1.5px <code>moved-mark</code> ring, no fill.</p>
+<div class="message agent"><p>The release notes session is the one waiting for you.</p><div class="actions"><span class="secondary-button small focus">Copy ref</span></div></div>
+<p class="k" style="margin-top:10px"><b>People only</b>: a dashed hairline and a label; the agent does not read it.</p>
+<div class="message aside"><p class="audience">People only · the agent doesn't read this</p><div class="body">Let's agree on the README wording before anything else.</div></div>
+</section>
+</div>
+</body>
+</html>
