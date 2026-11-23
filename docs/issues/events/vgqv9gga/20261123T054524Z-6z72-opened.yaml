@@ -1,0 +1,17 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M83F034KAZS5HNPQ8GA06Z72
+subject: vgqv9gga
+type: opened
+at: 2026-11-23T05:45:24Z
+actor:
+  kind: agent
+  name: claude
+  email: null
+  agent: claude
+  on_behalf_of: niko.virtala@hey.com
+data:
+  title: Use the canvas's words in the composer
+  template: task
+  template_version: 1
