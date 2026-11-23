@@ -1,0 +1,16 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M84HJ81N00D7BWG76PB9BHAM
+subject: fnw9xyma
+type: closed
+at: 2026-11-23T15:49:31Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: 244629292+kiro-agent@users.noreply.github.com
+reason: "A double-click on the divider resets the width and forgets the stored one (setPanelWidth(null)). Tests: e2e/frame.spec.ts 'the frame is quiet...' step 8b (reset, then default after a restart; shot f09) and test/frame.test.ts 'is forgotten with null, and the default holds after a restart'."
+data:
+  resolution: done
