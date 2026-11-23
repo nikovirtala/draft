@@ -2,6 +2,7 @@ import { z } from "zod";
 import { AcceptanceEffectSchema } from "./acceptance.ts";
 import { tryParseAddress } from "./address.ts";
 import { canonicalJson, sha256Hex } from "./canonical.ts";
+import { FEED_TYPES, type FeedType, PR_REF } from "./feed.ts";
 import { isUlid } from "./ids.ts";
 import { INTERRUPT_KINDS, type InterruptKind } from "./interrupts.ts";
 
@@ -136,6 +137,34 @@ export const CheckSourceSchema = z.discriminatedUnion("type", [
   }),
 ]);
 export type CheckSource = z.infer<typeof CheckSourceSchema>;
+
+/**
+ * One event as a change feed sent it (feed.ts). The payload of a type draft knows is checked
+ * against that type; a type it doesn't know keeps whatever the feed sent.
+ */
+const FeedEventRecord = z
+  .object({
+    v: z.number().int().min(1),
+    id: z.string().min(1),
+    seq: z.number().int().min(1),
+    ts: z.string().min(1),
+    type: z.string().min(1),
+    effect: z.string().min(1),
+    sessionId: z.string().min(1),
+    pr: z.string().regex(PR_REF).nullable(),
+    source: z.string().min(1),
+    payload: z.record(z.string(), z.unknown()),
+  })
+  .superRefine((e, ctx) => {
+    if (!(e.type in FEED_TYPES)) return;
+    const typed = FEED_TYPES[e.type as FeedType].payload.safeParse(e.payload);
+    if (!typed.success)
+      ctx.addIssue({
+        code: "custom",
+        message: `the payload of ${e.type} is not one`,
+        path: ["payload"],
+      });
+  });
 
 /** The data of each event type at the schema version this build writes. Data is stored as received; these check it. */
 export const EventData = {
@@ -403,6 +432,56 @@ export const EventData = {
   "check.failed": z.object({ key: z.string().min(1), note: z.string().min(1) }),
   /** The check waited a day on a person (`CHECK_REMINDER_MS`): it is raised again. */
   "check.reminded": z.object({ key: z.string().min(1) }),
+  /**
+   * One event of a change feed another system publishes (Kiro Remote's, feed.ts), kept exactly as
+   * the feed sent it: its envelope and a payload the reader checked against its type. The
+   * feed's own `seq` is its position, so a restart resumes from the last one in the log and never
+   * replays. Events of a type the reader doesn't know but may skip are kept too, unread.
+   */
+  "feed.event": z.object({ feed: z.string().min(1), event: FeedEventRecord }),
+  /**
+   * Where a session's links and waits stood when the feed started to be followed for it: they
+   * have no event from before the feed, so the fold starts from what the service says (GET
+   * /v1/sessions/{id}) and follows the feed after `cursor`, the last `seq` in the log when it was
+   * read.
+   */
+  "feed.baseline": z.object({
+    feed: z.string().min(1),
+    cursor: z.number().int().min(0),
+    session: z.string().min(1),
+    links: z.array(
+      z.object({
+        pr: z.string().regex(PR_REF),
+        method: z.string().min(1),
+        prState: z.string().min(1),
+      }),
+    ),
+    waits: z.array(
+      z.object({ pr: z.string().regex(PR_REF), source: z.string().min(1), since: z.string() }),
+    ),
+  }),
+  /**
+   * The reader stopped following the feed: the next event is a state change it can't read, so
+   * the links and waits folded from it would be wrong. `seq` is that event's, when it had one.
+   */
+  "feed.stopped": z.object({
+    feed: z.string().min(1),
+    seq: z.number().int().min(1).nullable(),
+    type: z.string().min(1),
+    reason: z.enum(["type", "version", "invalid"]),
+  }),
+  /**
+   * The feed is followed again from a new starting state: events after the cursor had expired
+   * (`gap`, with the `seq` expected and the one that came), or the type that stopped it is known
+   * now (`resumed`). Everything folded from the feed before is rebuilt from the new baselines.
+   */
+  "feed.restarted": z.object({
+    feed: z.string().min(1),
+    reason: z.enum(["gap", "resumed"]),
+    cursor: z.number().int().min(0),
+    expected: z.number().int().min(1).nullable(),
+    got: z.number().int().min(1).nullable(),
+  }),
   "context.crossed": z.object({
     purpose: z.enum(["referenced", "followed", "pulled", "opened"]),
     /** The other context, by the name this device knows it by. */
@@ -460,6 +539,10 @@ export const SCHEMA_VERSIONS: Record<EventType, number> = {
   "check.passed": 1,
   "check.failed": 1,
   "check.reminded": 1,
+  "feed.event": 1,
+  "feed.baseline": 1,
+  "feed.stopped": 1,
+  "feed.restarted": 1,
 };
 
 export function schemaVersionOf(type: EventType): number {
@@ -551,6 +634,10 @@ const NO_CONVERSATION: ReadonlySet<string> = new Set([
   "context.created",
   "log.recovered",
   "context.folder_decided",
+  "feed.event",
+  "feed.baseline",
+  "feed.stopped",
+  "feed.restarted",
 ]);
 
 export type ParseResult = { ok: true; event: DraftEvent } | { ok: false; reason: string };

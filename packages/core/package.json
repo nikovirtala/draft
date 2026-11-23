@@ -23,6 +23,11 @@
       "types": "./dist/check-types.d.ts",
       "default": "./dist/check-types.js"
     },
+    "./kiro-feed-types": {
+      "source": "./src/kiro-feed-types.ts",
+      "types": "./dist/kiro-feed-types.d.ts",
+      "default": "./dist/kiro-feed-types.js"
+    },
     "./map-graph": {
       "source": "./src/map-graph.ts",
       "types": "./dist/map-graph.d.ts",
