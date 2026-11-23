@@ -450,18 +450,14 @@ test("an item clicked in one window goes to its block in the window that shows i
   await expect(panel).toBeHidden();
   await shot(win, "a10-item-from-the-main-window-goes-to-the-thread-window");
 
-  // 6. A selected status stub is not filled: it stays on its own ground, header and details,
-  // and a click shows no focus ring.
+  // 6. A selected status stub keeps its words. (That it is not filled, and that a click shows no
+  // focus ring, are checked on every window by the harness.)
   const stub = main.getByTestId("stub").first();
   await stub.getByRole("button", { name: "Expand" }).click();
   await stub.locator(".stub-title").click();
   await expect(stub).toHaveAttribute("data-selected", "true");
-  await expect(stub).toHaveCSS("background-color", "rgb(255, 253, 247)");
-  await expect(stub.locator(".stub-line")).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
-  await expect(stub.getByTestId("stub-details")).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
   await expect(stub.locator(".stub-details dt").first()).toHaveCSS("color", "rgb(93, 107, 109)");
   await expect(stub.locator(".stub-title")).toHaveCSS("color", "rgb(0, 86, 97)");
-  await expect(stub).toHaveCSS("outline-style", "none");
   await shot(page, "a11-selected-status-stub");
   await electronApp.close();
 });
