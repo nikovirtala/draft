@@ -90,6 +90,42 @@
     "width": 720
   },
   {
+    "state": "Kiro Remote: a session waits for a pull request, on the map",
+    "screenshot": "fw01-session-waits-on-a-pull-request-map.png",
+    "preview": "docs/design-system/components/Graph/preview.html",
+    "width": 720
+  },
+  {
+    "state": "Kiro Remote: a session waits for a pull request, its stub",
+    "screenshot": "fw02-session-waits-on-a-pull-request-stub.png",
+    "preview": "docs/design-system/components/PullRequestStub/preview.html",
+    "width": 720
+  },
+  {
+    "state": "Kiro Remote: the pull request merged and the session woke, on the map",
+    "screenshot": "fw03-the-pull-request-merged-and-the-session-woke-map.png",
+    "preview": "docs/design-system/components/Graph/preview.html",
+    "width": 720
+  },
+  {
+    "state": "Kiro Remote: the pull request merged and the session woke, its stub",
+    "screenshot": "fw04-the-pull-request-merged-and-the-session-woke-stub.png",
+    "preview": "docs/design-system/components/PullRequestStub/preview.html",
+    "width": 720
+  },
+  {
+    "state": "Kiro Remote: a wait that couldn't be read needs you",
+    "screenshot": "fw05-a-wait-that-couldnt-be-read-needs-you.png",
+    "preview": "docs/design-system/components/NoticeAndWorking/preview.html",
+    "width": 720
+  },
+  {
+    "state": "Kiro Remote: the feed stopped at a type draft can't read",
+    "screenshot": "fw06-the-feed-stopped-at-a-type-draft-cant-read.png",
+    "preview": "docs/design-system/components/NoticeAndWorking/preview.html",
+    "width": 720
+  },
+  {
     "state": "Map: the graph as a kind of view",
     "screenshot": "m03-graph-kind.png",
     "preview": "docs/design-system/components/Switch/preview.html",
