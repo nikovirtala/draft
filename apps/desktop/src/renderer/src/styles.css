@@ -48,6 +48,17 @@
   box-sizing: border-box;
 }
 
+/*
+ * Keyboard focus, everywhere: one 1.5px moved-mark ring and no fill, through :focus-visible only,
+ * so a click shows nothing (a text field shows it for any focus, as the platform defines). A
+ * switch's radio is hidden, so its label carries the ring. This is the only outline in this file.
+ */
+:focus-visible,
+.map-range label:has(input:focus-visible) {
+  outline: 1.5px solid var(--moved-mark);
+  outline-offset: 1px;
+}
+
 html,
 body,
 #root {
@@ -436,12 +447,6 @@ button.icon {
 button.icon:hover {
   background: var(--moved-fill);
   color: var(--ink);
-}
-
-button:focus-visible,
-textarea:focus-visible {
-  outline: 2px solid var(--moved-mark);
-  outline-offset: 1px;
 }
 
 .stub-details {
@@ -938,13 +943,9 @@ textarea:focus-visible {
 /*
  * No block is filled with purple: a stub, a thread stub or a block in the panel or a window stays
  * on its own ground when it is selected, clicked, expanded, open in the panel or has focus inside
- * it. moved-selected is the chosen option of a list or a control. Keyboard focus on a block is the
- * ring the inputs use, through :focus-visible only, so a click shows nothing.
+ * it. moved-selected is the chosen option of a list or a control. Keyboard focus is the one ring
+ * above, never a fill.
  */
-:is(.stub, .thread-stub, .block-full):focus-visible {
-  outline: 1.5px solid var(--moved-mark);
-  outline-offset: 1px;
-}
 
 .thread-chip.working {
   color: var(--moved-strong);
@@ -1467,11 +1468,6 @@ textarea:focus-visible {
   pointer-events: none;
 }
 
-.map-range label:focus-within {
-  outline: 2px solid var(--moved-mark);
-  outline-offset: 1px;
-}
-
 .empty-map {
   color: var(--muted);
   margin: 4px 0 0;
@@ -1577,12 +1573,6 @@ textarea:focus-visible {
   background: var(--moved-selected);
   position: relative;
   z-index: 2;
-}
-
-.map-cell:focus-visible,
-.map-item:focus-visible {
-  outline: 2px solid var(--moved-mark);
-  outline-offset: 1px;
 }
 
 .map-cell-label {
@@ -1766,11 +1756,6 @@ div.map-item {
   color: var(--muted);
 }
 
-.graph-heading:focus-visible {
-  outline: 2px solid var(--moved-mark);
-  outline-offset: 2px;
-}
-
 .graph-stage {
   position: relative;
   width: 100%;
@@ -1779,11 +1764,6 @@ div.map-item {
   border: var(--hairline) solid var(--line-strong);
   border-radius: var(--radius-card);
   overflow: hidden;
-}
-
-.graph-stage:focus-visible {
-  outline: 2px solid var(--moved-mark);
-  outline-offset: 2px;
 }
 
 .graph-stage.pan-ready {
@@ -1935,11 +1915,6 @@ div.map-item {
 
 .graph-stage.pan-ready .graph-node {
   cursor: inherit;
-}
-
-.graph-node:focus-visible {
-  outline: 2px solid var(--moved-mark);
-  outline-offset: 3px;
 }
 
 .graph-node:hover:not(:disabled) {
