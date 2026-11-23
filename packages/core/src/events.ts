@@ -109,6 +109,34 @@ export const CitationsSchema = z.object({
 export const AgentStateSchema = z.enum(["active", "paused"]);
 export type AgentState = z.infer<typeof AgentStateSchema>;
 
+/** One step of a check, as the pull request's After deploy section wrote it (after-deploy.ts). */
+export const CheckStepSchema = z.object({
+  text: z.string(),
+  do: z.string(),
+  see: z.string().nullable(),
+  commands: z.array(z.string()),
+});
+
+/**
+ * What asked for a check. A merged pull request's After deploy section is the first source; the
+ * factory's done-when and review passes will be others, so the kind reads this field and never
+ * a pull request's.
+ */
+export const CheckSourceSchema = z.discriminatedUnion("type", [
+  z.object({
+    type: z.literal("merged-pull-request"),
+    /** The pull request stub's target, `pull-request` and `owner/repo/pull/12`. */
+    target: TargetSchema,
+    /** `owner/repo#12`. */
+    ref: z.string().min(1),
+    /** The head of the pull request when it merged. */
+    sha: z.string().min(1),
+    title: z.string().nullable(),
+    url: z.string().nullable(),
+  }),
+]);
+export type CheckSource = z.infer<typeof CheckSourceSchema>;
+
 /** The data of each event type at the schema version this build writes. Data is stored as received; these check it. */
 export const EventData = {
   "context.created": z.object({ context: z.string().min(1), title: z.string() }),
@@ -349,6 +377,32 @@ export const EventData = {
    * context, or confirmed opening another context. The other context's log is never read by the
    * agent (ADR gw4vxvw4).
    */
+  /**
+   * Something only a person can check waits on them: one item of a merged pull request's After
+   * deploy section, with its reason and its steps. The key is the source, the commit and the item's
+   * place, so reading the same pull request again asks for nothing twice. `gates` names the
+   * proposed decisions the item is about: passing it offers their acceptance.
+   */
+  "check.requested": z.object({
+    key: z.string().min(1),
+    source: CheckSourceSchema,
+    /** The item's place among the source's items, from 0. */
+    index: z.number().int().min(0),
+    title: z.string().min(1),
+    reason: z.string(),
+    steps: z.array(CheckStepSchema),
+    tail: z.string().nullable(),
+    /** The item as written; shown as it is when `parsed` is false. */
+    raw: z.string(),
+    parsed: z.boolean(),
+    gates: z.array(TargetSchema),
+  }),
+  /** A person saw what the check asks for, and it was as it should be. The note is optional. */
+  "check.passed": z.object({ key: z.string().min(1), note: z.string().nullable() }),
+  /** A person saw something else. The note says what. */
+  "check.failed": z.object({ key: z.string().min(1), note: z.string().min(1) }),
+  /** The check waited a day on a person (`CHECK_REMINDER_MS`): it is raised again. */
+  "check.reminded": z.object({ key: z.string().min(1) }),
   "context.crossed": z.object({
     purpose: z.enum(["referenced", "followed", "pulled", "opened"]),
     /** The other context, by the name this device knows it by. */
@@ -402,6 +456,10 @@ export const SCHEMA_VERSIONS: Record<EventType, number> = {
   "log.recovered": 1,
   "context.folder_decided": 1,
   "context.crossed": 1,
+  "check.requested": 1,
+  "check.passed": 1,
+  "check.failed": 1,
+  "check.reminded": 1,
 };
 
 export function schemaVersionOf(type: EventType): number {

@@ -22,7 +22,8 @@ export type InterruptKind =
   | "unfinished-step"
   | "conclusion"
   | "review-requested"
-  | "acceptance";
+  | "acceptance"
+  | "check";
 
 export interface InterruptKindSpec {
   /** Where the kind sits in the attention order: lower comes first. */
@@ -76,6 +77,12 @@ export const INTERRUPT_KINDS: Record<InterruptKind, InterruptKindSpec> = {
     outcomes: ["accepted", "changes-requested", "rejected"],
     label: "Acceptance request",
   },
+  /**
+   * What a merged pull request still leaves for the person, as a check (check.ts). It is not an
+   * `interrupt.*` event: its own facts are in the log, and it joins the attention order here.
+   * It ranks with what is left to resolve: nothing is broken, and it stops no one but the person.
+   */
+  check: { rank: RANKS.resolve, outcomes: ["passed", "failed"], label: "Check" },
 };
 
 export type InterruptState = "open" | "settled" | "cleared";

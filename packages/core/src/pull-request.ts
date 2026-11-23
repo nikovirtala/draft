@@ -69,6 +69,11 @@ export interface PullRequestState {
   headSha: string;
   /** The commit a merge made on the base branch; null until it is merged. */
   mergeCommitSha: string | null;
+  /**
+   * The description, once it is merged: what it still leaves for a person is in its After deploy
+   * section (check.ts). Null before, so that editing an open pull request's text changes nothing.
+   */
+  body: string | null;
   /** The branch it is from, and the repository that has it (a fork's, when it is from one). */
   headRef: string;
   headRepo: string | null;
@@ -93,6 +98,7 @@ export interface PullRequestState {
 
 interface ApiPull {
   title: string;
+  body?: string | null;
   html_url: string;
   state: "open" | "closed";
   merged?: boolean;
@@ -411,6 +417,7 @@ function toState(
     author: pull.user?.login ?? null,
     headSha: pull.head.sha,
     mergeCommitSha: pull.merged === true ? (pull.merge_commit_sha ?? null) : null,
+    body: pull.merged === true ? (pull.body ?? null) : null,
     headRef: pull.head.ref ?? "",
     headRepo: pull.head.repo?.full_name ?? null,
     baseRef: pull.base.ref,

@@ -28,6 +28,8 @@ export interface FakeReview {
 
 export interface FakePull {
   title: string;
+  /** The description: what a merged pull request's checks are read from. */
+  body?: string;
   state: "open" | "closed";
   merged: boolean;
   draft: boolean;
@@ -350,6 +352,7 @@ export class FakeGithub {
         );
       return send(200, {
         title: p.title,
+        body: p.body ?? null,
         html_url: `https://github.com/${pr[1]}/pull/${pr[2]}`,
         state: p.state,
         merged: p.merged,

@@ -20,6 +20,14 @@ import {
 } from "./agent.ts";
 import { buildAgentNote } from "./agent-changes.ts";
 import { buildAgentContext, contextDigest } from "./agent-context.ts";
+import {
+  type CheckFold,
+  checkLifecycle,
+  dueReminders,
+  foldChecks,
+  requestsOfMerge,
+  type UiCheck,
+} from "./check.ts";
 import { CONTEXT_ITEM, type ContextItemSnapshot, contextItemKey } from "./cross-context.ts";
 import {
   type Actor,
@@ -170,6 +178,18 @@ export type UiBlock =
       what: string;
       text: string;
       at: string;
+    }
+  | {
+      /**
+       * Something only a person can check, asked for by a source such as a merged pull request's
+       * After deploy section (check.ts). It is derived from the check's facts in the log, so it
+       * stays where it was requested.
+       */
+      kind: "check";
+      /** The check's key: what an answer and an attention item name. */
+      id: string;
+      at: string;
+      check: UiCheck;
     };
 
 /**
@@ -311,6 +331,11 @@ export interface ConversationOptions {
   launcher?: ContextLauncher;
   /** Takes snapshots of other contexts' items for references. Without it, none are made. */
   crossContext?: CrossContext;
+  /**
+   * The decisions that are proposed in the repositories this context covers, read now: what a
+   * check that names a decision links to. Without it a check gates nothing.
+   */
+  proposedDecisions?: () => Promise<readonly { repo: string; id: string }[]>;
   context?: string;
   /** The context's title, written once with `context.created`; "Local" by default. */
   contextTitle?: string;
@@ -356,6 +381,10 @@ export class ConversationService {
   private readonly touched: ((conversation: string) => void) | undefined;
   private readonly launcher: ContextLauncher | null;
   private readonly crossContext: CrossContext | null;
+  private readonly now: () => number;
+  private readonly proposedDecisions:
+    | (() => Promise<readonly { repo: string; id: string }[]>)
+    | null;
   private readonly proposals = new Map<string, UiProposal>();
   private readonly listeners = new Set<(c: UiChange) => void>();
   private readonly prompts = new Map<
@@ -386,6 +415,8 @@ export class ConversationService {
     this.touched = o.touched;
     this.launcher = o.launcher ?? null;
     this.crossContext = o.crossContext ?? null;
+    this.proposedDecisions = o.proposedDecisions ?? null;
+    this.now = o.poller?.now ?? Date.now;
     this.conversation = conversation;
     this.context = conversation.split("/")[0] as string;
     const m = draftMetrics();
@@ -500,6 +531,16 @@ export class ConversationService {
         cause: "conclusion",
         at: thread.conclusion.proposedAt,
       });
+    for (const c of this.checks())
+      if (c.state === "requested")
+        items.push({
+          id: c.key,
+          conversation: this.conversation,
+          cause: "check",
+          // A reminder raises it again: it has waited since it last asked.
+          at: c.raisedAt,
+          seq: c.seq,
+        });
     for (const p of this.prompts.values())
       items.push({
         id: p.prompt.id,
@@ -738,6 +779,11 @@ export class ConversationService {
         },
       });
     }
+    for (const c of this.checks())
+      blocks.push({
+        seq: c.seq,
+        block: { kind: "check", id: c.key, at: c.requestedAt, check: this.uiCheck(c) },
+      });
     // Interrupts keep the place in the log where they arose.
     const seqOf = new Map<string, number>();
     for (const st of this.projection.steps(this.conversation)) {
@@ -777,6 +823,212 @@ export class ConversationService {
   /** Polls the visible stubs that are due. The host calls this on a timer. */
   async tick(): Promise<void> {
     await this.poller.runDue();
+    await this.remindChecks();
+  }
+
+  /* ------------------------------------------------------------------------------------------ */
+  /* Checks                                                                                      */
+  /* ------------------------------------------------------------------------------------------ */
+
+  /** The checks of this conversation, from the facts in the log. */
+  private checks(): CheckFold[] {
+    return this.allChecks().filter((c) => c.conversation === this.conversation);
+  }
+
+  private allChecks(): CheckFold[] {
+    const events: { event: DraftEvent; seq: number }[] = [];
+    this.log.events().forEach((r, seq) => {
+      if (!isUnknown(r) && r.type.startsWith("check.")) events.push({ event: r, seq });
+    });
+    return foldChecks(events);
+  }
+
+  private uiCheck(c: CheckFold): UiCheck {
+    const r = c.requested;
+    return {
+      key: c.key,
+      state: c.state,
+      title: r.title,
+      reason: r.reason,
+      steps: r.steps,
+      tail: r.tail,
+      raw: r.raw,
+      parsed: r.parsed,
+      source: r.source,
+      gates: r.gates.map((target) => {
+        const title = this.projection.stub(targetKey(target))?.state.title;
+        return { target, title: typeof title === "string" ? title : null };
+      }),
+      requestedAt: c.requestedAt,
+      raisedAt: c.raisedAt,
+      reminders: c.reminders,
+      answer: c.answer,
+    };
+  }
+
+  /**
+   * Asks for the checks a merged pull request's After deploy section holds, once each: a key that
+   * is in the log already is not asked for again, whatever merged it or how often it is seen.
+   * They are written in the conversation that holds the pull request's stub.
+   */
+  private async requestChecks(
+    target: Target,
+    state: Record<string, unknown>,
+    traceId: string,
+  ): Promise<void> {
+    const requests = requestsOfMerge(target, state);
+    if (requests.length === 0) return;
+    const proposed = new Set(
+      (await this.proposedDecisions?.().catch(() => []))?.map((d) => `${d.repo}:${d.id}`) ?? [],
+    );
+    const owner = this.projection.ownerOf(target);
+    await this.writer.run(async () => {
+      const known = new Set(this.allChecks().map((c) => c.key));
+      const drafts: EventDraft[] = [];
+      for (const { candidates, ...r } of requests) {
+        if (known.has(r.key)) continue;
+        const gates = [...proposed]
+          .filter((id) => candidates.some((c) => id.endsWith(`:${c}`)))
+          .sort()
+          .map((id) => ({ type: "adr", id }));
+        drafts.push({
+          type: "check.requested",
+          address: itemAddress(owner, newItemId(this.newId)),
+          conversation: owner,
+          actor: SYSTEM,
+          traceId,
+          data: { ...r, gates },
+        });
+      }
+      if (drafts.length === 0) return;
+      const sealed = await this.log.append(drafts);
+      for (const e of sealed) this.projection.apply(e);
+      draftMetrics().interrupts.add(sealed.length, {
+        "draft.interrupt.kind": "check",
+        "draft.interrupt.event": "raised",
+      });
+    });
+    this.touch(owner);
+  }
+
+  /**
+   * A person's answer to a check, as themselves: passed (with a note, if they wish) or failed
+   * (with a note saying what they saw). Only a person can: the machine lets no one else fire
+   * either. Passing a check that names proposed decisions makes them referenceable here, so the
+   * acceptance of each is offered with the check.
+   */
+  async answerCheck(key: string, outcome: "passed" | "failed", note: string | null): Promise<void> {
+    const c = this.checks().find((x) => x.key === key);
+    if (c === undefined) throw new Error(`no such check: ${key}`);
+    const text = note === null || note.trim() === "" ? null : note.trim();
+    const step = checkLifecycle().next(
+      c.state,
+      outcome === "passed" ? "pass" : "fail",
+      "user",
+      text,
+    );
+    if (!step.ok)
+      throw new Error(
+        step.reason === "reason-required"
+          ? "Say what you saw, so whoever fixes it knows."
+          : "this check is already answered",
+      );
+    const traceId = this.systemTrace("draft.check.answer");
+    await this.append(
+      [
+        outcome === "passed"
+          ? {
+              type: "check.passed",
+              address: itemAddress(this.conversation, newItemId(this.newId)),
+              conversation: this.conversation,
+              actor: this.user,
+              traceId,
+              data: { key, note: text },
+            }
+          : {
+              type: "check.failed",
+              address: itemAddress(this.conversation, newItemId(this.newId)),
+              conversation: this.conversation,
+              actor: this.user,
+              traceId,
+              data: { key, note: text as string },
+            },
+      ],
+      `check.${outcome}`,
+    );
+    draftMetrics().interrupts.add(1, {
+      "draft.interrupt.kind": "check",
+      "draft.interrupt.event": "settled",
+      "draft.interrupt.outcome": outcome,
+    });
+    if (outcome === "passed") await this.offerGates(c, traceId);
+  }
+
+  /** Makes each decision a passed check names a stub of this conversation, and raises its request. */
+  private async offerGates(c: CheckFold, traceId: string): Promise<void> {
+    const adr = this.resolvers.get("adr");
+    if (adr === undefined) return;
+    for (const target of c.requested.gates) {
+      try {
+        const snapshot = await adr.fetch(target.id);
+        if (snapshot === null) continue;
+        const key = targetKey(target);
+        if (this.projection.stub(key) === null)
+          await this.append(
+            [
+              {
+                type: "reference.made",
+                address: itemAddress(this.conversation, newItemId(this.newId)),
+                conversation: this.conversation,
+                actor: SYSTEM,
+                traceId,
+                data: {
+                  from: c.address,
+                  target,
+                  kind: "structural",
+                  relation: "gates",
+                  source: "text",
+                  snapshot,
+                },
+              },
+            ],
+            "reference",
+          );
+        else if (!sameState(this.projection.stub(key)?.state, snapshot))
+          await this.append([this.statusDraft(target, snapshot, adr, traceId)], "status");
+        await this.reconcile(target, snapshot, adr, traceId);
+      } catch {
+        draftMetrics().resolverFailures.add(1, { "draft.resolver": target.type });
+      }
+    }
+  }
+
+  /**
+   * Raises again every check that has waited a day on a person. A reminder only says so in the
+   * log; it closes nothing. Whichever conversation a check is in, the main one writes it.
+   */
+  async remindChecks(now: number = this.now()): Promise<void> {
+    const due = dueReminders(this.allChecks(), now);
+    if (due.length === 0) return;
+    await this.writer.run(async () => {
+      // Looked at again inside the write order: a reminder another tick wrote counts.
+      const still = new Set(dueReminders(this.allChecks(), now).map((c) => c.key));
+      const drafts: EventDraft[] = due
+        .filter((c) => still.has(c.key))
+        .map((c) => ({
+          type: "check.reminded",
+          address: itemAddress(c.conversation, newItemId(this.newId)),
+          conversation: c.conversation,
+          actor: SYSTEM,
+          traceId: null,
+          data: { key: c.key },
+          at: new Date(now).toISOString(),
+        }));
+      if (drafts.length === 0) return;
+      const sealed = await this.log.append(drafts);
+      for (const e of sealed) this.projection.apply(e);
+    });
+    for (const c of new Set(due.map((x) => x.conversation))) this.touch(c);
   }
 
   answerPrompt(id: string, allow: boolean): void {
@@ -2138,6 +2390,9 @@ export class ConversationService {
     state: Record<string, unknown>,
     resolver: Resolver,
   ): Promise<void> {
+    // A pull request seen to merge asks for the checks its After deploy section holds.
+    const before = this.projection.stub(targetKey(target))?.state;
+    const merged = before != null && before.state !== "merged" && state.state === "merged";
     const span = tracer().startSpan(
       "draft.resolver.observed",
       { attributes: { "draft.resolver": resolver.type } },
@@ -2148,6 +2403,7 @@ export class ConversationService {
         const traceId = span.spanContext().traceId;
         await this.append([this.statusDraft(target, state, resolver, traceId)], "status");
         await this.reconcile(target, state, resolver, traceId);
+        if (merged) await this.requestChecks(target, state, traceId);
       });
     } finally {
       span.end();

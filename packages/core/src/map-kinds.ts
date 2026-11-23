@@ -1,5 +1,6 @@
 import { acceptanceSpec, evidenceGreen } from "./acceptance.ts";
 import { tryParseAddress } from "./address.ts";
+import { checkLifecycle, foldChecks } from "./check.ts";
 import { type DraftEvent, type LogRecord, type Target, targetKey } from "./events.ts";
 import { INTERRUPT_KINDS, type InterruptKind, interruptMachine } from "./interrupts.ts";
 import { bareToolName } from "./kiro.ts";
@@ -13,6 +14,7 @@ import {
   type MapQuery,
   type MapSnapshot,
   type PathEntry,
+  type StateDecl,
   statesOfMachine,
 } from "./map.ts";
 import { isFailedConclusion, pullRequestAcceptance } from "./pull-request.ts";
@@ -609,6 +611,56 @@ export function mergedPullRequests(
 }
 
 /* ----------------------------------------------------------------------------------------------- */
+/* Checks                                                                                           */
+/* ----------------------------------------------------------------------------------------------- */
+
+function checkItems({ events }: KindInput): ItemDraft[] {
+  return foldChecks(events).map((c) => ({
+    id: c.key,
+    label: `${c.requested.title} · ${c.requested.source.ref}`,
+    open: inConversation(c.conversation, c.key),
+    path: c.path,
+  }));
+}
+
+/** A check follows the pull request that asked for it, and gates the decisions it names. */
+function checkEdges(input: KindInput): EdgeDraft[] {
+  const out: EdgeDraft[] = [];
+  for (const c of foldChecks(input.events)) {
+    const from = { kind: "check", id: c.key };
+    const source = c.requested.source.target;
+    const kind = input.kindOfTarget(source.type);
+    if (kind !== null)
+      out.push({ from, to: { kind, id: source.id }, rel: "follows", at: c.requestedAt });
+    for (const gate of c.requested.gates) {
+      const to = targetItem(input, gate);
+      if (to !== null) out.push({ from, to, rel: "gates", at: c.requestedAt });
+    }
+  }
+  return out;
+}
+
+/**
+ * The states are the check machine's (check.ts), except that a failed check is not done with: the
+ * person's part is over, and what they saw is for whoever fixes it, so it waits on the agent. It
+ * shows in the waiting colours with its own word; the palette has no red.
+ */
+export const CHECK_STATES: readonly StateDecl[] = statesOfMachine(checkLifecycle().spec).map((s) =>
+  s.id === "failed" ? { ...s, class: "waiting", waitsOn: "agent" } : s,
+);
+
+export const CHECK_KIND: KindDecl = {
+  id: "check",
+  label: "Checks",
+  source: "machine",
+  derivation:
+    "the check machine (check.ts): requested by what a merged pull request left for a person, passed or failed by them",
+  states: CHECK_STATES,
+  items: checkItems,
+  edges: checkEdges,
+};
+
+/* ----------------------------------------------------------------------------------------------- */
 /* The registry                                                                                     */
 /* ----------------------------------------------------------------------------------------------- */
 
@@ -621,6 +673,7 @@ for (const k of [
   ACCEPTANCE_KIND,
   KIRO_SESSION_KIND,
   PULL_REQUEST_KIND,
+  CHECK_KIND,
 ])
   mapRegistry.register(k);
 

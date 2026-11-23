@@ -1,6 +1,7 @@
 export * from "./acceptance.ts";
 export * from "./address.ts";
 export * from "./adr.ts";
+export * from "./after-deploy.ts";
 export * from "./agent.ts";
 export * from "./agent-changes.ts";
 export * from "./agent-context.ts";
@@ -9,6 +10,7 @@ export * from "./ark-issue.ts";
 export * from "./ark-records.ts";
 export * from "./artifact-page.ts";
 export * from "./canonical.ts";
+export * from "./check.ts";
 export * from "./conversation.ts";
 export * from "./cross-context.ts";
 export * from "./events.ts";
