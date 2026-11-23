@@ -1,0 +1,16 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M84HJ2NQ58VFMSGFRMGWTF0C
+subject: axqdkppw
+type: closed
+at: 2026-11-23T15:49:25Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: 244629292+kiro-agent@users.noreply.github.com
+reason: "Done when met: e2e/frame.spec.ts 'a long context name keeps the top bar on one line at 1280 px' uses a 62-character context name, asserts the bar's height equals its height with a short name and that nothing sticks out, and shoots e2e/artifacts/f08-top-bar-long-context-name.png, which I read from CI: one line, name, Contexts and Conversation, with the footer below. Keyboard access of the moved controls is in 'the frame is quiet' (same spec)."
+data:
+  resolution: done
