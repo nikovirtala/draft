@@ -360,6 +360,8 @@ draft remembers three different things: what happened, what it still owes, and w
 | Kind | What is still owed | It can be left undone, someone waits on it, and done can be measured | Moves through its states until it closes | A change, a deployment, an open question, an assumption, a follow-up, a waiver |
 | Standing | What holds now | It holds until revoked, and every thread should take it as given | Only through a decision | "We deploy to AWS", "our VCS is GitHub", a principle, a guideline, a check, a term |
 
+**Every fact and every transition records its cause.** The cause is the address of the event that led to it, taken from the source that knows: kiro-remote's feed names the merge that fired a wait, a commit's trailer names the issue it closes, a deployment names its commit, draft names the step or message that started a session. A transition can have more than one cause (a merge needs both the checks that passed and the person who merged). When no source records a cause, the fact says *cause unknown*; draft never infers one, and a person can supply one later as a new fact. Causes are what let the map answer "what led to this, and what did it lead to?"
+
 A kind also needs an actor who can close it and a timeout that says what happens when nobody does. Something nobody will ever close is not a kind: it is a wish, or a fact in disguise.
 
 Measurement and Usage are facts, since they never close, and Term is standing, so none of them is in the kinds table above.
@@ -664,7 +666,8 @@ The big picture is the graph seen from further away: one view at every distance,
 - **Nodes and edges.** An item is a node, coloured by its state, and a reference is a typed edge: implements, supersedes, closes, deployed by, cites. A cluster is a node too, sized by its count, and the edges between clusters are bundled and weighted by the references they carry.
 - **Movement.** A transition recolours its node, and a pulse runs along the edge that caused it, leaving a fading trail, so the last hour reads as motion.
 - **Waits age.** A waiting node warms from neutral to amber to red as it nears its timeout. Stuck things stand out without anyone writing a rule for them.
-- **Cascades.** When one kind's transition triggers another's, the edges between them light up in turn: a signal contradicts an assumption, the decision resting on it goes under review, an issue opens.
+- **Cascades.** When one kind's transition triggers another's, the edges between them light up in turn: a signal contradicts an assumption, the decision resting on it goes under review, an issue opens. A cascade is drawn from the causes the facts record, never from timing alone.
+- **Why it moved.** Choose an event and the map shows it as a causal trace: events in the order of causes, each with its source and time beside it, and an arrow for each recorded cause. There are no lanes; what an event is and where it came from is said next to it. What a person or an agent did (merge, send, launch) is a command, said as one and drawn apart from states: a command is a cause, never a state. Its causes light up back to the root, its effects forward to where they stop; the rest stays grey. A reference that is not a cause (the notes a lost delivery was about) is dashed, an unknown cause is a dashed stub, and an effect that led nowhere is an open end. The design system's CausalTrace preview draws two real chains.
 - **Open loops.** A path that stops before an answer is marked as an open end.
 - **A layout that stays put.** Positions are seeded by ids and change a little at a time, so when the log moves, a node stays where you last saw it. A layout is never recomputed from scratch, or nobody could learn their own map.
 - **Moving about.** Zooming and panning change the viewport and never the layout, so a node is where it was when you come back. Buttons, Cmd and plus or minus, and a pinch zoom; the arrow keys, dragging with Space held and a two-finger scroll pan; a button fits the graph to the panel. The zoom levels below are a different move, made on purpose, and each fits its own view.
@@ -674,7 +677,7 @@ Zoom levels: the process (the seven steps as stations with live counts), the uni
 
 Time: live by default. A scrubber replays the log; because a [durable context](#durable-context) rehydrates from its log, the map can be rebuilt at any moment, and a week can be watched as it happened.
 
-Lenses: by state (the grid), only what is moving, waiting on me, open loops, broken invariants, one person's view.
+Lenses: by state (the grid), causes and effects of one event (the causal trace), only what is moving, waiting on me, open loops, broken invariants, one person's view.
 
 Flow is measured, not targeted: how long things take from talk to hearing back, and where they pile up.
 
