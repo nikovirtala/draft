@@ -1,8 +1,18 @@
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { LayoutService } from "../src/main/layout.ts";
+import { ViewStateStore } from "../src/main/view-state.ts";
 import {
+  CONVERSATION_MIN,
+  clampPanelWidth,
+  clampStoredPanelWidth,
   composerPlaceholder,
   MAIN_PLACEHOLDER,
+  PANEL_MIN,
   PAUSED_PLACEHOLDER,
+  panelMax,
   showsAsideHint,
   THREAD_PLACEHOLDER,
 } from "../src/shared/frame.ts";
@@ -26,5 +36,40 @@ describe("the aside hint", () => {
     expect(showsAsideHint(1)).toBe(false);
     expect(showsAsideHint(2)).toBe(true);
     expect(showsAsideHint(5)).toBe(true);
+  });
+});
+
+describe("the thread column's width", () => {
+  it("stays between the narrowest column and the room the conversation keeps", () => {
+    expect(clampPanelWidth(10, 1600)).toBe(PANEL_MIN);
+    expect(clampPanelWidth(5000, 1600)).toBe(1600 - CONVERSATION_MIN);
+    expect(clampPanelWidth(612.4, 1600)).toBe(612);
+    // A window too narrow for both: the thread keeps its minimum.
+    expect(panelMax(500)).toBe(PANEL_MIN);
+  });
+
+  it("keeps a whole number of pixels the main process can store", () => {
+    expect(clampStoredPanelWidth(100)).toBe(PANEL_MIN);
+    expect(clampStoredPanelWidth(500.6)).toBe(501);
+    expect(clampStoredPanelWidth(99_999)).toBe(4000);
+  });
+
+  it("is remembered on this device and comes back after a restart", () => {
+    const file = join(mkdtempSync(join(tmpdir(), "draft-width-")), "device.db");
+    const first = new ViewStateStore(file);
+    const layout = new LayoutService(first);
+    expect(layout.view().panelWidth).toBeNull();
+    const seen: (number | null)[] = [];
+    layout.onChange((v) => seen.push(v.panelWidth));
+    layout.setPanelWidth(640.2);
+    layout.setPanelWidth(640);
+    expect(layout.view().panelWidth).toBe(640);
+    // The same width again changes nothing, so nothing is announced twice.
+    expect(seen).toEqual([640]);
+    first.close();
+
+    const second = new ViewStateStore(file);
+    expect(new LayoutService(second).view().panelWidth).toBe(640);
+    second.close();
   });
 });

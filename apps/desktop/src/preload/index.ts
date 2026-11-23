@@ -40,6 +40,7 @@ const bridge: DraftBridge = {
   map: (request) => ipcRenderer.invoke(CHANNELS.map, request ?? {}),
   setMapVisible: (on) => ipcRenderer.send(CHANNELS.mapVisible, on),
   selectMapCell: (block, cell) => ipcRenderer.invoke(CHANNELS.selectMapCell, block, cell),
+  setPanelWidth: (width) => ipcRenderer.invoke(CHANNELS.setPanelWidth, width),
   onChange: (cb) => {
     const listener = (_e: unknown, c: Change) => cb(c);
     ipcRenderer.on(CHANNELS.change, listener);

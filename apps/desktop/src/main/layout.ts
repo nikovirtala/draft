@@ -1,3 +1,4 @@
+import { clampStoredPanelWidth } from "../shared/frame.ts";
 import type { BlockRegistration, MapSelection, MoveOutcome, View } from "../shared/ipc.ts";
 import {
   type BlockInfo,
@@ -21,6 +22,7 @@ export class LayoutService {
   private layout: Layout;
   private seenMessages: Record<string, number>;
   private cells: Record<string, MapSelection>;
+  private panelWidth: number | null;
   private readonly legacy: Record<string, "inline" | "minimized">;
   private readonly listeners = new Set<(v: View) => void>();
 
@@ -31,11 +33,17 @@ export class LayoutService {
     this.layout = store.layout();
     this.seenMessages = store.seen();
     this.cells = store.mapCells();
+    this.panelWidth = store.panelWidth();
     this.legacy = store.legacyPlacements();
   }
 
   view(): View {
-    return { layout: this.layout, seen: this.seenMessages, cells: this.cells };
+    return {
+      layout: this.layout,
+      seen: this.seenMessages,
+      cells: this.cells,
+      panelWidth: this.panelWidth,
+    };
   }
 
   onChange(cb: (v: View) => void): () => void {
@@ -117,6 +125,15 @@ export class LayoutService {
     this.store.setMapCell(block, cell);
     const { [block]: _gone, ...rest } = this.cells;
     this.cells = cell === null ? rest : { ...rest, [block]: cell };
+    this.emit();
+  }
+
+  /** Remembers the width of the thread's column on this device. View state: never the log. */
+  setPanelWidth(width: number): void {
+    const px = clampStoredPanelWidth(width);
+    if (px === this.panelWidth) return;
+    this.store.setPanelWidth(px);
+    this.panelWidth = px;
     this.emit();
   }
 
