@@ -1,0 +1,16 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M84XN25GR230F0TN8HGQ4D2F
+subject: vr20g4rb
+type: labeled
+at: 2026-11-23T19:20:46Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: 244629292+kiro-agent@users.noreply.github.com
+data:
+  set:
+    - type:chore
