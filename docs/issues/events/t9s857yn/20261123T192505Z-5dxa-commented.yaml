@@ -1,0 +1,15 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M84XWZ5TFDD957YEKDP55DXA
+subject: t9s857yn
+type: commented
+at: 2026-11-23T19:25:05Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: 244629292+kiro-agent@users.noreply.github.com
+data:
+  text: The checks' screenshots k01 to k04 (e2e/checks.spec.ts:174-219) are taken but have no entry in e2e/states.json, so the pull request's screenshot comment never shows them and no preview draws a check. Add them with the preview.
