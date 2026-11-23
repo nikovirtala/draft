@@ -420,6 +420,12 @@ export function MapView({ address }: { address: string }) {
         />
       )}
       <Moves map={map} />
+      {map.feeds.map((f) => (
+        <p className="secondary" key={f.feed} data-testid="map-feed" data-cursor={f.cursor}>
+          Built from the {f.feed} feed, cursor {f.cursor}
+          {f.stale !== null && <span data-testid="map-feed-stale"> · out of date: {f.stale}</span>}
+        </p>
+      ))}
       {map.problems.length > 0 && (
         <p className="secondary" data-testid="map-problems">
           {problemLines(map.problems).join(" · ")}

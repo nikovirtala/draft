@@ -206,6 +206,17 @@ function Shapes({ graph, layout, arrow }: { graph: Graph; layout: Layout; arrow:
         >
           <path className="graph-arrowhead" d="M0 0L8 4L0 8z" />
         </marker>
+        <marker
+          id={`${arrow}-waits`}
+          viewBox="0 0 8 8"
+          refX="7"
+          refY="4"
+          markerWidth="6"
+          markerHeight="6"
+          orient="auto"
+        >
+          <path className="graph-arrowhead waits" d="M0 0L8 4L0 8z" />
+        </marker>
       </defs>
       {graph.nodes.map((n) => {
         const c = tetherOf(graph, n);
@@ -227,18 +238,21 @@ function Shapes({ graph, layout, arrow }: { graph: Graph; layout: Layout; arrow:
         const from = byId.get(e.from);
         const to = byId.get(e.to);
         if (from === undefined || to === undefined) return null;
+        // A wait is in the waiting colours, with an arrow to what is waited for.
+        const waits = e.rels.some((r) => r.rel === "waits-for");
         return (
           <path
             key={e.id}
-            className={`graph-edge${e.cascade ? " cascade" : ""}`}
+            className={`graph-edge${e.cascade ? " cascade" : ""}${waits ? " waits" : ""}`}
             d={edgePath(at(from), at(to), radiusOf(from), radiusOf(to))}
             strokeWidth={edgeWidth(e.count)}
-            markerEnd={e.cascade ? `url(#${arrow})` : undefined}
+            markerEnd={waits ? `url(#${arrow}-waits)` : e.cascade ? `url(#${arrow})` : undefined}
             data-testid="graph-edge"
             data-from={e.from}
             data-to={e.to}
             data-count={e.count}
             data-cascade={e.cascade}
+            data-waits={waits}
           >
             <title>{`${plural(e.count, "reference")}: ${relsText(e)}`}</title>
           </path>
@@ -467,6 +481,13 @@ function Legend() {
           <path className="graph-arrowhead" d="M21 3L27 7L21 11z" />
         </svg>
         Cascade: a reference between items that moved
+      </li>
+      <li className="waiting">
+        <svg width="28" height="14" viewBox="0 0 28 14" aria-hidden="true">
+          <path className="graph-edge waits" d="M2 7H22" />
+          <path className="graph-arrowhead waits" d="M21 3L27 7L21 11z" />
+        </svg>
+        Wait: a session waits for a pull request
       </li>
       <li className="done">
         <svg width="14" height="14" viewBox="-9 -9 18 18" aria-hidden="true">

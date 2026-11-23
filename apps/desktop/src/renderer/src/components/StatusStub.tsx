@@ -1,3 +1,4 @@
+import { endWords } from "@nikovirtala/draft-core/kiro-feed-types";
 import { useEffect } from "react";
 import type { Stub } from "../../../shared/ipc.ts";
 import { availableMoves, type Entry, type Placement } from "../../../shared/placement.ts";
@@ -27,7 +28,7 @@ function pendingText(n: number): string {
 interface Chip {
   text: string;
   testid: string;
-  tone?: "bad" | "good" | "wait" | "review";
+  tone?: "bad" | "good" | "wait" | "review" | "moved";
 }
 
 interface Summary {
@@ -177,24 +178,52 @@ function artifact(state: Record<string, unknown>, id: string): Summary {
   };
 }
 
-function kiroSession(state: Record<string, unknown>, id: string): Summary {
+function kiroSession(
+  state: Record<string, unknown>,
+  id: string,
+  feed: Stub["feed"] | undefined,
+): Summary {
   const status = typeof state.status === "string" ? state.status : "unknown";
   const pending = num(state.pendingPermissions) ?? 0;
+  const chips: Chip[] = [];
+  if (pending > 0) chips.push({ text: pendingText(pending), testid: "stub-pending", tone: "wait" });
+  // What Kiro Remote decided, from its change feed: what the session waits for and why it woke.
+  const details: [string, string][] = [["Session", id]];
+  if (Array.isArray(state.repos) && state.repos.length > 0)
+    details.push(["Repositories", (state.repos as string[]).join(", ")]);
+  if (feed !== undefined) {
+    for (const w of feed.waits)
+      chips.push({ text: `Waiting for ${w.pr}`, testid: "stub-waits", tone: "wait" });
+    if (feed.lastWake !== null)
+      chips.push({ text: `Woke: ${feed.lastWake.text}`, testid: "stub-last-wake", tone: "moved" });
+    if (feed.stale !== null)
+      chips.push({ text: "Waits may be out of date", testid: "stub-feed-stale", tone: "wait" });
+    if (feed.waits.length > 0)
+      details.push(["Waiting for", feed.waits.map((w) => w.pr).join(", ")]);
+    if (feed.lastWake !== null)
+      details.push([
+        "Last woke",
+        `${feed.lastWake.text}, ${new Date(feed.lastWake.at).toLocaleTimeString()}`,
+      ]);
+    for (const e of feed.ended)
+      details.push(["Wait ended", `${e.pr ?? "a pull request"}: ${endWords(e.reason)}`]);
+    if (feed.links.length > 0)
+      details.push(["Pull requests", feed.links.map((l) => `${l.pr} (${l.prState})`).join(", ")]);
+    details.push([
+      "Built from",
+      `the ${feed.feed} feed, cursor ${feed.cursor}${feed.baseline === null ? "" : `, from the session as it was at ${feed.baseline}`}`,
+    ]);
+    if (feed.stale !== null) details.push(["Out of date", feed.stale]);
+  }
   return {
     state,
     status,
     statusLabel: label(status),
     title: str(state.title) ?? "Untitled session",
-    chips:
-      pending > 0 ? [{ text: pendingText(pending), testid: "stub-pending", tone: "wait" }] : [],
+    chips,
     kind: KINDS["kiro-session"] as string,
     url: null,
-    details: [
-      ["Session", id],
-      ...(Array.isArray(state.repos) && state.repos.length > 0
-        ? ([["Repositories", (state.repos as string[]).join(", ")]] as [string, string][])
-        : []),
-    ],
+    details,
   };
 }
 
@@ -225,7 +254,7 @@ function summary(p: StatusProps): Summary {
     case "artifact":
       return artifact(state, p.target.id);
     default:
-      return kiroSession(state, p.target.id);
+      return kiroSession(state, p.target.id, p.stub?.feed);
   }
 }
 
@@ -304,7 +333,11 @@ function Line({ p, children }: { p: StatusProps; children?: React.ReactNode }) {
         {s.statusLabel}
       </span>
       {s.chips.map((c) => (
-        <span key={c.testid} className={`pending ${c.tone ?? ""}`} data-testid={c.testid}>
+        <span
+          key={`${c.testid}:${c.text}`}
+          className={`pending ${c.tone ?? ""}`}
+          data-testid={c.testid}
+        >
           {c.text}
         </span>
       ))}
