@@ -1,6 +1,7 @@
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { FakeAgentRuntime } from "../src/agent.ts";
 import {
@@ -25,7 +26,7 @@ import { mapOf } from "../src/map-kinds.ts";
 import { Projection } from "../src/projection.ts";
 import { PullRequestResolver } from "../src/pull-request.ts";
 import type { Resolver } from "../src/resolver.ts";
-import { FakeGithub } from "../src/testing/index.ts";
+import { createAcceptanceFixture, FakeGithub } from "../src/testing/index.ts";
 import { Workspace } from "../src/workspace.ts";
 import { AGENT, SYSTEM, USER } from "./helpers.ts";
 
@@ -437,5 +438,55 @@ describe("the map of a log with checks", () => {
     const records = h.events();
     expect(mapOf(records)).toEqual(mapOf(records));
     h.close();
+  });
+});
+
+describe("the decisions a context's repositories propose", () => {
+  it("are read on demand from the repositories, a proposal on an open pull request included", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "draft-checks-adr-"));
+    const fixture = createAcceptanceFixture({
+      dir: join(dir, "fixture"),
+      adr: fileURLToPath(new URL("../../../node_modules/.bin/adr", import.meta.url)),
+      repo: REPO,
+    });
+    const github = await new FakeGithub().start();
+    github.addGitRepo(REPO, fixture.bare);
+    github.addPull(REPO, 7, { headRef: fixture.adr.branch, draft: true });
+    github.addPull(REPO, 9, {
+      title: "A change",
+      body: BODY,
+      headSha: "a".repeat(40),
+      draft: true,
+    });
+    const log = FileLogStore.open(join(dir, "log.jsonl"));
+    const projection = Projection.open(join(dir, "views.db"));
+    const client = new GithubClient({ token: "t0ken", baseUrl: github.baseUrl });
+    const ws = await Workspace.open({
+      log,
+      projection,
+      agent: new FakeAgentRuntime({ turns: [], fallback: "Nothing scripted." }, {} as never, {
+        model: "claude-opus-5-5",
+      }),
+      resolvers: [new PullRequestResolver(client)],
+      user: USER,
+      poller: { baseMs: 0 },
+      ark: { github: client, repos: () => [REPO] },
+    });
+    // Nothing is shown and no map is on screen: the repositories are read when they are needed.
+    expect(await ws.proposedDecisions()).toEqual([{ repo: REPO, id: fixture.adr.id }]);
+    // A check that names it, in a body that merges, links to it.
+    const body = BODY.replaceAll(ADR_ID, fixture.adr.id);
+    github.updatePull(REPO, 9, { body });
+    await ws.main.submit(`${REPO}#9`);
+    github.updatePull(REPO, 9, { state: "closed", merged: true });
+    ws.setVisible([PR]);
+    await ws.tick();
+    const gates = knownEvents(log.events()).flatMap((e) =>
+      e.type === "check.requested" ? [e.data.gates] : [],
+    );
+    expect(gates).toEqual([[{ type: "adr", id: `${REPO}:${fixture.adr.id}` }], []]);
+    log.close();
+    projection.close();
+    await github.stop();
   });
 });

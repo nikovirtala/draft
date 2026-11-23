@@ -372,6 +372,27 @@ export class FakeGithub {
       });
     }
     const tree = /^\/repos\/([^/]+\/[^/]+)\/git\/trees\/([^/]+)$/.exec(path);
+    // A git-backed repository's trees and blobs are git's own, so the records a map reads agree
+    // with the contents a decision's resolver reads.
+    if (tree !== null && this.gitRepos.has(tree[1] as string)) {
+      const repo = tree[1] as string;
+      const ref = decodeURIComponent(tree[2] as string);
+      const listing = this.git(repo, ["ls-tree", "-r", "--full-tree", ref]);
+      const root = this.git(repo, ["rev-parse", `${ref}^{tree}`])?.trim();
+      if (listing === null || root === undefined) return send(404, { message: "Not Found" });
+      return send(200, {
+        sha: root,
+        truncated: false,
+        tree: listing
+          .split("\n")
+          .filter((l) => l !== "")
+          .map((l) => {
+            const [meta = "", file = ""] = l.split("\t");
+            const [, type = "blob", sha = ""] = meta.split(" ");
+            return { path: file, type, sha };
+          }),
+      });
+    }
     if (tree !== null) {
       const files = this.treeOf(tree[1] as string, decodeURIComponent(tree[2] as string));
       if (files === undefined) return send(404, { message: "Not Found" });
@@ -384,6 +405,10 @@ export class FakeGithub {
       return send(200, { sha, truncated: false, tree: entries });
     }
     const blob = /^\/repos\/([^/]+\/[^/]+)\/git\/blobs\/([0-9a-f]+)$/.exec(path);
+    if (blob !== null && this.gitRepos.has(blob[1] as string)) {
+      const text = this.git(blob[1] as string, ["cat-file", "blob", blob[2] as string]);
+      return text === null ? send(404, { message: "Not Found" }) : send(200, text, true);
+    }
     if (blob !== null) {
       for (const text of [...(this.files.get(blob[1] as string)?.values() ?? [])].flatMap((f) => [
         ...f.values(),
