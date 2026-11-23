@@ -183,7 +183,12 @@ export class ViewStateStore {
     return Number.isFinite(n) ? n : null;
   }
 
-  setPanelWidth(width: number): void {
+  /** Remembers the width, or forgets it with `null`. */
+  setPanelWidth(width: number | null): void {
+    if (width === null) {
+      this.db.prepare("delete from prefs where key = 'panel-width'").run();
+      return;
+    }
     this.db
       .prepare(
         "insert into prefs values ('panel-width', ?) on conflict(key) do update set value = excluded.value",

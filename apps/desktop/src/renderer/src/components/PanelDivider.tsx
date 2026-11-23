@@ -33,17 +33,20 @@ export function usePanelWidth(
   max: number;
   set: (px: number) => void;
   commit: (px: number) => void;
+  /** Back to the default width, and the stored one forgotten. */
+  reset: () => void;
   style: CSSProperties | undefined;
 } {
   const [width, setWidth] = useState<number | null>(stored);
   const [available, setAvailable] = useState(0);
   const [measured, setMeasured] = useState<number | null>(null);
+  const [epoch, setEpoch] = useState(0);
   const latest = useRef(width);
   latest.current = width;
 
   // The room both columns have, and the width the default gives the thread's column. It reads
-  // again when the panel opens or closes, which `open` says.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: `open` only says when to read again
+  // again when the panel opens or closes, which `open` says, and after a reset, which `epoch` says.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `open` and `epoch` only say when to read again
   useEffect(() => {
     const el = grid.current;
     if (el === null) return;
@@ -56,7 +59,7 @@ export function usePanelWidth(
     const observer = new ResizeObserver(read);
     observer.observe(el);
     return () => observer.disconnect();
-  }, [grid, open]);
+  }, [grid, open, epoch]);
 
   const limit = available > 0 ? available : Number.POSITIVE_INFINITY;
   const shown = width === null ? measured : clampPanelWidth(width, limit);
@@ -65,11 +68,17 @@ export function usePanelWidth(
     setWidth(px);
     void window.draft.setPanelWidth(px);
   }, []);
+  const reset = useCallback(() => {
+    setWidth(null);
+    setEpoch((n) => n + 1);
+    void window.draft.setPanelWidth(null);
+  }, []);
   return {
     width: shown,
     max: panelMax(limit),
     set,
     commit,
+    reset,
     style:
       width === null
         ? undefined
@@ -82,7 +91,7 @@ export function usePanelWidth(
  * arrow keys move. Its value is the thread column's width in pixels, so Left makes the thread
  * wider (the divider moves left) and Right narrower. Shift moves it by more; Home and End go to
  * the narrowest and the widest the window allows. The width is kept when the pointer lets go or a
- * key moves it.
+ * key moves it. A double-click returns the column to its default and forgets the kept width.
  */
 export function PanelDivider({
   grid,
@@ -127,6 +136,7 @@ export function PanelDivider({
       aria-valuemax={panel.max}
       tabIndex={0}
       onKeyDown={onKey}
+      onDoubleClick={() => panel.reset()}
       onPointerDown={(e) => {
         dragging.current = true;
         e.currentTarget.setPointerCapture(e.pointerId);

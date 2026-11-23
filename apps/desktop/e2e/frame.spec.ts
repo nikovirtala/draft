@@ -230,6 +230,23 @@ test("the frame is quiet: a lean top bar, a footer, plain words, and a thread co
   await expect(page.getByTestId("panel-divider")).toHaveAttribute("aria-valuenow", String(chosen));
   expect(Math.abs((await widths(page)).box - chosen)).toBeLessThanOrEqual(2);
   await shot(page, "f05-width-restored-after-restart");
+
+  // 8b. A double-click on the divider returns the column to the default width and forgets the
+  // chosen one: the divider says the default, the column is that wide, and after a restart the
+  // default holds.
+  expect(chosen).not.toBe(before.value);
+  await page.getByTestId("panel-divider").dblclick();
+  await expect.poll(async () => (await widths(page)).value).toBe(before.value);
+  expect(Math.abs((await widths(page)).box - before.box)).toBeLessThanOrEqual(2);
+  await shot(page, "f09-width-reset-by-double-click");
+  await electronApp.close();
+  ({ electronApp, page } = await launch());
+  await expect(page.getByTestId("panel")).toBeVisible();
+  await expect(page.getByTestId("panel-divider")).toHaveAttribute(
+    "aria-valuenow",
+    String(before.value),
+  );
+  expect(Math.abs((await widths(page)).box - before.box)).toBeLessThanOrEqual(2);
   await electronApp.close();
 
   // 9. A second person in the context: the composer now explains asides.
