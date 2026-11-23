@@ -1,0 +1,16 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M851E5CBNQJ74W5FY7TBC863
+subject: wgytkvq6
+type: closed
+at: 2026-11-23T20:26:54Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: 244629292+kiro-agent@users.noreply.github.com
+reason: The rule that filled the title bar with moved-fill while a block is in focus is removed, so it stays on titlebar. The focus is still said in words by the attention bar's In focus mark. The app-wide fills check (e2e/design-checks.ts) fails any element with a fill token and no data-fill, and a title bar with moved-fill would be one; the picture for how the title bar says which window has focus is an open question in the spec.
+data:
+  resolution: done
