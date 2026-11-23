@@ -74,30 +74,36 @@ export function ThreadStub({ thread }: { thread: Thread }) {
           place="turn"
           showLabel
           className="thread-chip working"
+          data-fill="chip"
         />
         {fresh > 0 && (
-          <span className="thread-chip new" data-testid="thread-new">
+          <span className="thread-chip new" data-fill="chip" data-testid="thread-new">
             {fresh} new
           </span>
         )}
         {thread.waiting > 0 && (
-          <span className="thread-chip waiting" data-testid="thread-waiting">
+          <span className="thread-chip waiting" data-fill="chip" data-testid="thread-waiting">
             Waiting on you · {thread.waiting}
           </span>
         )}
         {thread.state !== "open" && thread.state !== "concluding" && (
-          <span className="thread-chip" data-testid="thread-state" data-state={thread.state}>
+          <span
+            className="thread-chip"
+            data-fill="chip"
+            data-testid="thread-state"
+            data-state={thread.state}
+          >
             {STATES[thread.state]}
           </span>
         )}
         {thread.artifacts > 0 && (
-          <span className="thread-chip" data-testid="thread-artifacts">
+          <span className="thread-chip" data-fill="chip" data-testid="thread-artifacts">
             {plural(thread.artifacts, "artifact", "artifacts")}
           </span>
         )}
         <span className="spacer" />
         {away ? (
-          <span className="where" data-testid="stub-where">
+          <span className="where" data-fill="chip" data-testid="stub-where">
             {WHERE[placement]}
           </span>
         ) : (

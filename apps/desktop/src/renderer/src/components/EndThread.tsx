@@ -50,7 +50,7 @@ export function EndThread({ conversation }: { conversation: string }) {
         Cancel
       </button>
       {error !== null && (
-        <span className="error" role="alert">
+        <span className="error" data-fill="notice" role="alert">
           {error}
         </span>
       )}

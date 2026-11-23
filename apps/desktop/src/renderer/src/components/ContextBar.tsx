@@ -55,6 +55,7 @@ export function ContextBar() {
                   type="button"
                   role="menuitem"
                   className="context-item-button"
+                  data-fill={c.current ? "chosen pointer" : "pointer"}
                   data-testid="context-recent"
                   data-context={c.name}
                   data-current={c.current}

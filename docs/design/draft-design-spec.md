@@ -73,11 +73,21 @@ This is the allow-list. A fill that is not here is a bug. **Built** lists the se
 
 ### Marking a fill
 
-- **A1. Planned: every element that carries a state fill is marked `data-fill="<allowed place>"`,** with one value per place in the lists below (`chosen`, `pointer`, `chip`, `cell`, `notice`). An app-wide e2e check reads every element whose computed background is a state fill and fails on one without a mark, or whose mark does not allow that colour. No code sets `data-fill` today; the design-system session is adding the check, see [Open questions](#open-questions).
+- **A1. Built: every element that carries a state fill is marked `data-fill="<place>"`,** one value per place in the table below (a space-separated list when it carries two, as a chosen option that is also a row under the pointer). The harness (`e2e/design-checks.ts`, check **fills**) walks every visible element after each test and fails one whose computed background (or `fill`, in the graph) is one of the fill tokens and that has no mark allowing it, printing its path, its colour and this table. `src/shared/fills.ts` holds the table; `test/design-fills.test.ts` fails when it differs from this one. The title bar's ground (`titlebar`) is allowed on `header.titlebar` and nowhere else.
+
+| Place | Fills | What it marks |
+| --- | --- | --- |
+| `chosen` | `moved-selected` | the chosen option of a list or a control (A2) |
+| `action` | `moved-selected` | the main action button (A2) |
+| `pointer` | `moved-fill` | a row or control under the pointer (A3) |
+| `chip` | `moved-fill`, `done-fill`, `review-fill`, `waiting-fill` | a state chip (A7, A8) |
+| `cell` | `moved-fill`, `done-fill`, `waiting-fill` | a map cell and a disc of the graph (A9) |
+| `notice` | `waiting-fill` | a failure notice (A8, A10) |
+| `ask` | `waiting-fill` | a block that asks the person for something (A10) |
 
 ### Purple: `moved-selected` and `moved-fill`
 
-- **A2. `moved-selected` (fill) is for the chosen option in a list or a control, and for the main action button.** Built: the context you are in in the Contexts menu (`.context-item-button[data-current="true"]`), the "on" option of the map's range and layout switches (`.map-range label.on`), the chosen map cell (`.map-cell.selected`), and the main action button (`.primary-button`: Send, Passed, Accept, Switch). The words on it are `ink`.
+- **A2. `moved-selected` (fill) is for the chosen option in a list or a control, and for the main action button.** Built: the context you are in in the Contexts menu (`.context-item-button[data-current="true"]`), the "on" option of the map's range and layout switches (`.map-range label.on`), the chosen map cell (`.map-cell.selected`), and the main action button (`.primary-button`, place `action`: Send, Allow, Passed, Accept, Switch; disabled, it is paler and keeps its colour). The words on it are `ink`. A row's chosen option is the place `chosen`; the main action button is the place `action`, whatever it is called.
 - **A3. `moved-fill` is a row or a control under the pointer, and the fill of a "moved" chip or cell.** Built under the pointer: `button.icon:hover`, `.branch-agent:hover`, `.attention-open:hover`, `.context-item-button:hover`, `.map-range label:hover`, `.panel-divider:hover`, `.graph-node:hover` (55% on transparent). Built as a state fill: the chips `.where`, `.thread-chip.new`, `.thread-chip.working`, `.pending.moved`, `.context-badge`, `.agent-badge.active`, the legend chip `.graph-legend li.moved`, the cell `.map-cell.active`, and the item disc `.graph-dot.moved`.
 - **A4. Purple never fills a block, a block's header, a panel or a window header.** A block is a stub (`.stub`), a thread stub (`.thread-stub`), a block in the panel or a window (`.block-full`), their headers (`.block-header`, `.stub-line`), the panel (`.panel`) and the title bar. It stays on its own ground (`raised` for a stub, `page` for a header and a panel, `titlebar` for the title bar) whether it is selected, clicked, expanded, focused or open in the panel. A thread open in the panel says so with its "In the panel" chip (`.where`) and nothing else. A unit test (`test/renderer/no-purple-blocks.test.tsx`) holds this for the block selectors it names, and the e2e test "a selected stub is never filled" for one stub; one place breaks it, see [Drift](#drift) D1.
 - **A5. Keyboard focus is a 1.5px `moved-mark` ring, no fill, through `:focus-visible` only,** so a click shows nothing. Built for blocks (`:is(.stub, .thread-stub, .block-full):focus-visible`, `outline: 1.5px solid var(--moved-mark)` with a 1px offset); the other focus rules are 2px, some use `:focus-within` and two draw a fill: see D2 and D3.

@@ -107,7 +107,7 @@ export function ConversationView({ conversation }: { conversation: string }) {
             <ConclusionCard conversation={conversation} conclusion={state.thread.conclusion} />
           )}
           {state.error && (
-            <p className="error" role="alert">
+            <p className="error" data-fill="notice" role="alert">
               {state.error}
             </p>
           )}

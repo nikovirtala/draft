@@ -58,7 +58,10 @@ export function AcceptanceBody({ block }: { block: Interrupt }) {
       <ul className="evidence" data-testid="evidence">
         {evidence.map((e) => (
           <li key={e.id} className={`evidence-${e.status}`} data-testid={`evidence-${e.id}`}>
-            <span className="evidence-mark">{MARK[e.status]}</span> <strong>{e.label}</strong>
+            <span className="evidence-mark" data-fill="chip">
+              {MARK[e.status]}
+            </span>{" "}
+            <strong>{e.label}</strong>
             {e.detail !== null && <span className="secondary"> · {e.detail}</span>}
           </li>
         ))}
@@ -102,6 +105,7 @@ export function AcceptanceActions({
         <button
           type="button"
           className="primary-button"
+          data-fill="action"
           data-testid="settle-accepted"
           disabled={busy !== null}
           onClick={() => answer("accepted")}
@@ -143,6 +147,7 @@ export function AcceptanceActions({
           <button
             type="button"
             className="primary-button"
+            data-fill="action"
             data-testid="acceptance-send"
             disabled={busy !== null || words.trim() === ""}
             onClick={() =>
@@ -154,7 +159,7 @@ export function AcceptanceActions({
         </div>
       )}
       {error !== null && (
-        <p className="error" role="alert" data-testid="acceptance-error">
+        <p className="error" data-fill="notice" role="alert" data-testid="acceptance-error">
           {error}
         </p>
       )}

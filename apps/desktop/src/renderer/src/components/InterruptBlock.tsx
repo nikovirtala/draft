@@ -136,6 +136,7 @@ export function InterruptBlock({
   return (
     <section
       className="interrupt"
+      data-fill="ask"
       data-testid="interrupt"
       data-key={block.id}
       data-cause={block.cause}
@@ -147,7 +148,9 @@ export function InterruptBlock({
         : { "data-stub-target": `${block.target.type}:${block.target.id}` })}
     >
       <p className="interrupt-label">
-        <span className="chip">{label}</span>
+        <span className="chip" data-fill="chip">
+          {label}
+        </span>
         <span className="secondary" data-testid="interrupt-age">
           waiting {ageText(block.at)}
         </span>
@@ -162,6 +165,7 @@ export function InterruptBlock({
               key={o}
               type="button"
               className={o === "allowed" || o === "retry" ? "primary-button" : "secondary-button"}
+              data-fill={o === "allowed" || o === "retry" ? "action" : undefined}
               data-testid={`settle-${o}`}
               disabled={busy !== null}
               onClick={() => {
@@ -179,7 +183,7 @@ export function InterruptBlock({
         </div>
       )}
       {error !== null && (
-        <p className="error" role="alert">
+        <p className="error" data-fill="notice" role="alert">
           {error}
         </p>
       )}

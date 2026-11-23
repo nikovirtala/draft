@@ -67,7 +67,11 @@ export function LayoutSwitch({
   return (
     <fieldset className="map-range map-layout" aria-label="Layout" data-testid="map-layout">
       {options.map((o) => (
-        <label key={o.id} className={value === o.id ? "on" : ""}>
+        <label
+          key={o.id}
+          className={value === o.id ? "on" : ""}
+          data-fill={value === o.id ? "chosen pointer" : "pointer"}
+        >
           <input
             type="radio"
             name={name}
@@ -268,6 +272,7 @@ function Shapes({ graph, layout, arrow }: { graph: Graph; layout: Layout; arrow:
             <g key={n.id} className="graph-cluster-shape" transform={`translate(${p.x} ${p.y})`}>
               <circle
                 className={`graph-disc${n.waitingOnPerson > 0 ? " waiting" : ""}${n.external ? " external" : ""}`}
+                data-fill={n.waitingOnPerson > 0 ? "cell" : undefined}
                 r={r}
               />
               {n.share > 0 && (
@@ -285,6 +290,7 @@ function Shapes({ graph, layout, arrow }: { graph: Graph; layout: Layout; arrow:
           <g key={n.id} transform={`translate(${p.x} ${p.y})`}>
             <circle
               className={`graph-dot${n.moved ? " moved" : ""}${n.waiting ? " waiting" : ""}${n.class === "terminal" ? " settled" : ""}${n.focus ? " focus" : ""}`}
+              data-fill={n.moved || n.waiting || n.class === "terminal" ? "cell" : undefined}
               r={r}
             />
             {n.openLoop && <circle className="graph-loop" r={r + 4} />}
@@ -341,6 +347,7 @@ function NodeButton({
       <button
         type="button"
         className={`graph-node cluster${node.waitingOnPerson > 0 ? " waiting" : ""}`}
+        data-fill="pointer"
         style={style}
         disabled={node.zoom === null}
         aria-label={clusterLabel(node)}
@@ -365,6 +372,7 @@ function NodeButton({
     <button
       type="button"
       className={`graph-node item${node.moved ? " moved" : ""}${node.waiting ? " waiting" : ""}${node.openLoop ? " loop" : ""}${node.focus ? " focus" : ""}`}
+      data-fill="pointer"
       style={style}
       aria-label={itemLabel(node)}
       aria-current={node.focus ? "true" : undefined}
@@ -451,21 +459,21 @@ function Focus({ graph }: { graph: Graph }) {
 function Legend() {
   return (
     <ul className="graph-legend" aria-label="Legend" data-testid="graph-legend">
-      <li className="moved">
+      <li className="moved" data-fill="chip">
         <svg width="14" height="14" viewBox="-9 -9 18 18" aria-hidden="true">
-          <circle className="graph-dot moved" r="6" />
+          <circle className="graph-dot moved" data-fill="cell" r="6" />
         </svg>
         Moved: changed state in the window shown
       </li>
-      <li className="waiting">
+      <li className="waiting" data-fill="chip">
         <svg width="14" height="14" viewBox="-9 -9 18 18" aria-hidden="true">
-          <circle className="graph-dot waiting" r="6" />
+          <circle className="graph-dot waiting" data-fill="cell" r="6" />
         </svg>
         Waiting: needs you
       </li>
-      <li className="done">
+      <li className="done" data-fill="chip">
         <svg width="14" height="14" viewBox="-9 -9 18 18" aria-hidden="true">
-          <circle className="graph-dot settled" r="6" />
+          <circle className="graph-dot settled" data-fill="cell" r="6" />
         </svg>
         Settled: done
       </li>
@@ -475,21 +483,21 @@ function Legend() {
         </svg>
         Open loop: something settled leads to it and it is not settled
       </li>
-      <li className="moved">
+      <li className="moved" data-fill="chip">
         <svg width="28" height="14" viewBox="0 0 28 14" aria-hidden="true">
           <path className="graph-edge cascade" d="M2 7H22" />
           <path className="graph-arrowhead" d="M21 3L27 7L21 11z" />
         </svg>
         Cascade: a reference between items that moved
       </li>
-      <li className="waiting">
+      <li className="waiting" data-fill="chip">
         <svg width="28" height="14" viewBox="0 0 28 14" aria-hidden="true">
           <path className="graph-edge waits" d="M2 7H22" />
           <path className="graph-arrowhead waits" d="M21 3L27 7L21 11z" />
         </svg>
         Wait: a session waits for a pull request
       </li>
-      <li className="done">
+      <li className="done" data-fill="chip">
         <svg width="14" height="14" viewBox="-9 -9 18 18" aria-hidden="true">
           <circle className="graph-ring" r="6" strokeDasharray="25 38" transform="rotate(-90)" />
         </svg>

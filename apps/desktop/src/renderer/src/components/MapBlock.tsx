@@ -166,7 +166,7 @@ function MapRowView({
           {row.total}
         </span>
         {row.stale !== null && (
-          <span className="map-stale" title={row.stale} data-testid="map-stale">
+          <span className="map-stale" data-fill="chip" title={row.stale} data-testid="map-stale">
             from before
           </span>
         )}
@@ -189,6 +189,7 @@ function MapRowView({
                   key={cell.column}
                   type="button"
                   className={`map-cell ${column.class}${lit ? " lit" : ""}${selected === cell.column ? " selected" : ""}`}
+                  data-fill={selected === cell.column ? "chosen" : "cell"}
                   style={{ width: CELL - GAP }}
                   disabled={cell.count === 0}
                   aria-pressed={selected === cell.column}
@@ -373,7 +374,11 @@ export function MapView({ address }: { address: string }) {
         <Working active={map.reading} label="Reading GitHub" place="map" />
         <fieldset className="map-range" aria-label="Moves shown">
           {RANGES.map((r) => (
-            <label key={r.id} className={range === r.id ? "on" : ""}>
+            <label
+              key={r.id}
+              className={range === r.id ? "on" : ""}
+              data-fill={range === r.id ? "chosen pointer" : "pointer"}
+            >
               <input
                 type="radio"
                 name={`range-${address}`}
@@ -470,7 +475,7 @@ export function MapStub({ message, conversation }: { message: string; conversati
         {placement === "minimized" && <MapLine />}
         <span className="spacer" />
         {away ? (
-          <span className="where" data-testid="stub-where">
+          <span className="where" data-fill="chip" data-testid="stub-where">
             {WHERE_BLOCK[placement]}
           </span>
         ) : (

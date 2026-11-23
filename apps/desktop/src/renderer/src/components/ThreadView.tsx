@@ -22,7 +22,12 @@ function SwitchCard({
 }) {
   const s = preview.size;
   return (
-    <section className="prompt switch" data-testid="switch-card" aria-label="Switch agent">
+    <section
+      className="prompt switch"
+      data-fill="ask"
+      data-testid="switch-card"
+      aria-label="Switch agent"
+    >
       <p className="prompt-title">
         Switch this thread from <strong>{agentName(preview.from)}</strong> to{" "}
         <strong>{agentName(preview.to)}</strong>?
@@ -39,7 +44,12 @@ function SwitchCard({
         <button type="button" className="secondary-button" onClick={() => onAnswer(false)}>
           Keep {agentName(preview.from)}
         </button>
-        <button type="button" className="primary-button" onClick={() => onAnswer(true)}>
+        <button
+          type="button"
+          className="primary-button"
+          data-fill="action"
+          onClick={() => onAnswer(true)}
+        >
           Switch
         </button>
       </div>
@@ -126,7 +136,7 @@ export function ThreadView({ entry }: { entry: Entry }) {
             )}
         </div>
         {error !== null && (
-          <p className="error" role="alert">
+          <p className="error" data-fill="notice" role="alert">
             {error}
           </p>
         )}

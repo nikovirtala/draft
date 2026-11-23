@@ -28,7 +28,7 @@ export function ContextItemStub({
       aria-label={`An item of the context ${context}`}
     >
       <div className="stub-line">
-        <span className="context-badge" data-testid="context-item-context">
+        <span className="context-badge" data-fill="chip" data-testid="context-item-context">
           {context}
         </span>
         <span className="stub-title" data-testid="context-item-title">
@@ -43,7 +43,7 @@ export function ContextItemStub({
         </span>
         <span className="spacer" />
         {reference.pulled ? (
-          <span className="pending good" data-testid="context-item-pulled">
+          <span className="pending good" data-fill="chip" data-testid="context-item-pulled">
             In the agent's context
           </span>
         ) : (
