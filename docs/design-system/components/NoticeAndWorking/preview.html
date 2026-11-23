@@ -1,0 +1,22 @@
+<!-- @dsCard group="Feedback" height=150 subtitle="What failed, and what is under way" -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>A failure notice and the working indicator</title>
+<style>
+body{margin:0;font-family:var(--font-sans);background:var(--page);color:var(--text);font-size:13px}
+.chip{display:inline-flex;align-items:center;gap:var(--space-1);font-size:12.5px;line-height:1;font-weight:500;padding:7px var(--space-3);border-radius:var(--radius-chip);border:1px solid transparent;white-space:nowrap}
+.chip i{font-style:normal;font-size:11px}
+.moved{background:var(--moved-fill);color:var(--moved-strong)}
+.done{background:var(--done-fill);color:var(--done-word)}
+.review{background:var(--review-fill);color:var(--review-word)}
+.waiting{background:var(--waiting-fill);color:var(--waiting-word)}
+.failed{background:var(--waiting-fill);color:var(--waiting-word);border:var(--hairline-dashed) dashed var(--waiting-mark)}
+.idle{background:transparent;color:var(--muted);border:var(--hairline) solid var(--idle-line)}
+.loop{background:transparent;color:var(--muted);border:var(--hairline-dashed) dashed var(--loop-mark)}
+.row{display:flex;flex-wrap:wrap;gap:var(--space-2);align-items:center}
+.k{width:150px;flex:none;color:var(--muted);font-size:12px}
+.notice{display:flex;gap:8px;align-items:center;background:var(--waiting-fill);color:var(--waiting-word);border:var(--hairline-dashed) dashed var(--waiting-mark);border-radius:var(--radius-card);padding:10px 14px;max-width:560px}.work{display:inline-flex;gap:8px;align-items:center;color:var(--moved-word);font-weight:500}.ring{width:14px;height:14px;border-radius:50%;border:2px solid var(--moved-fill);border-top-color:var(--moved-mark)}@media (prefers-reduced-motion:no-preference){.ring{animation:s 1s linear infinite}}@keyframes s{to{transform:rotate(360deg)}}</style></head>
+<body>
+<div style="padding:16px;display:grid;gap:14px"><div class="notice"><b>✕</b> A turn failed: the agent stopped. Try again.</div><div class="row"><span class="work"><span class="ring"></span>Kiro is working</span><span class="work"><span class="ring"></span>Reading GitHub</span><span class="chip moved"><span class="ring" style="width:10px;height:10px"></span>Working</span></div></div>
+</body>
+</html>

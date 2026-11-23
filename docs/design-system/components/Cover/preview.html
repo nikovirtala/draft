@@ -1,0 +1,54 @@
+<!-- @dsCard height=288 -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>draft</title>
+<style>
+  html, body { margin:0; height:100%; }
+  body { background:var(--page); color:var(--ink); font-family:var(--font-sans); overflow:hidden; }
+  .cover { position:relative; height:288px; overflow:hidden; }
+  .art { position:absolute; top:0; left:480px; width:480px; height:288px; overflow:hidden; }
+  .moved { fill:var(--moved-fill); } .done { fill:var(--done-fill); } .review { fill:var(--review-fill); } .waiting { fill:var(--waiting-fill); }
+  .ink { fill:var(--ink); }
+  .m-moved { fill:var(--moved-mark); } .m-done { fill:var(--done-mark); } .m-review { fill:var(--review-mark); } .m-waiting { fill:var(--waiting-mark); }
+  .card { rx:var(--radius-card); } .chip { rx:var(--radius-chip); }
+  .words { position:absolute; left:32px; bottom:32px; max-width:440px; }
+  .name { margin:0; font-family:var(--font-serif); font-size:120px; line-height:.9; font-weight:400; letter-spacing:-.02em; color:var(--ink); }
+  .tag { margin:10px 0 0 4px; font-size:14px; line-height:20px; color:var(--muted); }
+</style>
+</head>
+<body>
+<div class="cover">
+<div class="art" aria-hidden="true">
+<svg viewBox="0 0 480 288" width="480" height="288"><title>draft's state fills as cards, with chips in their mark colours</title>
+<!--
+  blocks      the four state fills as the identity (moved 176x184 bled off the top, done 128x136, review 96x96, waiting 128x96) and one ink slab 48x120 off the right edge; about a third of 960x288
+  arrangement a staggered stack of cards, like blocks in a conversation, bottoms on two lines 32 above the edge, 16 gutters
+  pattern     chips, from "pastel fills carry the state, strong colour only in small marks": chip-shaped pills (radius-chip) in the mark colours, small, one row per card, as a state row reads
+  scales      gutters space-4 (16); chip height 14 at a 22 pitch; card corners radius-card, chip corners radius-chip
+-->
+<rect class="moved card" x="16" y="-24" width="176" height="184" rx="12"/>
+<rect class="done card" x="208" y="24" width="128" height="136" rx="12"/>
+<rect class="review card" x="208" y="176" width="96" height="80" rx="12"/>
+<rect class="waiting card" x="16" y="176" width="176" height="80" rx="12"/>
+<rect class="ink card" x="352" y="56" width="160" height="200" rx="12"/>
+<rect class="m-moved chip" x="40" y="112" width="56" height="14" rx="7"/>
+<rect class="m-moved chip" x="104" y="112" width="32" height="14" rx="7"/>
+<rect class="m-done chip" x="232" y="112" width="40" height="14" rx="7"/>
+<rect class="m-done chip" x="280" y="112" width="24" height="14" rx="7"/>
+<rect class="m-waiting chip" x="40" y="216" width="72" height="14" rx="7"/>
+<rect class="m-review chip" x="232" y="216" width="48" height="14" rx="7"/>
+<rect class="moved chip" x="376" y="88" width="48" height="14" rx="7"/>
+<rect class="done chip" x="376" y="112" width="72" height="14" rx="7"/>
+<rect class="review chip" x="376" y="136" width="40" height="14" rx="7"/>
+<rect class="waiting chip" x="376" y="160" width="56" height="14" rx="7"/>
+</svg>
+</div>
+<div class="words">
+<h1 class="name">draft</h1>
+<p class="tag">Pastel states on cream. A colour means one thing, everywhere.</p>
+</div>
+</div>
+</body>
+</html>
