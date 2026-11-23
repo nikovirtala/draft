@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Boot } from "../../shared/ipc.ts";
 import { windowTitle } from "../../shared/placement.ts";
 import { agentLabel } from "./components/AgentState.tsx";
@@ -7,6 +7,7 @@ import { BlockContent } from "./components/BlockContent.tsx";
 import { ContextBar } from "./components/ContextBar.tsx";
 import { ConversationView } from "./components/ConversationView.tsx";
 import { Footer } from "./components/Footer.tsx";
+import { PanelDivider, usePanelWidth } from "./components/PanelDivider.tsx";
 import { TrustStep } from "./components/TrustStep.tsx";
 import { GlobalWorking, Working } from "./components/Working.tsx";
 import { useVisibleStubs } from "./visibility.ts";
@@ -37,6 +38,8 @@ function MainWindow() {
   useVisibleStubs();
   const main = ws.states[ws.main];
   const panel = panelEntry(ws);
+  const grid = useRef<HTMLDivElement>(null);
+  const width = usePanelWidth(grid, ws.view.panelWidth, panel !== null);
   return (
     <div className="app" data-testid="app" data-focused={ws.view.layout.focus !== null}>
       <header className="titlebar">
@@ -47,10 +50,15 @@ function MainWindow() {
         <span className="spacer" />
         <AttentionBar />
       </header>
-      <div className={`workspace${panel === null ? "" : " with-panel"}`}>
+      <div
+        className={`workspace${panel === null ? "" : " with-panel"}`}
+        ref={grid}
+        style={panel === null ? undefined : width.style}
+      >
         <section className="left" aria-label="Conversation">
           <ConversationView conversation={ws.main} />
         </section>
+        {panel !== null && <PanelDivider grid={grid} panel={width} />}
         {panel !== null && (
           <aside className="panel" data-testid="panel" aria-label="Panel">
             <BlockContent key={panel.info.address} entry={panel} />

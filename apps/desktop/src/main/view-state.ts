@@ -28,6 +28,7 @@ export interface Bounds {
  * - `window_bounds`: where each block's window was last, kept per block.
  * - `seen`: how many messages of each thread this device has shown.
  * - `map_cells`: the cell each map block has open: the row's kind and the column.
+ * - `prefs`: what the person set about how this device looks, by name: the thread column's width.
  */
 export class ViewStateStore {
   private readonly db: DatabaseSync;
@@ -47,6 +48,7 @@ export class ViewStateStore {
       create table if not exists seen (conversation text primary key, messages integer not null);
       create table if not exists map_cells (
         block text primary key, kind text not null, col text not null);
+      create table if not exists prefs (key text primary key, value text not null);
     `);
   }
 
@@ -170,6 +172,23 @@ export class ViewStateStore {
            on conflict(block) do update set kind = excluded.kind, col = excluded.col`,
         )
         .run(block, cell.kind, cell.column);
+  }
+
+  /** The width in pixels the person gave the thread's column, or null while they haven't. */
+  panelWidth(): number | null {
+    const r = this.db.prepare("select value from prefs where key = 'panel-width'").get() as
+      | { value: string }
+      | undefined;
+    const n = r === undefined ? Number.NaN : Number(r.value);
+    return Number.isFinite(n) ? n : null;
+  }
+
+  setPanelWidth(width: number): void {
+    this.db
+      .prepare(
+        "insert into prefs values ('panel-width', ?) on conflict(key) do update set value = excluded.value",
+      )
+      .run(String(width));
   }
 
   close(): void {

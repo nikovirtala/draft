@@ -120,7 +120,7 @@ a,
 }
 
 .column {
-  max-width: 760px;
+  max-width: 950px;
   margin: 0 auto;
   padding: 28px 24px 12px;
   display: flex;
@@ -507,7 +507,7 @@ textarea:focus-visible {
 
 /* Composer */
 .composer-wrap {
-  max-width: 760px;
+  max-width: 950px;
   width: 100%;
   margin: 0 auto;
   padding: 12px 24px 14px;
@@ -777,8 +777,23 @@ textarea:focus-visible {
   grid-template-columns: minmax(0, 1fr);
 }
 
+/* The thread's column is 44% (at least 380px) until the person sizes it with the divider. */
 .workspace.with-panel {
-  grid-template-columns: minmax(0, 1fr) minmax(380px, 44%);
+  --panel-width: max(380px, 44%);
+  grid-template-columns: minmax(0, 1fr) 8px var(--panel-width);
+}
+
+.panel-divider {
+  cursor: col-resize;
+  touch-action: none;
+  user-select: none;
+  border-left: var(--hairline) solid var(--line);
+  background: transparent;
+}
+
+.panel-divider:hover,
+.panel-divider:focus-visible {
+  background: var(--moved-fill);
 }
 
 .left,
@@ -790,7 +805,6 @@ textarea:focus-visible {
 }
 
 .panel {
-  border-left: var(--hairline) solid var(--line);
   background: var(--page);
 }
 

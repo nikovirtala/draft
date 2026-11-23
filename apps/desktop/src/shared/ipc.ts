@@ -227,6 +227,8 @@ export interface View {
   seen: Record<string, number>;
   /** The cell each map block has open on this device, by block address. */
   cells: Record<string, MapSelection>;
+  /** The width in pixels the person gave the thread's column on this device; null: the default. */
+  panelWidth: number | null;
 }
 
 export type Change =
@@ -368,6 +370,8 @@ export interface DraftBridge {
   setMapVisible(on: boolean): void;
   /** Remembers which cell of a map block is open on this device, or closes it with `null`. */
   selectMapCell(block: string, cell: MapSelection | null): Promise<void>;
+  /** Remembers the width of the thread's column on this device. */
+  setPanelWidth(width: number): Promise<void>;
   onChange(cb: (c: Change) => void): () => void;
 }
 
@@ -400,5 +404,6 @@ export const CHANNELS = {
   map: "draft:map",
   mapVisible: "draft:map-visible",
   selectMapCell: "draft:select-map-cell",
+  setPanelWidth: "draft:set-panel-width",
   change: "draft:change",
 } as const;

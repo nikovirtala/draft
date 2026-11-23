@@ -218,6 +218,10 @@ function run(): void {
       if (!str(block, 500) || !parsed.success) throw new Error("bad request");
       runtimeOf(e)?.layout.selectCell(block, parsed.data);
     });
+    ipcMain.handle(CHANNELS.setPanelWidth, (e, width: unknown) => {
+      if (typeof width !== "number" || !Number.isFinite(width)) throw new Error("bad request");
+      runtimeOf(e)?.layout.setPanelWidth(width);
+    });
     ipcMain.handle(CHANNELS.focus, (e, target: unknown) => {
       const parsed = FocusSchema.safeParse(target);
       if (parsed.success) runtimeOf(e)?.layout.focus(parsed.data);
