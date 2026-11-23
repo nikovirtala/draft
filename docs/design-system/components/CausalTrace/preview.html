@@ -1,0 +1,89 @@
+<!-- @dsCard group="Map" height=900 subtitle="Why things moved: causes to the left, effects to the right" -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>The causal trace</title>
+<style>body{margin:0;font-family:var(--font-sans);background:var(--page);color:var(--text);font-size:13px}
+.frame{background:var(--raised);border:var(--hairline) solid var(--line-strong);border-radius:var(--radius-card);padding:12px 12px 4px;display:inline-block;margin:0 0 14px}
+.cap{color:var(--muted);font-size:12px;margin:0 0 6px 4px}.cap b{color:var(--ink);font-weight:500}
+.lane{font:12px var(--font-sans);fill:var(--muted)}.sep{stroke:var(--line);stroke-width:.5}
+.time{font:11.5px var(--font-sans);fill:var(--muted)}.src{fill:var(--text)}
+.ev rect{stroke-width:.5}.ev text{font:500 12.5px var(--font-sans)}
+.ev.moved rect{fill:var(--moved-fill);stroke:transparent}.ev.moved text{fill:var(--moved-strong)}
+.ev.done rect{fill:var(--done-fill);stroke:transparent}.ev.done text{fill:var(--done-word)}
+.ev.review rect{fill:var(--review-fill);stroke:transparent}.ev.review text{fill:var(--review-word)}
+.ev.waiting rect{fill:var(--waiting-fill);stroke:transparent}.ev.waiting text{fill:var(--waiting-word)}
+.ev.failed rect{fill:var(--waiting-fill);stroke:var(--waiting-mark);stroke-width:.75;stroke-dasharray:3 2}.ev.failed text{fill:var(--waiting-word)}
+.ev.command rect{fill:var(--raised);stroke:var(--line-strong)}.ev.command text{fill:var(--ink)}
+.ev.idle rect{fill:none;stroke:var(--idle-line)}.ev.idle text{fill:var(--muted)}
+.ev.unknown rect{fill:none;stroke:var(--loop-mark);stroke-width:.75;stroke-dasharray:3 2}.ev.unknown text{fill:var(--muted);font-weight:400}
+.cause{fill:none;stroke:var(--edge);stroke-width:1.2}.cause.on{stroke:var(--moved-mark);stroke-width:1.6}
+.ref{fill:none;stroke:var(--edge);stroke-width:1;stroke-dasharray:2 3}
+.unk{fill:none;stroke:var(--loop-mark);stroke-width:1;stroke-dasharray:3 2}
+.open{fill:none;stroke:var(--loop-mark);stroke-width:1;stroke-dasharray:3 2}.openring{fill:none;stroke:var(--loop-mark);stroke-width:.75;stroke-dasharray:3 2}
+.why{margin:6px 4px 10px;font-size:12.5px;color:var(--text)}.why b{color:var(--ink);font-weight:500}
+.leg{display:flex;flex-wrap:wrap;gap:14px;margin:2px 4px 10px;font-size:12px;color:var(--muted);align-items:center}
+.leg svg{vertical-align:middle;margin-right:4px}</style></head>
+<body>
+<div style="padding:16px">
+<p class="cap"><b>A cascade.</b> Every event says what caused it; what a person or Claude did reads as a command. Events follow the order of causes; each carries its source and time.</p>
+<div class="frame"><svg viewBox="0 0 1000 152" width="1000" height="152" role="img" aria-label="A cascade: a merge wakes a waiting session, which leads to the next merge and an issue closing">
+<defs><marker id="c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 1L9 5L0 9z" fill="context-stroke"/></marker></defs>
+<path class="cause on" d="M128 106 C148 106 148 106 168 106" marker-end="url(#c)"/>
+<path class="cause on" d="M262 106 C277 106 277 106 292 106" marker-end="url(#c)"/>
+<path class="cause on" d="M406 106 C416 106 416 106 426 106" marker-end="url(#c)"/>
+<path class="cause on" d="M540 106 C555 106 555 106 570 106" marker-end="url(#c)"/>
+<path class="cause on" d="M519 40 C545 40 545 106 570 106" marker-end="url(#c)"/>
+<path class="cause on" d="M664 106 C681 106 681 106 698 106" marker-end="url(#c)"/>
+<g class="ev done"><rect x="36" y="93" width="91" height="26" rx="7"/><text x="82" y="110" text-anchor="middle">#50 merged</text></g>
+<text class="time" x="82" y="134" text-anchor="middle"><tspan class="src">GitHub</tspan> · 20:25</text>
+<g class="ev moved"><rect x="170" y="93" width="91" height="26" rx="7"/><text x="216" y="110" text-anchor="middle">wait fired</text></g>
+<text class="time" x="216" y="134" text-anchor="middle"><tspan class="src">kiro-remote</tspan> · 20:25</text>
+<g class="ev moved"><rect x="294" y="93" width="111" height="26" rx="7"/><text x="350" y="110" text-anchor="middle">woke, rebased</text></g>
+<text class="time" x="350" y="134" text-anchor="middle"><tspan class="src">Kiro session</tspan> · 20:26</text>
+<g class="ev done"><rect x="428" y="93" width="111" height="26" rx="7"/><text x="484" y="110" text-anchor="middle">checks passed</text></g>
+<text class="time" x="484" y="134" text-anchor="middle"><tspan class="src">CI</tspan></text>
+<g class="ev command"><rect x="449" y="27" width="70" height="26" rx="7"/><text x="484" y="44" text-anchor="middle">› merge</text></g>
+<text class="time" x="484" y="68" text-anchor="middle"><tspan class="src">you</tspan> · 21:09</text>
+<g class="ev done"><rect x="572" y="93" width="91" height="26" rx="7"/><text x="618" y="110" text-anchor="middle">#51 merged</text></g>
+<text class="time" x="618" y="134" text-anchor="middle"><tspan class="src">GitHub</tspan> · 21:09</text>
+<g class="ev done"><rect x="700" y="93" width="104" height="26" rx="7"/><text x="752" y="110" text-anchor="middle">issue closed</text></g>
+<text class="time" x="752" y="134" text-anchor="middle"><tspan class="src">issues</tspan> · 21:09</text>
+</svg><div class="leg"><span><svg width="40" height="14" aria-hidden="true"><rect x="1" y="1" width="38" height="12" rx="5" fill="var(--raised)" stroke="var(--line-strong)" stroke-width=".5"/></svg>a command: what you or Claude did</span><span><svg width="34" height="10" aria-hidden="true"><path d="M2 5H30" stroke="var(--moved-mark)" stroke-width="1.6"/></svg>caused, on the chosen path</span><span><svg width="34" height="10" aria-hidden="true"><path d="M2 5H30" stroke="var(--edge)" stroke-width="1.2"/></svg>caused, elsewhere</span><span><svg width="34" height="10" aria-hidden="true"><path d="M2 5H30" stroke="var(--edge)" stroke-dasharray="2 3"/></svg>refers to, not a cause</span><span><svg width="34" height="10" aria-hidden="true"><path d="M2 5H30" stroke="var(--loop-mark)" stroke-dasharray="3 2"/></svg>cause unknown or open end</span></div></div>
+<p class="cap"><b>An open end, chosen.</b> "3 lost" is chosen: its causes back to the root light up, the rest of the chain stays grey. A cause no source recorded is shown as unknown, never guessed.</p>
+<div class="frame"><svg viewBox="0 0 1000 284" width="1000" height="284" role="img" aria-label="A chain that ends in an open end: queued notes lost when a session was deleted for an unknown cause">
+<defs><marker id="c" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 1L9 5L0 9z" fill="context-stroke"/></marker></defs>
+<path class="cause" d="M152 40 C160 40 160 40 168 40" marker-end="url(#c)"/>
+<path class="cause" d="M302 40 C319 40 319 40 336 40" marker-end="url(#c)"/>
+<path class="cause" d="M302 40 C314 40 314 106 326 106" marker-end="url(#c)"/>
+<path class="cause" d="M543 172 C560 172 560 172 578 172" marker-end="url(#c)"/>
+<path class="cause" d="M653 40 C679 40 679 40 704 40" marker-end="url(#c)"/>
+<path class="cause on" d="M787 238 C816 238 816 172 846 172" marker-end="url(#c)"/>
+<path class="ref" d="M656 172 C751 172 751 172 846 172" marker-end="url(#c)"/>
+<g class="ev command"><rect x="12" y="27" width="139" height="26" rx="7"/><text x="82" y="44" text-anchor="middle">› send screenshot</text></g>
+<text class="time" x="82" y="68" text-anchor="middle"><tspan class="src">you</tspan> · 20:30</text>
+<g class="ev command"><rect x="170" y="27" width="132" height="26" rx="7"/><text x="236" y="44" text-anchor="middle">› launch session</text></g>
+<text class="time" x="236" y="68" text-anchor="middle"><tspan class="src">Claude</tspan> · 20:31</text>
+<g class="ev review"><rect x="338" y="27" width="91" height="26" rx="7"/><text x="384" y="44" text-anchor="middle">#52 opened</text></g>
+<text class="time" x="384" y="68" text-anchor="middle"><tspan class="src">Kiro session</tspan> · 20:44</text>
+<g class="ev moved"><rect x="328" y="93" width="111" height="26" rx="7"/><text x="384" y="110" text-anchor="middle">3 bugs opened</text></g>
+<text class="time" x="384" y="134" text-anchor="middle"><tspan class="src">Kiro session</tspan></text>
+<g class="ev command"><rect x="583" y="27" width="70" height="26" rx="7"/><text x="618" y="44" text-anchor="middle">› merge</text></g>
+<text class="time" x="618" y="68" text-anchor="middle"><tspan class="src">you</tspan> · 21:13</text>
+<g class="ev done"><rect x="706" y="27" width="91" height="26" rx="7"/><text x="752" y="44" text-anchor="middle">#52 merged</text></g>
+<text class="time" x="752" y="68" text-anchor="middle"><tspan class="src">GitHub</tspan> · 21:13</text>
+<g class="ev command"><rect x="425" y="159" width="118" height="26" rx="7"/><text x="484" y="176" text-anchor="middle">› send 3 notes</text></g>
+<text class="time" x="484" y="200" text-anchor="middle"><tspan class="src">Claude</tspan> · 21:02</text>
+<g class="ev waiting"><rect x="580" y="159" width="77" height="26" rx="7"/><text x="618" y="176" text-anchor="middle">3 queued</text></g>
+<text class="time" x="618" y="200" text-anchor="middle"><tspan class="src">kiro-remote</tspan> · 21:02–21:13</text>
+<g class="ev idle"><rect x="717" y="225" width="70" height="26" rx="7"/><text x="752" y="242" text-anchor="middle">deleted</text></g>
+<text class="time" x="752" y="266" text-anchor="middle"><tspan class="src">Kiro session</tspan> · 21:14</text>
+<g class="ev failed"><rect x="848" y="159" width="77" height="26" rx="7"/><text x="886" y="176" text-anchor="middle">✕ 3 lost</text></g>
+<text class="time" x="886" y="200" text-anchor="middle"><tspan class="src">kiro-remote</tspan></text>
+<g class="ev unknown"><rect x="562" y="225" width="111" height="26" rx="7"/><text x="618" y="242" text-anchor="middle">cause unknown</text></g>
+<path class="unk" d="M674 238 L715 238" marker-end="url(#c)"/>
+<path class="open" d="M928 172 L958 172"/><circle class="openring" cx="966" cy="172" r="7"/><text class="time" x="966" y="200" text-anchor="middle">open end</text>
+</svg>
+<p class="why"><b>3 lost</b> · caused by: <b>deleted</b> (Kiro session, 21:14), whose cause is unknown · refers to: <b>3 queued</b> · led to: nothing yet, an open end</p><div class="leg"><span><svg width="40" height="14" aria-hidden="true"><rect x="1" y="1" width="38" height="12" rx="5" fill="var(--raised)" stroke="var(--line-strong)" stroke-width=".5"/></svg>a command: what you or Claude did</span><span><svg width="34" height="10" aria-hidden="true"><path d="M2 5H30" stroke="var(--moved-mark)" stroke-width="1.6"/></svg>caused, on the chosen path</span><span><svg width="34" height="10" aria-hidden="true"><path d="M2 5H30" stroke="var(--edge)" stroke-width="1.2"/></svg>caused, elsewhere</span><span><svg width="34" height="10" aria-hidden="true"><path d="M2 5H30" stroke="var(--edge)" stroke-dasharray="2 3"/></svg>refers to, not a cause</span><span><svg width="34" height="10" aria-hidden="true"><path d="M2 5H30" stroke="var(--loop-mark)" stroke-dasharray="3 2"/></svg>cause unknown or open end</span></div></div>
+</div>
+</body>
+</html>
