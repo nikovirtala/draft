@@ -107,6 +107,8 @@ export function ConversationView({ conversation }: { conversation: string }) {
           busy={state.busy}
           agentState={state.agent.state}
           agentLabel={agentLabel(state.agent)}
+          thread={!isMain}
+          people={state.people}
           onFocus={() => ws.select({ block: isMain ? null : conversation, conversation })}
           onSubmit={(t, aside) => {
             ws.select({ block: isMain ? null : conversation, conversation });

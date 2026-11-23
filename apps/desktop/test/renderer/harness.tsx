@@ -67,6 +67,7 @@ export function conversationState(over: Partial<ConversationState> = {}): Conver
     busy: false,
     resolving: [],
     error: null,
+    people: 1,
     ...over,
   };
 }

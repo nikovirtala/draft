@@ -1,20 +1,29 @@
 import { type FormEvent, type KeyboardEvent, useState } from "react";
+import { composerPlaceholder, showsAsideHint } from "../../../shared/frame.ts";
 
 /**
  * The composer. ↵ sends to the conversation's default audience, which comes from the agent's
  * state: people and the agent while it is active, people only while it is paused. ⌥↵ sends an
- * aside, for people only. The line under the box says which is which.
+ * aside, for people only. The box says in its own words what it is for, and while the agent is
+ * paused, that it isn't listening. The line under it explains audiences only once there is
+ * another person to hear an aside; the shortcut works before that, unadvertised.
  */
 export function Composer({
   busy,
   agentState,
   agentLabel,
+  thread,
+  people,
   onSubmit,
   onFocus,
 }: {
   busy: boolean;
   agentState: "active" | "paused";
   agentLabel: string;
+  /** A thread's composer, not the main conversation's. */
+  thread: boolean;
+  /** How many people have spoken in this context. */
+  people: number;
   onSubmit: (text: string, aside: boolean) => void;
   /** Speaking in a conversation selects it, which is what focus takes. */
   onFocus?: () => void;
@@ -47,7 +56,7 @@ export function Composer({
       <div className="composer">
         <textarea
           aria-label="Message"
-          placeholder={paused ? "Message people" : "Message draft"}
+          placeholder={composerPlaceholder({ thread, paused })}
           rows={1}
           value={text}
           onChange={(e) => setText(e.target.value)}
@@ -64,19 +73,21 @@ export function Composer({
           {altHeld ? "Aside" : "Send"}
         </button>
       </div>
-      <p className="composer-hint" data-testid="composer-hint">
-        {paused ? (
-          <>
-            {agentLabel} is paused: messages go to people only. Write <code>@agent</code> to reach
-            it for one message.
-          </>
-        ) : (
-          <>
-            To people and {agentLabel}. <kbd>Option</kbd>+<kbd>Enter</kbd> (<kbd>Alt</kbd>+
-            <kbd>Enter</kbd>) sends an aside, for people only.
-          </>
-        )}
-      </p>
+      {showsAsideHint(people) && (
+        <p className="composer-hint" data-testid="composer-hint">
+          {paused ? (
+            <>
+              Messages go to people only. Write <code>@agent</code> to reach {agentLabel} for one
+              message.
+            </>
+          ) : (
+            <>
+              To people and {agentLabel}. <kbd>Option</kbd>+<kbd>Enter</kbd> (<kbd>Alt</kbd>+
+              <kbd>Enter</kbd>) sends an aside, for people only.
+            </>
+          )}
+        </p>
+      )}
     </form>
   );
 }

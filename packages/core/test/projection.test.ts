@@ -321,4 +321,22 @@ describe("projections", () => {
     expect(p.sync(b.events())).toBe("rebuilt");
     expect(p.messages(CONV)[0]?.text).toBe("b");
   });
+
+  it("counts the people who spoke, never the agent, and each person once", async () => {
+    const log = new MemoryLogStore(testClock());
+    const p = Projection.open();
+    p.applyAll(await log.append(genesisDrafts()));
+    expect(p.people()).toBe(0);
+    const other = { kind: "user", id: "01kahx00000000000000other", name: "Other" } as const;
+    p.applyAll(
+      await log.append([
+        messageDraft("m1", "user", "hi"),
+        messageDraft("m2", "agent", "hello"),
+        messageDraft("m3", "user", "again"),
+      ]),
+    );
+    expect(p.people()).toBe(1);
+    p.applyAll(await log.append([{ ...messageDraft("m4", "user", "me too"), actor: other }]));
+    expect(p.people()).toBe(2);
+  });
 });
