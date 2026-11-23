@@ -458,5 +458,16 @@ test("an item clicked in one window goes to its block in the window that shows i
   await expect(inWindow).toBeInViewport();
   await expect(panel).toBeHidden();
   await shot(win, "a10-item-from-the-main-window-goes-to-the-thread-window");
+
+  // 6. A selected status stub is drawn on moved-selected (#d7c5fb): the names of its details,
+  // muted elsewhere, are text there, and the pull request's state keeps its chip.
+  const stub = main.getByTestId("stub").first();
+  await stub.getByRole("button", { name: "Expand" }).click();
+  await stub.locator(".stub-title").click();
+  await expect(stub).toHaveAttribute("data-selected", "true");
+  await expect(stub).toHaveCSS("background-color", "rgb(215, 197, 251)");
+  await expect(stub.locator(".stub-details dt").first()).toHaveCSS("color", "rgb(68, 88, 90)");
+  await expect(stub.locator(".stub-title")).toHaveCSS("color", "rgb(0, 86, 97)");
+  await shot(page, "a11-selected-status-stub-on-moved-selected");
   await electronApp.close();
 });

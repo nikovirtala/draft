@@ -881,12 +881,6 @@ textarea:focus-visible {
   background: var(--moved-fill);
 }
 
-.stub[data-selected="true"],
-.thread-stub[data-selected="true"],
-.block-full.thread-view:focus-within {
-  border-color: var(--moved-mark);
-}
-
 .threads {
   margin-top: 10px;
   display: flex;
@@ -933,6 +927,51 @@ textarea:focus-visible {
   color: var(--waiting-word);
   background: var(--waiting-fill);
   border-color: transparent;
+}
+
+/*
+ * The block in focus is drawn on moved-selected, as the design system's Selection preview shows:
+ * a stub or a thread stub whole, a block in the panel or a window by its header. Words on it are
+ * ink or text (5.3:1 and 4.8:1); muted and the strong words fall under 4.5:1 there, so what is
+ * muted elsewhere (a stub's reference and status, a thread's agent, a detail's name, an icon, a
+ * chip with no fill) becomes text. A chip with a fill keeps it, so no state word is ever bare on
+ * moved-selected.
+ */
+:is(.stub, .thread-stub)[data-selected="true"],
+.block-full[data-selected="true"] > .block-header,
+.block-full.thread-view:focus-within > .block-header {
+  background: var(--moved-selected);
+}
+
+/* A stub that says where its block went is faded; faded words would fall under 4.5:1 on the fill. */
+:is(.stub, .thread-stub).away[data-selected="true"] {
+  opacity: 1;
+}
+
+:is(
+    :is(.stub, .thread-stub)[data-selected="true"],
+    .block-full[data-selected="true"] > .block-header,
+    .block-full.thread-view:focus-within > .block-header
+  )
+  :is(
+    .stub-ref,
+    .stub-status:not(.pr-state),
+    .pr-state.pr-closed,
+    .thread-agent,
+    .thread-chip:not(.new, .waiting),
+    .stub-details dt,
+    button.icon
+  ) {
+  color: var(--text);
+}
+
+:is(
+    :is(.stub, .thread-stub)[data-selected="true"],
+    .block-full[data-selected="true"] > .block-header,
+    .block-full.thread-view:focus-within > .block-header
+  )
+  .thread-mark {
+  color: var(--ink);
 }
 
 .thread-chip.working {
@@ -1236,9 +1275,13 @@ textarea:focus-visible {
   cursor: pointer;
 }
 
-.context-item-button:hover,
-.context-item-button[data-current="true"] {
+.context-item-button:hover {
   background: var(--moved-fill);
+}
+
+/* The context you are in is the row you are on: moved-selected, with ink words. */
+.context-item-button[data-current="true"] {
+  background: var(--moved-selected);
 }
 
 .context-recent-name {
@@ -1249,7 +1292,7 @@ textarea:focus-visible {
   font-size: 12px;
 }
 
-/* Soft purple is read with ink or text, never with muted. */
+/* Purple is read with ink or text, never with muted. */
 .context-item-button:hover .context-recent-meta,
 .context-item-button[data-current="true"] .context-recent-meta {
   color: var(--text);
@@ -1636,6 +1679,15 @@ textarea:focus-visible {
 
 .map-item.lit {
   border-color: var(--line);
+}
+
+/* The row you are on takes moved-selected, and its muted words become text. */
+.map-item:focus-visible {
+  background: var(--moved-selected);
+}
+
+.map-item:focus-visible :is(.map-item-since, .map-item-where) {
+  color: var(--text);
 }
 
 .map-item-label {
