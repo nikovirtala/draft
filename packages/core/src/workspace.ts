@@ -1,4 +1,5 @@
 import { conversationKey, itemAddress, parseAddress } from "./address.ts";
+import { foldStatus } from "./adr.ts";
 import { type AgentDirectory, singleAgent } from "./agent.ts";
 import { buildAgentContext, type ContextSize, contextSize } from "./agent-context.ts";
 import {
@@ -117,10 +118,25 @@ export class Workspace {
       writer,
       agents: o.agents ?? singleAgent(o.agent),
       touched: (c: string) => workspace?.touch(c),
+      proposedDecisions:
+        o.proposedDecisions ?? (async () => (await workspace?.proposedDecisions()) ?? []),
     };
     const main = await ConversationService.open(shared);
     workspace = new Workspace(shared, main);
     return workspace;
+  }
+
+  /**
+   * The decisions proposed in the repositories this context covers, read now. A check that names
+   * one of them gates it. Empty without repositories, and when they cannot be read.
+   */
+  async proposedDecisions(): Promise<{ repo: string; id: string }[]> {
+    if (this.ark === null) return [];
+    await this.ark.read();
+    return this.ark.records
+      .snapshot()
+      .adrs.filter((a) => foldStatus(a.events) === "proposed")
+      .map((a) => ({ repo: a.repo, id: a.id }));
   }
 
   get mainConversation(): string {

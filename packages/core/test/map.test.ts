@@ -418,6 +418,7 @@ describe("the registry", () => {
       "acceptance",
       "kiro-session",
       "pull-request",
+      "check",
     ]);
     // Where a kind has a machine its states are the machine's.
     expect(mapRegistry.get("thread")?.states.map((s) => s.id)).toEqual(
@@ -512,10 +513,11 @@ describe("an empty map", () => {
       "Acceptance requests",
       "Kiro sessions",
       "Pull requests",
+      "Checks",
       "Widgets",
     ])
       expect(text).toContain(name);
-    expect(text).toContain("Pull requests and Widgets appear here");
+    expect(text).toContain("Checks and Widgets appear here");
     // Kinds that share a prefix are one name.
     expect(text.match(/Interrupts/g)).toHaveLength(1);
     expect(emptyMapText(mapRegistry.list())).not.toContain("Widgets");

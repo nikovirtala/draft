@@ -475,6 +475,14 @@ export class ArkMap {
   /** Reads what changed when a map is on screen and it is time. Returns whether the map changed. */
   tick(): Promise<boolean> {
     if (this.viewers.size === 0 || !this.records.due()) return Promise.resolve(false);
+    return this.read();
+  }
+
+  /**
+   * Reads the repositories now, map or no map: what a check needs to know about the decisions
+   * that are proposed when a pull request merges. A read already under way is the one returned.
+   */
+  read(): Promise<boolean> {
     if (this.inFlight === null) {
       this.inFlight = this.records
         .refresh(this.o.intervalMs ?? 30_000)
