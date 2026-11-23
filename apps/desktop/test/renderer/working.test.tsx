@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { act } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { App } from "../../src/renderer/src/App.tsx";
+import { App, MainWindow } from "../../src/renderer/src/App.tsx";
 import { ConversationView } from "../../src/renderer/src/components/ConversationView.tsx";
 import { MapStub } from "../../src/renderer/src/components/MapBlock.tsx";
 import { StatusStub } from "../../src/renderer/src/components/StatusStub.tsx";
@@ -211,6 +211,27 @@ describe("the indicator in each place, only while there is work", () => {
     );
     await mounted.render(view(0, []));
     expect(indicators(mounted.host, "global")).toHaveLength(0);
+  });
+
+  it("the window shows it in the footer's activity slot and never in the title bar", async () => {
+    const busy = workspace({
+      states: { "local/main": conversationState({ busy: true }) },
+    });
+    mounted = await mount(inWorkspace(busy, <MainWindow />));
+    await advance(WORKING_DELAY_MS);
+    const slot = mounted.host.querySelector('[data-testid="footer-activity"]');
+    const bar = mounted.host.querySelector("header.titlebar");
+    expect(slot).not.toBeNull();
+    expect(bar).not.toBeNull();
+    expect(slot?.querySelectorAll('[data-testid="working"][data-place="global"]')).toHaveLength(1);
+    expect(bar?.querySelectorAll('[data-testid="working"]')).toHaveLength(0);
+    await mounted.render(
+      inWorkspace(
+        workspace({ states: { "local/main": conversationState({ busy: false }) } }),
+        <MainWindow />,
+      ),
+    );
+    expect(mounted.host.querySelectorAll('[data-testid="working"]')).toHaveLength(0);
   });
 
   it("says what is going on in words", () => {

@@ -9,7 +9,7 @@ import { ConversationView } from "./components/ConversationView.tsx";
 import { Footer } from "./components/Footer.tsx";
 import { PanelDivider, usePanelWidth } from "./components/PanelDivider.tsx";
 import { TrustStep } from "./components/TrustStep.tsx";
-import { GlobalWorking, Working } from "./components/Working.tsx";
+import { Working } from "./components/Working.tsx";
 import { useVisibleStubs } from "./visibility.ts";
 import { panelEntry, useWorkspace, type Workspace, WorkspaceProvider } from "./workspace.tsx";
 
@@ -32,7 +32,7 @@ function useFocusGesture(ws: Workspace) {
   }, [ws]);
 }
 
-function MainWindow() {
+export function MainWindow() {
   const ws = useWorkspace();
   useFocusGesture(ws);
   useVisibleStubs();
@@ -46,7 +46,6 @@ function MainWindow() {
         <span className="brand">draft</span>
         <ContextBar />
         <span className="title">{main?.title ?? ""}</span>
-        <GlobalWorking />
         <span className="spacer" />
         <AttentionBar />
       </header>
