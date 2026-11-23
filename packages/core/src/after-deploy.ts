@@ -3,7 +3,7 @@ import { ARK_ID } from "./ark-issue.ts";
 /**
  * What a merged pull request still leaves for a person: the items of its "After deploy" section,
  * read as checks. AGENTS.md says how to write the section; this is the one parse of it, and it
- * reads what agents wrote before the shape was settled too (docs/model.md, "Checks").
+ * reads what agents wrote before the shape was settled too (docs/implementation.md, "What a merged pull request leaves for the person").
  *
  * - `Nothing` or `None` (with a reason after it, if the writer gave one) means no check.
  * - Each top-level bullet is one check. Its first lines are its reason (a bold lead is its title),

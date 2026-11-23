@@ -2137,3 +2137,50 @@ div.map-item {
   white-space: nowrap;
   border: 0;
 }
+
+/* A check: what a merged pull request leaves for the person. It reuses the interrupt's look. */
+.check .interrupt-label {
+  flex-wrap: wrap;
+}
+
+.check-steps {
+  margin: 8px 0;
+  padding-left: 22px;
+}
+
+.check-steps li {
+  margin: 0 0 10px;
+}
+
+.check-command {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin: 6px 0;
+}
+
+.check-command .prompt-input {
+  flex: 1;
+  margin: 0;
+}
+
+.check-see {
+  color: var(--muted);
+}
+
+.check-note {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 8px 0;
+  font: inherit;
+  color: var(--text);
+  background: var(--raised);
+  border: var(--hairline) solid var(--line);
+  border-radius: 8px;
+  padding: 6px 8px;
+}
+
+.check-gate {
+  margin: 8px 0;
+}

@@ -1,6 +1,7 @@
 import { type ReactNode, useEffect, useRef } from "react";
 import { useWorkspace } from "../workspace.tsx";
 import { agentLabel } from "./AgentState.tsx";
+import { CheckBlock, hostedAcceptances } from "./CheckBlock.tsx";
 import { Composer } from "./Composer.tsx";
 import { ConclusionCard, EndedNote } from "./Conclusion.tsx";
 import { InterruptBlock } from "./InterruptBlock.tsx";
@@ -33,6 +34,8 @@ export function ConversationView({ conversation }: { conversation: string }) {
   const isMain = conversation === ws.main;
   const threadsHere = (message: string) => ws.threads.filter((t) => t.parent === message);
   const showFull = ws.showsInterrupts(conversation);
+  // A passed check that names a decision hosts that decision's acceptance request.
+  const hosted = hostedAcceptances(ws.states);
   return (
     <div
       className="conversation-pane"
@@ -51,6 +54,17 @@ export function ConversationView({ conversation }: { conversation: string }) {
           )}
           {state.timeline.map((b) => {
             if (b.kind === "unknown") return <UnknownBlock key={b.id} block={b} />;
+            if (b.kind === "check")
+              return showFull || b.check.state !== "requested" ? (
+                <CheckBlock key={b.id} block={b} conversation={conversation} />
+              ) : null;
+            if (
+              b.kind === "interrupt" &&
+              b.cause === "acceptance" &&
+              b.target !== null &&
+              hosted.has(`${b.target.type}:${b.target.id}`)
+            )
+              return null;
             if (b.kind === "interrupt")
               // What is settled is history and always shows; what is open shows where you are.
               return showFull || b.state !== "open" ? (

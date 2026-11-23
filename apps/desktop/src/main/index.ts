@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import { BY_CLASS } from "@nikovirtala/draft-core";
-import { app, ipcMain, shell } from "electron";
+import { app, clipboard, ipcMain, shell } from "electron";
 import { z } from "zod";
 import { CHANNELS } from "../shared/ipc.ts";
 import { BlockInfoSchema, MOVE_TYPES } from "../shared/placement.ts";
@@ -262,6 +262,26 @@ function run(): void {
           .settleInterrupt(key, outcome, words);
       },
     );
+    ipcMain.handle(
+      CHANNELS.answerCheck,
+      async (e, conversation: unknown, key: unknown, outcome: unknown, note: unknown) => {
+        if (
+          !str(conversation) ||
+          !str(key, 2000) ||
+          (outcome !== "passed" && outcome !== "failed") ||
+          !(note === null || str(note, 5000))
+        )
+          throw new Error("bad request");
+        await requireRuntime(e)
+          .workspace.conversation(conversation)
+          .answerCheck(key, outcome, note);
+      },
+    );
+    ipcMain.handle(CHANNELS.copyText, (e, text: unknown) => {
+      if (!str(text, 100_000)) throw new Error("bad request");
+      requireRuntime(e);
+      clipboard.writeText(text);
+    });
     ipcMain.handle(CHANNELS.wrapUp, async (e, conversation: unknown) => {
       if (!str(conversation)) throw new Error("bad request");
       await requireRuntime(e)

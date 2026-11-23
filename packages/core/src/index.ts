@@ -11,6 +11,7 @@ export * from "./ark-records.ts";
 export * from "./artifact-page.ts";
 export * from "./canonical.ts";
 export * from "./check.ts";
+export * from "./check-types.ts";
 export * from "./conversation.ts";
 export * from "./cross-context.ts";
 export * from "./events.ts";
