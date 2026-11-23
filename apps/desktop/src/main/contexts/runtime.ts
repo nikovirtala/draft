@@ -4,6 +4,7 @@ import {
   type CrossContext,
   FileLogStore,
   type GithubClient,
+  type KiroFeedApi,
   type KiroRemoteTools,
   Projection,
   type Resolver,
@@ -33,6 +34,8 @@ export interface RuntimeDeps {
   github: GithubClient;
   /** Kiro Remote as the person: what answering a permission request and retrying a step call. */
   actions: KiroRemoteTools | null;
+  /** Kiro Remote's change feed, read into each context's log; null without a Kiro Remote. */
+  feed: KiroFeedApi | null;
   /** What answering an acceptance request runs, as the person. */
   acceptance: AcceptanceActions;
   /** Makes the ACP runtime of one agent, working where `place` says. */
@@ -98,6 +101,9 @@ export class ContextRuntime {
         repos: coveredRepos(deps, name),
         intervalMs: deps.config.mapPollMs,
       },
+      ...(deps.feed === null
+        ? {}
+        : { feed: { api: deps.feed, intervalMs: deps.config.feedPollMs } }),
       launcher: deps.launcher(name),
       crossContext: deps.crossContext(name),
       ...(deps.actions === null ? {} : { actions: deps.actions }),
@@ -139,6 +145,11 @@ export class ContextRuntime {
       folder: place.folder,
       folderMissing: place.missing,
     };
+  }
+
+  /** A window gained focus: the change feed is read now, not at the next interval. */
+  focus(): void {
+    void this.workspace.focus();
   }
 
   /** A window has a map on screen, or no longer has; the repositories are read while one has. */

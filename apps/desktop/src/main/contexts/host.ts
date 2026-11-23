@@ -279,6 +279,11 @@ export class ContextHost {
           .find((w) => w.webContents.id === webContentsId) ?? null);
   }
 
+  /** A window gained focus: each context reads Kiro Remote's change feed now. */
+  focused(): void {
+    for (const r of this.runtimes.values()) r.focus();
+  }
+
   forgetWindow(webContentsId: number): void {
     for (const r of this.runtimes.values()) r.forgetWindow(webContentsId);
   }

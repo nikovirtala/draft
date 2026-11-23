@@ -73,6 +73,7 @@ function run(): void {
           resolvers: s.resolvers,
           github: s.github,
           actions: s.actions,
+          feed: s.feed,
           acceptance: s.acceptance,
           makeAgent: s.makeAgent,
           githubNote: s.githubNote,
@@ -347,6 +348,9 @@ function run(): void {
     const id = contents.id;
     contents.once("destroyed", () => host?.forgetWindow(id));
   });
+
+  // Coming back to the app is when the person wants to know: the change feed is read now.
+  app.on("browser-window-focus", () => host?.focused());
 
   app.on("window-all-closed", () => {
     if (process.platform !== "darwin") app.quit();
