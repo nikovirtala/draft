@@ -1,0 +1,17 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M84XN15VFBSGXHTMPNFZCWD8
+subject: edenwvc1
+type: opened
+at: 2026-11-23T19:20:45Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: 244629292+kiro-agent@users.noreply.github.com
+data:
+  title: the caret blink and the message actions fade ignore prefers-reduced-motion
+  template: task
+  template_version: 1
