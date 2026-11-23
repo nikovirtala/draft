@@ -1,0 +1,17 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M84TXVBYKSA7F9DR0749RZQS
+subject: ynt6qt9k
+type: opened
+at: 2026-11-23T18:33:08Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: 244629292+kiro-agent@users.noreply.github.com
+data:
+  title: a selected stub is filled with moved-selected from edge to edge
+  template: task
+  template_version: 1
