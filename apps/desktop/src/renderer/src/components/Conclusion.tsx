@@ -42,12 +42,15 @@ export function ConclusionCard({
   return (
     <section
       className="prompt conclusion-card"
+      data-fill="ask"
       data-testid="conclusion-card"
       data-key={conclusion.address}
       aria-label="A conclusion to confirm"
     >
       <p className="interrupt-label">
-        <span className="chip">Conclusion to confirm</span>
+        <span className="chip" data-fill="chip">
+          Conclusion to confirm
+        </span>
       </p>
       <div data-testid="conclusion-text">
         <Markdown text={conclusion.text} />
@@ -65,6 +68,7 @@ export function ConclusionCard({
         <button
           type="button"
           className="primary-button"
+          data-fill="action"
           data-testid="conclusion-confirm"
           onClick={() => act(() => window.draft.confirmConclusion(conversation))}
         >
@@ -72,7 +76,7 @@ export function ConclusionCard({
         </button>
       </div>
       {error !== null && (
-        <p className="error" role="alert">
+        <p className="error" data-fill="notice" role="alert">
           {error}
         </p>
       )}

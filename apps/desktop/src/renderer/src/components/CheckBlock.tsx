@@ -123,6 +123,7 @@ export function CheckBlock({
   return (
     <section
       className="interrupt check"
+      data-fill="ask"
       data-testid="check"
       data-key={check.key}
       data-state={check.state}
@@ -130,7 +131,7 @@ export function CheckBlock({
       aria-label={`Check: ${check.title}`}
     >
       <p className="interrupt-label">
-        <span className={state.chip} data-testid="check-state">
+        <span className={state.chip} data-fill="chip" data-testid="check-state">
           {state.word}
         </span>
         <strong data-testid="check-title">{check.title}</strong>
@@ -221,6 +222,7 @@ export function CheckBlock({
             <button
               type="button"
               className="primary-button"
+              data-fill="action"
               data-testid="check-pass"
               disabled={busy !== null}
               onClick={() => answer("passed")}
@@ -239,7 +241,7 @@ export function CheckBlock({
         )
       )}
       {error !== null && (
-        <p className="error" role="alert" data-testid="check-error">
+        <p className="error" data-fill="notice" role="alert" data-testid="check-error">
           {error}
         </p>
       )}

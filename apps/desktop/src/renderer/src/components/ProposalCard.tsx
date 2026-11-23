@@ -17,6 +17,7 @@ export function ProposalCard({
   return (
     <section
       className="prompt proposal"
+      data-fill="ask"
       data-testid="proposal"
       data-kind={i.kind}
       aria-label="Open another context"
@@ -46,6 +47,7 @@ export function ProposalCard({
         <button
           type="button"
           className="primary-button"
+          data-fill="action"
           data-testid="proposal-open"
           onClick={() => answer(true)}
         >

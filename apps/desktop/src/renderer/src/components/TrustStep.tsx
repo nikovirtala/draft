@@ -62,7 +62,7 @@ export function TrustStep({
           own workspace.
         </p>
         {error !== null && (
-          <p className="error" role="alert">
+          <p className="error" data-fill="notice" role="alert">
             {error}
           </p>
         )}
@@ -79,6 +79,7 @@ export function TrustStep({
           <button
             type="button"
             className="primary-button"
+            data-fill="action"
             data-testid="trust-accept"
             disabled={busy}
             onClick={() => answer("trusted")}

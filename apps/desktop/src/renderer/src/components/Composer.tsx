@@ -68,6 +68,7 @@ export function Composer({
         <button
           type="submit"
           className="primary-button"
+          data-fill="action"
           disabled={(busy && !altHeld) || text.trim() === ""}
         >
           {altHeld ? "Aside" : "Send"}

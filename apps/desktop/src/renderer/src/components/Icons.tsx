@@ -55,6 +55,7 @@ export function BlockControls({ entry }: { entry: Entry }) {
           key={type}
           type="button"
           className="icon"
+          data-fill="pointer"
           aria-label={LABELS[type]}
           title={LABELS[type]}
           data-move={type}
