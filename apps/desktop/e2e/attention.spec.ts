@@ -19,8 +19,9 @@ import {
  * permission and the request lands in the thread whose step launched it; you allow it. A pull
  * request that fails a check becomes an interrupt where it is referenced, beside live stubs for an
  * ark issue and an artifact page. A step that draft stopped in the middle of is retried as a new
- * step. A thread wraps up and its conclusion returns to the main conversation. Screenshots and
- * the log excerpts land in e2e/artifacts.
+ * step. A thread wraps up and its conclusion returns to the main conversation. An item clicked in
+ * one window goes to its block in the window that shows it. Screenshots and the log excerpts land
+ * in e2e/artifacts.
  */
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -95,14 +96,16 @@ test.afterAll(async () => {
   await new Promise<void>((resolve) => artifactServer.close(() => resolve()));
 });
 
-async function launch(): Promise<{ electronApp: ElectronApplication; page: Page }> {
+async function launch(
+  data: string = dataDir,
+): Promise<{ electronApp: ElectronApplication; page: Page }> {
   const display = process.env.DISPLAY === undefined ? ["--ozone-platform=headless"] : [];
   const electronApp = await electron.launch({
     args: [join(app, "out/main/index.js"), "--no-sandbox", "--disable-gpu", ...display],
     cwd: app,
     env: {
       ...process.env,
-      DRAFT_DATA_DIR: dataDir,
+      DRAFT_DATA_DIR: data,
       DRAFT_AGENT: "fake",
       DRAFT_AGENT_COMMAND: process.execPath,
       DRAFT_AGENT_ARGS: JSON.stringify([FAKE_AGENT]),
@@ -380,4 +383,80 @@ test("what needs you arrives in its thread, in one order, and a thread wraps up"
         .map(excerpt),
     ].join("\n")}\n`,
   );
+});
+
+test("an item clicked in one window goes to its block in the window that shows it", async () => {
+  const second = mkdtempSync(join(tmpdir(), "draft-e2e-attention-windows-"));
+  writeFileSync(join(second, "config.json"), JSON.stringify({ arkSources: { draft: REPO } }));
+  github.addPull(REPO, 8, {
+    title: "Show the block you are on",
+    checks: [{ name: "e2e", conclusion: "failure" }],
+    requestedReviewers: [],
+    mergeableState: "blocked",
+  });
+  const { electronApp, page } = await launch(second);
+  const main = page.locator('[data-testid="conversation"][data-main="true"]');
+  const panel = page.getByTestId("panel");
+
+  // 1. A thread whose hosted session asks permission: an item that belongs to the thread.
+  await say(main, "Let's get going");
+  await expect(main.getByTestId("message-agent")).toHaveCount(1, { timeout: 30_000 });
+  const answer = main.getByTestId("message-agent").first();
+  await answer.hover();
+  await answer.getByTestId("branch").click();
+  await answer.getByRole("menuitem", { name: /the agent \(default\)/ }).click();
+  await expect(panel).toBeVisible();
+  const thread = panel.getByTestId("conversation");
+  await say(thread, "Please launch a session to fix the flaky test");
+  await thread.getByTestId("prompt").getByRole("button", { name: "Allow", exact: true }).click();
+  await expect(thread.getByTestId("stub")).toHaveCount(1, { timeout: 30_000 });
+  const sessionId = [...kiro.sessions.keys()].at(-1) as string;
+  kiro.update(sessionId, { status: "awaiting_permission", pendingPermissions: 1 });
+  const permission = thread.locator('[data-testid="interrupt"][data-cause="permission"]');
+  await expect(permission).toContainText("asks to: Run a command (1)", { timeout: 20_000 });
+
+  // 2. The thread leaves the panel for a window of its own: two windows, each with the one count.
+  await panel.locator("header.block-header").getByRole("button", { name: "Pop out" }).click();
+  await expect.poll(() => electronApp.windows().length, { timeout: 15_000 }).toBe(2);
+  const win = electronApp.windows().find((w) => w !== page) as Page;
+  await win.waitForLoadState("domcontentloaded");
+  await win.setViewportSize({ width: 900, height: 700 });
+  const inWindow = win.locator('[data-testid="interrupt"][data-cause="permission"]');
+  await expect(inWindow).toBeVisible();
+  await expect(panel).toBeHidden();
+
+  // 3. The main conversation gets a failed check, which is in the main window only.
+  await say(main, `Look at ${REPO}#8`);
+  const failed = main.locator('[data-testid="interrupt"][data-cause="failed-check"]');
+  await expect(failed).toContainText("the check “e2e” failed", { timeout: 30_000 });
+  await expect(page.getByTestId("attention-count")).toHaveText("2 need you", { timeout: 20_000 });
+  await expect(win.getByTestId("attention-count")).toHaveText("2 need you");
+  await expect(failed).not.toBeFocused();
+  await expect(inWindow).not.toBeFocused();
+
+  // 4. Clicked in the thread's window, the failed check is the main window's: it scrolls to and
+  // takes the keyboard on it there, and the thread's window keeps what it had.
+  await win.getByTestId("attention-count").click();
+  await win
+    .locator('[data-testid="attention-item"][data-cause="failed-check"]')
+    .getByTestId("attention-open")
+    .click();
+  await expect(failed).toBeFocused({ timeout: 10_000 });
+  await expect(failed).toBeInViewport();
+  await expect(win.getByTestId("attention-list")).toBeHidden();
+  await expect(inWindow).not.toBeFocused();
+  await shot(page, "a09-item-from-a-window-goes-to-the-main-window");
+
+  // 5. And the other way: clicked in the main window, the permission request is the thread's
+  // window's, which takes the keyboard on it and doesn't open the thread again in the panel.
+  await page.getByTestId("attention-count").click();
+  await page
+    .locator('[data-testid="attention-item"][data-cause="permission"]')
+    .getByTestId("attention-open")
+    .click();
+  await expect(inWindow).toBeFocused({ timeout: 10_000 });
+  await expect(inWindow).toBeInViewport();
+  await expect(panel).toBeHidden();
+  await shot(win, "a10-item-from-the-main-window-goes-to-the-thread-window");
+  await electronApp.close();
 });
