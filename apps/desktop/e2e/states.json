@@ -2,25 +2,25 @@
   {
     "state": "Frame: top bar and footer",
     "screenshot": "f01-top-bar-and-footer.png",
-    "preview": "docs/design-system/components/Cover/preview.html",
+    "preview": "docs/design-system/components/Frame/preview.html",
     "width": 960
   },
   {
     "state": "Frame: paused composer",
     "screenshot": "f02-paused-composer.png",
-    "preview": "docs/design-system/components/NoticeAndWorking/preview.html",
+    "preview": "docs/design-system/components/Composer/preview.html",
     "width": 720
   },
   {
     "state": "Thread beside the conversation, with its divider",
     "screenshot": "f03-thread-and-divider.png",
-    "preview": "docs/design-system/components/Selection/preview.html",
-    "width": 720
+    "preview": "docs/design-system/components/Frame/preview.html",
+    "width": 960
   },
   {
     "state": "Thread with a live pull request stub",
     "screenshot": "t04-thread-in-panel-with-live-stub.png",
-    "preview": "docs/design-system/components/PullRequestStub/preview.html",
+    "preview": "docs/design-system/components/ThreadStub/preview.html",
     "width": 720
   },
   {
@@ -44,31 +44,55 @@
   {
     "state": "What needs you: count and order",
     "screenshot": "a04-attention-count-and-order.png",
-    "preview": "docs/design-system/components/Selection/preview.html",
-    "width": 720
+    "preview": "docs/design-system/components/Frame/preview.html",
+    "width": 960
   },
   {
     "state": "A reply streaming, the agent working",
     "screenshot": "02-reply-streaming.png",
-    "preview": "docs/design-system/components/NoticeAndWorking/preview.html",
+    "preview": "docs/design-system/components/Message/preview.html",
     "width": 720
   },
   {
     "state": "An anomaly interrupts",
     "screenshot": "07-anomaly-interrupt.png",
-    "preview": "docs/design-system/components/NoticeAndWorking/preview.html",
+    "preview": "docs/design-system/components/PromptAndInterrupt/preview.html",
     "width": 720
   },
   {
     "state": "Acceptance: a red check, no request",
     "screenshot": "c01-red-check-no-acceptance-request.png",
-    "preview": "docs/design-system/components/Evidence/preview.html",
+    "preview": "docs/design-system/components/PromptAndInterrupt/preview.html",
     "width": 720
   },
   {
     "state": "Acceptance: requests with green evidence",
     "screenshot": "c02-acceptance-requests-with-green-evidence.png",
     "preview": "docs/design-system/components/Evidence/preview.html",
+    "width": 720
+  },
+  {
+    "state": "Checks: two need you",
+    "screenshot": "k01-two-checks-need-you.png",
+    "preview": "docs/design-system/components/Check/preview.html",
+    "width": 720
+  },
+  {
+    "state": "Checks: a check opened to its steps",
+    "screenshot": "k02-a-check-opened-to-its-steps.png",
+    "preview": "docs/design-system/components/Check/preview.html",
+    "width": 720
+  },
+  {
+    "state": "Checks: a failed check with its note",
+    "screenshot": "k03-a-failed-check-with-its-note.png",
+    "preview": "docs/design-system/components/Check/preview.html",
+    "width": 720
+  },
+  {
+    "state": "Checks: a passed check offers its ADR's acceptance",
+    "screenshot": "k04-a-passed-check-offers-its-adr-acceptance.png",
+    "preview": "docs/design-system/components/Check/preview.html",
     "width": 720
   },
   {
@@ -92,37 +116,37 @@
   {
     "state": "Kiro Remote: a session waits for a pull request, on the map",
     "screenshot": "fw01-session-waits-on-a-pull-request-map.png",
-    "preview": "docs/design-system/components/Graph/preview.html",
+    "preview": "docs/design-system/components/Feed/preview.html",
     "width": 720
   },
   {
     "state": "Kiro Remote: a session waits for a pull request, its stub",
     "screenshot": "fw02-session-waits-on-a-pull-request-stub.png",
-    "preview": "docs/design-system/components/PullRequestStub/preview.html",
+    "preview": "docs/design-system/components/Feed/preview.html",
     "width": 720
   },
   {
     "state": "Kiro Remote: the pull request merged and the session woke, on the map",
     "screenshot": "fw03-the-pull-request-merged-and-the-session-woke-map.png",
-    "preview": "docs/design-system/components/Graph/preview.html",
+    "preview": "docs/design-system/components/Feed/preview.html",
     "width": 720
   },
   {
     "state": "Kiro Remote: the pull request merged and the session woke, its stub",
     "screenshot": "fw04-the-pull-request-merged-and-the-session-woke-stub.png",
-    "preview": "docs/design-system/components/PullRequestStub/preview.html",
+    "preview": "docs/design-system/components/Feed/preview.html",
     "width": 720
   },
   {
     "state": "Kiro Remote: a wait that couldn't be read needs you",
     "screenshot": "fw05-a-wait-that-couldnt-be-read-needs-you.png",
-    "preview": "docs/design-system/components/NoticeAndWorking/preview.html",
+    "preview": "docs/design-system/components/PromptAndInterrupt/preview.html",
     "width": 720
   },
   {
     "state": "Kiro Remote: the feed stopped at a type draft can't read",
     "screenshot": "fw06-the-feed-stopped-at-a-type-draft-cant-read.png",
-    "preview": "docs/design-system/components/NoticeAndWorking/preview.html",
+    "preview": "docs/design-system/components/Feed/preview.html",
     "width": 720
   },
   {
@@ -134,26 +158,26 @@
   {
     "state": "Map: the grid, a cell opened",
     "screenshot": "m03-cell-opened.png",
-    "preview": "docs/design-system/components/StateChip/preview.html",
+    "preview": "docs/design-system/components/ByStateMap/preview.html",
     "width": 720
   },
   {
     "state": "Map: an empty context",
     "screenshot": "m01-empty.png",
-    "preview": null,
+    "preview": "docs/design-system/components/ByStateMap/preview.html",
     "width": 720
   },
   {
     "state": "Window scrolled to the end: title bar and footer stay",
     "screenshot": "w01-window-scrolled-to-the-end.png",
-    "preview": "docs/design-system/components/Cover/preview.html",
-    "width": 720
+    "preview": "docs/design-system/components/Frame/preview.html",
+    "width": 960
   },
   {
     "state": "A block's own window scrolled to the end",
     "screenshot": "w02-block-window-scrolled-to-the-end.png",
-    "preview": null,
-    "width": 720
+    "preview": "docs/design-system/components/Frame/preview.html",
+    "width": 960
   },
   {
     "state": "A selected map stub: nothing is filled",
@@ -170,13 +194,13 @@
   {
     "state": "Map: arcs between the three states of Issues",
     "screenshot": "m10-arcs-issues.png",
-    "preview": null,
+    "preview": "docs/design-system/components/ByStateMap/preview.html",
     "width": 720
   },
   {
     "state": "Map: arcs between the six states of Decisions",
     "screenshot": "m11-arcs-decisions.png",
-    "preview": null,
+    "preview": "docs/design-system/components/ByStateMap/preview.html",
     "width": 720
   },
   {
