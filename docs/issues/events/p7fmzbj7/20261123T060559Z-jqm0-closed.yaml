@@ -1,0 +1,16 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M83G5RRWY3X6VN8SQ2AQJQM0
+subject: p7fmzbj7
+type: closed
+at: 2026-11-23T06:05:59Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: 244629292+kiro-agent@users.noreply.github.com
+reason: Buttons, Cmd or Ctrl with plus, minus and 0, a pinch, the arrow keys, Space and drag, and a two-finger scroll move the viewport (map-viewport.ts) and nothing else, and a button fits the graph. Tests cover the viewport maths, that no input moves a node, and keyboard zoom and pan (test/map-viewport.test.ts); e2e/map.spec.ts zooms, pans and fits, and runs in CI, as Electron can't start in the sandbox it was written in.
+data:
+  resolution: done
