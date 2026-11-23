@@ -28,6 +28,11 @@
       "types": "./dist/map-layout.d.ts",
       "default": "./dist/map-layout.js"
     },
+    "./map-labels": {
+      "source": "./src/map-labels.ts",
+      "types": "./dist/map-labels.d.ts",
+      "default": "./dist/map-labels.js"
+    },
     "./map-viewport": {
       "source": "./src/map-viewport.ts",
       "types": "./dist/map-viewport.d.ts",

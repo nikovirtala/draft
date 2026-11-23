@@ -10,6 +10,7 @@ import {
   zoomKey,
   zoomOut,
 } from "@nikovirtala/draft-core/map-graph";
+import { type LabelBox, type Labels, layoutLabels } from "@nikovirtala/draft-core/map-labels";
 import {
   type Layout,
   laneCenter,
@@ -92,6 +93,24 @@ function useLayout(graph: Graph): Layout {
   return layout;
 }
 
+/**
+ * Where the names are: boxes kept clear of every node and every other name, and kept where they
+ * were while they stay clear. `scale` is how many screen pixels a world unit is, so a name is as
+ * big in the layout as it is on the screen; it is rounded so a pixel of resizing moves nothing.
+ */
+function useLabels(graph: Graph, layout: Layout, named: boolean, scale: number): Labels {
+  const kept = useRef(new Map<string, Labels>());
+  const key = zoomKey(graph.zoom);
+  const labels = useMemo(
+    () => layoutLabels(graph, layout, kept.current.get(key) ?? null, { named, scale }),
+    [graph, layout, key, named, scale],
+  );
+  useEffect(() => {
+    kept.current.set(key, labels);
+  }, [key, labels]);
+  return labels;
+}
+
 const pct = (v: number, of: number): string => `${(v / of) * 100}%`;
 
 /**
@@ -100,10 +119,10 @@ const pct = (v: number, of: number): string => `${(v / of) * 100}%`;
  * fills in as it is read is framed as it grows); a move takes it over, and "Fit" gives it back.
  * A change of semantic zoom (context, kind, item) fits the new level.
  */
-function useViewport(graph: Graph, layout: Layout) {
+function useViewport(graph: Graph, layout: Layout, labels: Labels) {
   const key = zoomKey(graph.zoom);
-  const fit = useMemo(() => fitGraph(graph, layout), [graph, layout]);
-  const bounds = useMemo(() => boundsOf(graph, layout), [graph, layout]);
+  const fit = useMemo(() => fitGraph(graph, layout, labels), [graph, layout, labels]);
+  const bounds = useMemo(() => boundsOf(graph, layout, labels), [graph, layout, labels]);
   const [own, setOwn] = useState<{ key: string; view: Viewport | null }>({ key, view: null });
   const taken = own.key === key ? own.view : null;
   if (own.key !== key) setOwn({ key, view: null });
@@ -262,15 +281,38 @@ function Shapes({ graph, layout, arrow }: { graph: Graph; layout: Layout; arrow:
   );
 }
 
+/** A name, set where the layout put it: a box beside its node, which never overlaps another. */
+function NodeName({ label, at, r }: { label: LabelBox; at: Point; r: number }) {
+  const w = 2 * r;
+  return (
+    <span
+      className="graph-name"
+      aria-hidden="true"
+      data-testid="graph-name"
+      data-side={label.side}
+      data-setting={label.setting}
+      style={{
+        left: `${50 + ((label.x - at.x) / w) * 100}%`,
+        top: `${50 + ((label.y - at.y) / w) * 100}%`,
+        transform: "translate(-50%, -50%)",
+        maxWidth: "none",
+        whiteSpace: "pre",
+      }}
+    >
+      {label.lines.join("\n")}
+    </span>
+  );
+}
+
 function NodeButton({
   node,
   layout,
-  named,
+  label,
   onZoom,
 }: {
   node: GraphNode;
   layout: Layout;
-  named: boolean;
+  label: LabelBox | null;
   onZoom: (zoom: GraphZoom) => void;
 }) {
   const p = layout[node.id] ?? { x: 0, y: 0 };
@@ -288,6 +330,7 @@ function NodeButton({
         style={style}
         disabled={node.zoom === null}
         aria-label={clusterLabel(node)}
+        title={node.label}
         data-testid="graph-cluster"
         data-kind={node.kind}
         data-state={node.state ?? ""}
@@ -300,9 +343,7 @@ function NodeButton({
         <span className="graph-count" aria-hidden="true">
           {node.count}
         </span>
-        <span className="graph-name" aria-hidden="true">
-          {node.label}
-        </span>
+        {label !== null && <NodeName label={label} at={p} r={r} />}
       </button>
     );
   }
@@ -323,11 +364,7 @@ function NodeButton({
       data-tethered={node.tether !== null}
       onClick={() => onZoom(node.zoom)}
     >
-      {named && (
-        <span className="graph-name" aria-hidden="true">
-          {node.label.length > 26 ? `${node.label.slice(0, 25)}…` : node.label}
-        </span>
-      )}
+      {label !== null && <NodeName label={label} at={p} r={r} />}
     </button>
   );
 }
@@ -510,15 +547,17 @@ function Stage({
   graph,
   layout,
   arrow,
-  named,
+  labels,
   onZoom,
+  onScale,
   nav,
 }: {
   graph: Graph;
   layout: Layout;
   arrow: string;
-  named: boolean;
+  labels: Labels;
   onZoom: (zoom: GraphZoom) => void;
+  onScale: (scale: number) => void;
   nav: Nav;
 }) {
   const stage = useRef<HTMLDivElement>(null);
@@ -549,6 +588,20 @@ function Stage({
     el.addEventListener("wheel", onWheel, { passive: false });
     return () => el.removeEventListener("wheel", onWheel);
   }, [latest, measure, move]);
+
+  // How big a screen pixel is, so a name is laid out at the size it is drawn.
+  useEffect(() => {
+    const el = stage.current;
+    if (el === null || typeof ResizeObserver === "undefined") return;
+    const seen = () => {
+      const width = el.getBoundingClientRect().width;
+      if (width > 0) onScale(Math.round((width / WORLD.width) * 10) / 10);
+    };
+    seen();
+    const watch = new ResizeObserver(seen);
+    watch.observe(el);
+    return () => watch.disconnect();
+  }, [onScale]);
 
   useEffect(() => {
     const off = () => setSpace(false);
@@ -647,7 +700,13 @@ function Stage({
             </span>
           ))}
         {graph.nodes.map((n) => (
-          <NodeButton key={n.id} node={n} layout={layout} named={named} onZoom={onZoom} />
+          <NodeButton
+            key={n.id}
+            node={n}
+            layout={layout}
+            label={labels[n.id] ?? null}
+            onZoom={onZoom}
+          />
         ))}
       </div>
     </div>
@@ -660,7 +719,10 @@ export function MapGraph({ map }: { map: MapSnapshot }) {
   const [asked, setZoom] = useState<GraphZoom>({ level: "context" });
   const graph = useMemo(() => projectGraph(map, asked), [map, asked]);
   const layout = useLayout(graph);
-  const nav = useViewport(graph, layout);
+  const [scale, setScale] = useState(1);
+  const named = graph.zoom.level === "item" || graph.nodes.length <= 14;
+  const labels = useLabels(graph, layout, named, scale);
+  const nav = useViewport(graph, layout, labels);
   const heading = useRef<HTMLHeadingElement>(null);
   const key = zoomKey(graph.zoom);
   const first = useRef(true);
@@ -671,7 +733,6 @@ export function MapGraph({ map }: { map: MapSnapshot }) {
     else heading.current?.focus();
   }, [key]);
   if (graph.nodes.length === 0) return null;
-  const named = graph.zoom.level === "item" || graph.nodes.length <= 14;
   return (
     <section
       className="map-graph"
@@ -714,7 +775,15 @@ export function MapGraph({ map }: { map: MapSnapshot }) {
       <h3 className="graph-heading" tabIndex={-1} ref={heading} data-testid="graph-heading">
         {headingOf(graph)}
       </h3>
-      <Stage graph={graph} layout={layout} arrow={arrow} named={named} onZoom={setZoom} nav={nav} />
+      <Stage
+        graph={graph}
+        layout={layout}
+        arrow={arrow}
+        labels={labels}
+        onZoom={setZoom}
+        onScale={setScale}
+        nav={nav}
+      />
       {graph.zoom.level === "kind" && graph.hidden > 0 && (
         <p className="secondary" data-testid="graph-hidden">
           {plural(graph.hidden, "item")} too many to draw one by one: each state shows its count,
