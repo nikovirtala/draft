@@ -1,0 +1,52 @@
+## Summary
+
+The app's colours, chips and "working" indicator now come from the design system in `docs/design-system`, so a colour means one thing everywhere and a person learns it once. Closes ?72, ?69 and ?74.
+
+Kiro-Remote-Session: 01M83FC2ER77A1737PR0F6GHKW
+
+- **The palette is `docs/design-system/tokens.json`, written once.** `palette.ts` reads it and adds only the job of each token; `pnpm --filter @example-owner/draft-desktop palette:sync` writes the `:root` of `styles.css` and the table in `docs/implementation.md` from it, and tests fail when either differs, when a rule writes a colour outside it, or when a component names a custom property the `:root` doesn't define (mermaid's theme included). The custom properties carry the design system's own names (`--page`, `--moved-fill`, `--hairline`, `--radius-chip`, `--font-sans`).
+- **Layered purple, three jobs per meaning.** `moved-fill` for what moved or is under the pointer, `moved-selected` for the selected option (ink words), `moved-mark` for icons, arcs, arrows and the working ring, `moved-word` for pastel words on the page, `moved-strong` for a small count badge and a moved chip's word. Green, blue and amber each have a fill, a mark and a word. Words take only text tokens, hairlines and marks only line tokens, areas only fill tokens; every line around a box is the hairline, and dashed ones the dashed hairline.
+- **Contrast.** Every text pair reaches 4.5:1 except the two the README accepts on purpose (`moved-word` on `page`, `moved-strong` on `moved-fill`), which the test allows by name; any other pair under 4.5:1 fails.
+- **A merged pull request is a chip of the weight of "8/8 checks passed"** (green with a check); open is blue, closed without merging has a hairline and no fill. Every state pill is one shared rule (the StateChip type style, padding and corners, read from `tokens.json` by a test), so none drifts. A failure is the waiting fill with a dashed hairline, a cross and its words: it has no colour of its own.
+- **One working indicator** (`Working`): a ring with one look, shown 500 ms after work starts and gone when it ends, named in words for a screen reader. It shows for an agent turn, a stub being read, the map reading GitHub and a window opening its context, and `GlobalWorking` says it once for the whole window beside the agent's state.
+- **The map follows its previews:** the graph's thin strokes and settled arc, a legend of chips, and a switch whose selected option is `moved-selected` with ink words. A pull request stub shows its reference in mono beside its title, and wraps its chips under the title when the column is narrow, as the PullRequestStub preview does.
+
+The branch keeps its original name because the pull request was opened before the naming rule.
+
+## How tested
+
+- [x] `pnpm check` (typecheck, lint, test, build): passes locally, and in CI on the tip ([run 45177142776](https://github.com/example-owner/draft/actions/runs/45177142776)): typecheck, lint (including `adr verify`, `issues verify` and commitlint), test, build and the end-to-end suite in Electron under Xvfb (7 passed).
+- [x] `adr verify` and `issues verify` report no errors.
+
+Tests, by name:
+
+- `test/palette.test.ts`: "has a job for every colour token of tokens.json, and no other"; "holds exactly tokens.json in the :root of styles.css, and nothing else is a colour there"; "no literal colour is written outside the tokens, in styles.css or a component"; "uses no custom property that the :root doesn't define"; "puts every colour token in exactly one row of the table of colour to meaning"; "has no red"; "each token keeps to its job"; "a strong colour stays small and thin" (no strong mark over 2.5px, every line around a box the hairline); the contrast cases, one per text token and surface, "allows exactly two pairs under 4.5:1, by name, as the README accepts them" and "every rule that sets a text colour on a background names a pairing the palette lists"; "styles.css and docs/implementation.md are what `pnpm palette:sync` writes".
+- `test/pull-request-look.test.ts`: "is the design system's chip: its type style, its padding, its corners", "gives every state pill the chip, and only a not-started one a solid hairline", "gives merged the weight and shape of 8/8 checks passed: both are the one chip", "tells open, merged and closed apart by shape as well as colour".
+- `test/renderer/working.test.tsx`: the indicator's delay (not before 500 ms, never for work that ends sooner, gone when the work is) and its presence only while there is work, for an agent turn, a stub being read, the map reading GitHub (minimized and inline), a window opening its context, and the global place. `test/renderer/pull-request-states.test.tsx`: the three pull request states in the stub.
+- core: `StubPoller` says what is in flight; `ArkMap` says it is reading and tells when that changes; the map snapshot carries `reading`.
+
+CI's end-to-end screenshots (from the run above), beside the matching preview of the design system on main. The previews are HTML files that read the tokens as CSS custom properties, so they are linked rather than shown:
+
+| Part | CI's screenshot | Its preview on main |
+| --- | --- | --- |
+| State chips: open, failing, your review, in progress, new, waiting | ![open, failing and review chips](https://github.com/example-owner/draft/blob/evidence/palette/shots/ci-a03-live-stubs-and-failed-check.png?raw=true) ![waiting and new chips](https://github.com/example-owner/draft/blob/evidence/palette/shots/ci-t08-two-live-thread-stubs.png?raw=true) | [StateChip](https://github.com/example-owner/draft/blob/main/docs/design-system/components/StateChip/preview.html) |
+| Pull request stubs: merged with checks passed, open with a failure | ![a merged pull request stub](https://github.com/example-owner/draft/blob/evidence/palette/shots/ci-c06-merged.png?raw=true) | [PullRequestStub](https://github.com/example-owner/draft/blob/main/docs/design-system/components/PullRequestStub/preview.html) |
+| Acceptance evidence: passed | ![acceptance requests with passed evidence](https://github.com/example-owner/draft/blob/evidence/palette/shots/ci-c02-acceptance-requests-with-green-evidence.png?raw=true) | [Evidence](https://github.com/example-owner/draft/blob/main/docs/design-system/components/Evidence/preview.html) |
+| The map's switches, and its cells as chips by state | ![the map's switches](https://github.com/example-owner/draft/blob/evidence/palette/shots/ci-m02-graph.png?raw=true) ![the map's cells](https://github.com/example-owner/draft/blob/evidence/palette/shots/ci-m02-busy.png?raw=true) | [Switch](https://github.com/example-owner/draft/blob/main/docs/design-system/components/Switch/preview.html) |
+| The map's graph, its legend and its arrows | ![the graph](https://github.com/example-owner/draft/blob/evidence/palette/shots/ci-m03-graph-kind.png?raw=true) | [Graph](https://github.com/example-owner/draft/blob/main/docs/design-system/components/Graph/preview.html) |
+| A failure notice and the working indicator | none: the scripted runs have no failing turn, and the ring is gone before a screenshot; the end-to-end test `threads.spec.ts` waits for the thread stub's "Working" chip, and `working.test.tsx` covers the rest | [NoticeAndWorking](https://github.com/example-owner/draft/blob/main/docs/design-system/components/NoticeAndWorking/preview.html) |
+
+The Selection and Cover previews have no counterpart in the app yet (draft has no rail or cover). The graph in the screenshot has the end-to-end fixture's clusters, the preview made-up ones.
+
+## After deploy
+
+One item, because it is a look that no test can judge: whether the palette looks right to a person. Tests check the values, the jobs, the contrast and the shapes; they cannot say whether the result is pleasing.
+
+1. On your Mac, in a terminal, run `pkill -f draft-desktop; cd ~/src/github.com/example-owner/draft && git switch main && git pull --ff-only && pnpm install && pnpm --filter @example-owner/draft-desktop dev -- "$HOME/src/github.com/example-owner/kiro-remote"`. You should see draft's window open on cream, with a slightly darker title bar.
+2. Type `show the map` and send it. You should see a graph of pale discs with hairlines, a thin green arc where something has settled, thin purple arrows, a legend of coloured chips, and the "Last hour" and "Graph" options selected in soft purple with dark words.
+3. Send a message that mentions `https://github.com/example-owner/draft/pull/36`. You should see a green dot, the reference in small mono type, the title, and a green "✓ Merged" chip beside it.
+
+## Filed for later
+
+- `6xgncgnv`: show the working indicator in the footer's activity slot, once the footer exists.
+- `nxqm65c4`: mark the block in focus with `moved-selected`, once the words inside it reach 4.5:1 there.

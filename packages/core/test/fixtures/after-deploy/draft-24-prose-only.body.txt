@@ -1,0 +1,64 @@
+Every prompt to the agent now starts with a note of what changed since that agent's last turn: the outcome of each decision the person made in draft, and what draft resolved for each stub the conversation referenced. This fixes the 22 November cases: #14 was accepted and merged and the agent still called it open, and #16's stub showed a check running while the agent said it had no details.
+
+Issue ?47 (8te08zc2) gets a comment and stays open: its second Done-when (a real turn after an accept) is the person's check, under After deploy.
+
+## What it does
+
+- `changesSince` (`packages/core/src/agent-changes.ts`) is one pure function over the projection. It returns typed entries, one `kind` per source: `settlement` and `stub`. `renderChanges` turns them into text in one place, through a renderer per kind and per stub type. A new kind (the map, ?41's decision and issue records) adds an entry type and a renderer, not a new path.
+- Settlements: every settlement made by a person since the agent's last turn. An acceptance says what was accepted, who, the step's result and the commit. A rejection carries the reason and a request for changes the text. Any other person-only settlement of a kind (a conclusion, a failed step) is told as "settled as X".
+- Stubs: the latest resolved state per target, once however often it changed, with when. Pull request: state, head, checks (with names of failing or running ones), mergeability, review. Kiro session: status, pending permission requests, repositories. Ark issue, ADR, artifact page: state and title. Another context's item is told when a person pulls it in.
+- The note is marked as draft's record, not the person's words, gives each item's address, and is capped at 12 entries and 4,000 characters (decisions first, newest first). When capped it says how many were left out and how to ask.
+- New event `agent.turn_started`: written when a turn begins, after the message's references are made, with the note exactly as sent (`null` when nothing changed). Its place in the log is the "since" of the agent's next note. A stub resolved while the agent answers is therefore told on the next turn, and a restart rebuilds the same "since" from the log and sends nothing twice.
+- The ACP runtime sends the note as its own text block before the person's text, on every turn, not only a session's first. `agent-context.ts` is untouched, so ?30's changes to the instructions part do not conflict.
+- `docs/implementation.md` (Agents over ACP) and `docs/model.md` (Durable context, rule 3) describe it.
+
+## Evidence
+
+Tests: `pnpm check` passes (typecheck, biome and markdownlint, 339 core tests, 160 desktop tests, build).
+
+New tests:
+
+- `packages/core/test/agent-changes.test.ts` (18): an accept, a rejection, a request for changes, other settlements, a non-person settlement ignored, a pull request's facts, session, issue and artifact lines, a stub resolved twice (one entry, the latest state), nothing new (no note), the note recorded in the turn's event, a stub resolved mid-turn (next turn's note only), a restart (rebuilt projection: no note), per-agent "last turn", people-only messages kept out, a stub named again, a pulled-in item, and the cap (31 changes: 12 told, 19 left out, decisions kept) with long entries.
+- `packages/core/test/acceptance.test.ts` (4 added), against a real git remote, `adr`, and a fake GitHub: the next prompt after an accept, a rejection and a request for changes carries the outcome, and a referenced pull request's resolved state (a check going green) reaches the next prompt and is not repeated.
+- `apps/desktop/test/acp-note.test.ts` (4), the same flows through the fake ACP agent over real stdio, reading the prompt blocks it recorded, plus a restart that does not repeat the note.
+
+The note as the scripted agent received it after the ADR and its pull request were accepted (the person's name is the test user):
+
+```text
+[draft's record, not the person's words. It is what changed since your last turn, from draft's log. Treat it as current: where it differs from what you remember, it is newer.]
+Decisions the person made in draft:
+- 2026-11-22T20:01:23.586Z: Test User accepted ADR “Accept only as the person” [adr:example-owner/draft:t1tjjp4w]. Result (adr.accept, commit 424fc62): accepted t1tjjp4w in a signed commit 424fc62 on adr/acceptance-as-yourself, as the person Test <person.test@example.com>.
+- 2026-11-22T20:01:23.867Z: Test User accepted pull request “Propose: tell the agent” [pull-request:example-owner/draft/pull/7]. Result (pull-request.merge, commit 424fc62): merged example-owner/draft#7 by rebase, now 424fc62.
+What draft resolved for the things referenced in the conversation:
+- 2026-11-22T20:01:23.728Z: ADR example-owner/draft:t1tjjp4w “Accept only as the person”: accepted [adr:example-owner/draft:t1tjjp4w]
+- 2026-11-22T20:01:23.887Z: pull request example-owner/draft#7 “Propose: tell the agent”: merged; head 424fc62 (adr/acceptance-as-yourself); checks: 1 of 1 passed; review: none [pull-request:example-owner/draft/pull/7]
+[end of draft's record]
+```
+
+Not run: the end-to-end tests. Electron cannot start in this sandbox (`libgtk-3.so.0` is missing, the filesystem is read-only and the package mirror answers 403), so all five specs fail at launch before reaching any code. I checked the specs by reading: none asserts an exact event sequence or prompt block count that the new event or block changes (`app.spec.ts` reads `blocks[0]`, the session preamble, which the note follows). Please let CI run them.
+
+## Decisions
+
+- **The marker is a new event, `agent.turn_started`, not an existing one.** The agent's reply is written at the end of the turn, so counting from it would lose what resolves during the turn. The user's message is written before its references. The new event is written after both and before the agent runs, so its position is exactly "everything before this was considered". Unknown to older builds, it is kept and skipped (ADR jj76pjg2). The projection version is 6, so existing logs rebuild once, and existing logs without the event give every agent a first note from the start of the log.
+- **"Since" is per agent.** An agent switched in (ADR h89hcrk6) counts from its own last turn, so it learns the decisions made while another agent ran. Its note is capped like any other.
+- **Stubs count when a message the agent may read referenced them.** Same audience rule as `buildAgentContext`: a people-only message, or another context's item nobody pulled in, contributes nothing, not even a count. A stub counts if it was resolved after the last turn or named again since, so asking "what about #16?" again always gets its latest state, even when nothing changed.
+- **Every person-only settlement is told**, not only acceptance, as "settled (kind, as outcome)". A request for changes is told with its text even though the same text also arrives as the message it starts, since the note is the record and the message is a prompt.
+- **Cap:** 12 entries and 4,000 characters, decisions before stubs, the newest kept. The left-out line says to ask the user about what is needed, and that naming a pull request, session, issue or decision again makes draft show its latest state.
+- **The note is its own text block** before the person's text, so the person's words stay byte-identical as the last block, and existing tests and the restart preamble (`blocks[0]`) are unaffected.
+- **At most once.** The event is written before the agent reads its prompt. If the agent fails before reading it, that note is not sent again. The next session starts from the context, which holds references' latest state but not settlements.
+- **No ADR.** This follows ADR h89hcrk6 (one projection of the log), jj76pjg2 (unknown events kept, projections rebuildable) and ytmnx1br and k8af6zrg (person-only answers) and changes none. The marker event could be recorded as one if you want it durable.
+- **Kiro session "linked pull requests"** are rendered when the session's state carries them, but the Kiro Remote session stub doesn't today (it holds status, title, repositories and permissions), and I did not guess the API's field. The note has the status and repositories.
+
+## After deploy
+
+the person accepts a docs-only pull request in draft, then asks the agent "is #<n> still open?". It should say the pull request was merged, at which commit, and that the person accepted it. Then he references another open pull request and asks about its checks. The agent should answer from the stub (state, head, checks, mergeability, review) without running a command. Once both hold, close ?47.
+
+## Next
+
+- A failed turn's note is lost (at most once). A resent note would need a "delivered" mark from the runtime.
+- Kiro session's linked pull requests: the stub must carry them first.
+- The map and ?41's decision and issue records: add an entry type and a renderer in `agent-changes.ts`.
+- Showing the note on the turn in the conversation, so the person sees what the agent was told (it is in the log as `agent.turn_started`).
+- The cap's numbers are fixed, like the context's budget; they may need to follow the model's context window.
+
+Kiro-Remote-Session: 01M82D1EYCWJ7TTAMPFX38S2N1

@@ -30,4 +30,14 @@ Follow [Conventional Commits 1.0.0](https://www.conventionalcommits.org/en/v1.0.
 - Keep the description current as the work changes: what the change does and why, how it was tested, and what is left. Describe the change, not the mechanics. Use the template in `.github/pull_request_template.md`.
 - **Prove it before the pull request is done.** Whatever a test, a CI job or a local run can show, the pull request shows. Where your sandbox can't run a suite (the Electron app, a real agent CLI), CI can: push, wait for CI, read its results and artifacts (logs, screenshots) with `gh`, and fix what fails. "CI runs them" is never a reason to hand a check to a person.
 - **Keep "After deploy" as small as it can be.** It holds only what no test can show: a secret only a person has, a sign-in only they can do, a look or a decision only they can make. Each item says why no test can show it, and each step is written out in full with what they should see, starting from the command that gets them there; never point to steps elsewhere. When the same kind of check keeps landing there, add the test or CI job that takes it over, or file an issue for it.
+
+  draft reads the section when the pull request merges and turns each item into a check that waits on the person, so write it in this shape. Write `Nothing` (with a reason after it, if you like) when there is nothing. Otherwise each top-level bullet is one check: its first lines say why no test can show it (a bold lead is its title), then the steps are a numbered list inside the bullet. A step holds its commands in code spans or fenced blocks and ends with what the person should see, after "You should see". An ADR id (8 characters, as adr writes them) in a bullet links the check to that ADR when it is proposed. A numbered list at the top of the section, with its reason before it, is one check. Anything else becomes one check that shows your Markdown as written.
+
+      ## After deploy
+
+      - **Look at the palette.** Why no test can show it: whether it looks right is a person's judgement. It also gates ADR 8rhwhgbw.
+        1. In a terminal, run `pnpm --filter @nikovirtala/draft-desktop dev`. You should see a window open on cream.
+        2. Type `show the map` and press Enter. You should see a graph of pale discs.
+      - **Sign in once.** Why no test can show it: it needs your Kiro account.
+        1. Run `kiro-cli login`. You should see a browser tab open.
 - A merged branch is finished: follow-ups go on a new branch from `main`.

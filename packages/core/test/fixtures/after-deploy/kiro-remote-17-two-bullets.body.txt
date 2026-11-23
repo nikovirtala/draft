@@ -1,0 +1,6 @@
+Reverts #16 (`fd81077`), the rollback drill. Merge it only after the drill run has ended rolled-back.
+
+## After deploy
+
+- This run stops at the freeze flag: `PIPELINE FROZEN: nothing was deployed`.
+- `./scripts/pipeline.sh unfreeze`, then Release change on `kiro-remote-deploy`: this commit deploys and its smoke checks all pass.

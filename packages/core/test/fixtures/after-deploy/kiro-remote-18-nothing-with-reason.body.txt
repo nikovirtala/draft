@@ -1,0 +1,109 @@
+## Summary
+
+A session is woken by its own linked PR, and by a base move that makes its linked PR conflict. It was not woken when a PR it depends on but does not own merged. On 23 November 2026 three draft sessions sat idle for hours because example-owner/draft#43, then #41, merged and nobody told them.
+
+This adds a **waits-for relation**. A session waits for any number of PRs, a PR can be waited for by any number of sessions, and when an awaited PR merges or closes every waiting session gets one wake turn.
+
+- **A wait is its own record** (session, awaited PR, source `mcp` / `rest` / `trailer`, time), not a field on a link. It can be listed per session (`GET /v1/sessions/{id}` and `kiro_get_session` return `waits[]`) and per PR (`Repository.queryWaiters`). The awaited repo must match `ALLOWED_REPOS`, and may differ from the session's repos.
+- **Registering:** `kiro_wait_for_pull_request` / `kiro_stop_waiting_for_pull_request` (both with `idempotencyKey`), `POST` / `DELETE /v1/sessions/{id}/waits…` (the scope of linking, `sessions:write`), and `Kiro-Remote-Waits-For: owner/repo#n` lines in a linked PR's body, read where `Kiro-Remote-Session` is read and under its rules. The launch prompt line asks for them. The PR is read once on registration: merged or closed wakes now, open stays stored. Registering twice is a no-op.
+- **The wake:** `route()` turns `pull_request.closed` into one wake per waiting session, linked PR or not, with the prompts below. A fired wait is removed. A waiter whose own linked PR conflicts after the same merge gets one turn for both.
+- **Reusable decision:** `decideWait()` (`packages/github/src/waits.ts`) is a pure function of the PR as GitHub reports it. The webhook path and the registration check use it, and a later sweep for waits whose PR merged while webhooks were down can too.
+- **Docs:** the wake table and a new section "Waiting for a pull request" in `docs/github.md`, `docs/mcp.md` (18 tools), `docs/rest-api.md`, `docs/testing.md`, `docs/pipeline.md`.
+- **Smoke check:** after deploy the API function must name the GitHub queue (`the API names the GitHub queue (waits for pull requests)`). It needs no new AWS action.
+
+Five commits, each passing `pnpm lint`, `pnpm build` and `pnpm -r test` on its own (checked with `git rebase --exec` from `origin/main`): core storage, the GitHub wake, REST and MCP, the smoke check, docs.
+
+Kiro-Remote-Session: 01M848SD5NS3ADS5FNE7M3DDD4
+
+## Evidence
+
+kiro-remote has no CI (no workflow, and no check runs on the PR), so these are local runs. They ran on **Node 24.22.1 and pnpm 12.18.0**, not the pinned Node 26.13.0: this sandbox could not download Node 26. `pnpm lint` and `pnpm build` pass. `pnpm test` with the AWS Emulator (v1.0.587) running and `KIRO_REMOTE_EMULATOR_TEST=1`, so no test is skipped: core 204, pipeline 38, auth 124, bridge 131, api 131, github 203, mcp 88, e2e 63, cdk 86, all passed.
+
+**Unit tests for the pure parts**
+
+- `packages/github/test/waits.test.ts`
+  - `decideWait (pure)`: an open PR keeps the wait; a merged PR fires with base and sha; closed without merging fires as closed; a PR GitHub does not know fires as gone; the sha keeps only hex.
+  - `route(): a closed PR that sessions wait for`: merged (one wake per waiting session, rebase prompt); closed unmerged; **no waiters**; a waiter claims the PR (not unmatched); the PR's own session and its waiters each woken once; **a waiter whose own PR may conflict** (merge wake held, base check first and wait wake last; a close is not held); only a closed PR fires; a wait for another PR does not fire; no title or body forwarded.
+  - `processDelivery: waits`: every waiter woken once and the waits removed, a redelivery wakes nobody twice, closed unmerged, two waits for one session, a busy waiter keeps its wake pending, the wait is put back when the wake cannot be written.
+  - `a waiter whose own linked PR also conflicts after the same merge`: **one turn for both** (due together), still one turn when GitHub had not computed mergeability at the first read, a waiter whose own PR does not conflict gets only the merge wake, a waiter with no PR of its own or on another base is not held.
+  - `wait_check: reading the PR once when a wait is registered`: **open**, **already merged**, **already closed**, unreadable PR, **checking twice** wakes once, a failed read is retried by SQS, the queue guard.
+  - `Kiro-Remote-Waits-For trailer`: **accepted** (on `opened`, on `edited` of a PR already linked, through a stored delivery), **wrong author**, session not found / repo not in the session / PR older than the session, PR linked to another session, **repo not allowed** (the others still register), **malformed** lines and a PR waiting for itself, no session trailer.
+- `packages/core/test/waits.test.ts`: trailer parsing (one per line, URL form, malformed, cap of 20, session trailer undisturbed, launch line), the repository (one item per wait, twice is a no-op, many to many, not a link, exactly one racing `deleteWait` wins), the service (stores and asks for one read, **twice**, repo only has to match `ALLOWED_REPOS`, scope and ownership, 501 without GitHub, **stopping**, `waits[]` in `getSession`).
+- `packages/api/test/github-routes.test.ts` (`POST /v1/sessions/{id}/waits`, `DELETE …`), `packages/mcp/test/{tools,in-process-client,http-client}.test.ts` (both tools, idempotency replay, REST paths), `packages/cdk/src/github.test.ts` (API env and `sqs:SendMessage`, no secret), `packages/pipeline/src/smoke/checks.test.ts` (the new check passes, and fails when the API names no queue or another one).
+
+**The AWS Emulator** (`packages/github/test/waits-emulator.test.ts`, DynamoDB with GSI1 and SQS; `packages/api` emulator suites still pass):
+
+- a wait is one item, one query per session and per PR through GSI1, not a link;
+- `deleteWait` is won by exactly one of two racing callers;
+- the service's `wait_check` message goes through a real queue to the consumer, which stores nothing for an open PR and fires it once for a merged one (twice read, one turn);
+- a merge webhook wakes every waiter once and a redelivery nobody;
+- a waiter whose own PR conflicts: both wakes held to the same due time, the delayed drain is on the queue (`ApproximateNumberOfMessagesDelayed`), one prompt command after it;
+- stopping a wait.
+
+**Wake prompts as rendered** (from `route()`, `processDelivery` and `wait_check`):
+
+Merged:
+
+```text
+[GitHub webhook] This turn was started by GitHub, not by the user: pull_request.closed (merged), awaited by this session on octo/repo#7 (delivery del-pullrequestclosedmerged).
+PR #7, which this session waits for, was merged into main at 2222222222222222222222222222222222222222. Rebase onto main (never merge it in), continue the work it unblocked, push with --force-with-lease and say what changed.
+```
+
+Closed unmerged:
+
+```text
+[GitHub webhook] This turn was started by GitHub, not by the user: pull_request.closed (not merged), awaited by this session on octo/repo#7 (delivery del-pullrequestclosedunmerged).
+PR #7, which this session waits for, was closed without merging. Say whether your work can go on without it.
+```
+
+Already merged when the wait was registered (no delivery to name):
+
+```text
+[GitHub webhook] This turn was started by GitHub, not by the user: awaited pull request was already merged when the wait was checked on octo/repo#7.
+PR #7, which this session waits for, was merged into main at bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb. Rebase onto main (never merge it in), continue the work it unblocked, push with --force-with-lease and say what changed.
+```
+
+PR that cannot be read:
+
+```text
+[GitHub webhook] This turn was started by GitHub, not by the user: awaited pull request not found on octo/repo#7.
+PR #7, which this session waits for, could not be read from GitHub: it does not exist, or kiro-remote cannot see it. The wait was removed. Say whether your work can go on without it.
+```
+
+One turn for the waiter whose own PR #8 also conflicts after the merge of #7 (two items folded by the drain):
+
+```text
+[GitHub webhook] This turn was started by GitHub, not by the user: mergeability check after the base branch moved on octo/repo#8 (delivery del-1).
+PR #8 no longer merges into `main`: it conflicts with `main` at 2222222222222222222222222222222222222222 (after #7 was merged). Rebase onto `main` (never merge it in), resolve the conflicts, push with --force-with-lease and say what changed.
+
+---
+
+[GitHub webhook] This turn was started by GitHub, not by the user: pull_request.closed (merged), awaited by this session on octo/repo#7 (delivery del-1).
+PR #7, which this session waits for, was merged into main at 2222222222222222222222222222222222222222. Rebase onto main (never merge it in), continue the work it unblocked, push with --force-with-lease and say what changed.
+```
+
+## Decisions
+
+- **One item per wait, with the PR on GSI1** ([`keys.ts`](https://github.com/example-owner/kiro-remote/blob/70473c9/packages/core/src/repo/keys.ts#L37), [`createWait`](https://github.com/example-owner/kiro-remote/blob/70473c9/packages/core/src/repo/repository.ts#L910)): `SESSION#<id>` / `WAIT#<owner>/<repo>#<n>`, `GSI1PK = GHWAIT#<owner>/<repo>#<n>`, `GSI1SK = <session id>`. A link needs a second reverse row and a transaction because it is unique per PR. A wait is many to many, so one item with one conditional write answers both queries and has nothing to keep in step. `GHWAIT#` cannot meet `USER#` or `GHREPO#` in the index.
+- **The wait is stored first and read second** ([`waitForPullRequest`](https://github.com/example-owner/kiro-remote/blob/70473c9/packages/core/src/service/waits.ts#L33), [`checkWait`](https://github.com/example-owner/kiro-remote/blob/70473c9/packages/github/src/consumer.ts#L454)), not read then stored as the task describes. The API holds no GitHub credentials, so it sends a `wait_check` message and the GitHub consumer reads the PR. Storing first also closes the window in which a PR merges between the read and the write. The result is the same: merged or closed wakes now, open stays, twice is a no-op. This gives the API function `GITHUB_QUEUE_URL` and `sqs:SendMessage` on the GitHub queue (not the secret), and `wait_check` joins the queue's messages. If the message cannot be sent the wait is deleted again.
+- **A wait is claimed by deleting it** ([`fireWait`](https://github.com/example-owner/kiro-remote/blob/70473c9/packages/github/src/consumer.ts#L423)): a webhook and a `wait_check` that fire the same wait at once, or a redelivery, wake the session once, because only the delete that succeeds writes the wake. If the wake cannot be written the wait is put back, so the SQS retry finds it. The cost is a lost wake if the process dies between the delete and the write; I chose that over a duplicate turn, and the put-back covers every failure that throws.
+- **A PR that cannot be read is not waited for forever.** The prompt did not say. The wait is removed and the session gets the fourth prompt above, so a mistyped PR is not silent. A transient 404 from a lost installation would also do this; a failed read (5xx) throws and is retried.
+- **One turn for a merge and the waiter's own conflict needed a change.** The drain folds all *due* items into one turn, but the conflict wake is debounced 2 minutes and re-checked up to twice, so an immediate wait wake would go out alone. A waiter with an open linked PR in the merged PR's repo (same base, or base not known yet) has its merge wake held for the debounce, every re-check delay and 30 s (about 4.5 minutes), and [`enqueueWake`](https://github.com/example-owner/kiro-remote/blob/70473c9/packages/github/src/wake.ts#L45) keeps the pending conflict and wait items due together: whichever is written second moves the other's due time. Every other waiter, and every closed-unmerged wake, goes out at once. The price is that a stacked waiter learns of the merge about 4.5 minutes later than an unstacked one.
+- **The trailer follows the session trailer's rules** ([`linkFromTrailer`](https://github.com/example-owner/kiro-remote/blob/70473c9/packages/github/src/consumer.ts#L121)): the waits count only when the session trailer is accepted. A PR already linked to the same session is validated again only when it carries wait lines, so an edit can add them; one linked to another session is ignored. Added: the awaited repo must match `ALLOWED_REPOS` (the consumer now reads it from its env, which it already had), a line naming the PR itself is refused, and one body registers at most 20 waits. The launch line puts the waits sentence first and keeps the session trailer last and unchanged, so no punctuation can end up after the session id.
+- **Scope and failure modes:** the tools and routes use the `link` action (`sessions:write`), as asked. Without the GitHub feature they answer 501 (`GithubNotEnabledError`).
+- **Prompt wording:** the base is not in backticks, as in the task text (the conflict prompt uses backticks). The header says `awaited by this session`, and omits `(delivery …)` for a wake that did not come from a webhook, instead of inventing an id.
+- **The smoke check** is one line in the existing `queues` check: it needs only `list-stack-resources` and `get-function-configuration`, which the smoke role has. No deployment task is needed.
+- **No ADR.** None of the three in `docs/adr` covers the GitHub integration, and none conflicts. The `adr` CLI is not installed in this sandbox, so I proposed nothing; the new edge API → GitHub queue could be one.
+- **Emulator setup:** the sandbox's filesystem is read-only, so I unpacked the RPM by hand into `/projects/sandbox/.agents/tasks/waits/` instead of installing it (telemetry off).
+
+## After deploy
+
+Nothing. The API function's new `GITHUB_QUEUE_URL` and send permission come with the stack, no GitHub App permission or event is added (`pull_request.closed` is already delivered), and the smoke check fails the deploy if the API does not name the queue.
+
+## Next
+
+- A live e2e scenario for waits (a session waits for a PR in the e2e repo, the harness merges it) beside the four in `docs/github.md`.
+- Waits derived from ark issues' depends-on links (`source` takes a new value) and draft's map: add `GET /v1/github/waits?pr=` over `queryWaiters`, which exists.
+- A scheduled sweep that reads each stored wait through `wait_check`, for PRs that merged while webhooks were down.
+- Removing a session's waits when the session is deleted (today a wait for a PR that never closes stays; one that fires for a deleted session is dropped by the drain).
+- **The change feed**, as ark ADR [9t6n5jc6](https://github.com/example-owner/ark/blob/docs/factory-review/docs/adr/decisions/9t6n5jc6-publish-every-decision-a-system-makes-as-events-others-can-read.md) ("Publish every decision a system makes as events others can read", [example-owner/ark#121](https://github.com/example-owner/ark/pull/121)) asks: one append-only feed per account of link added and removed, wait registered, fired (merged, closed, unreadable) and removed, and every wake sent with its cause, each event written in the same DynamoDB transaction as the state change it records, read by cursor over REST and MCP, with a versioned JSON Schema and 30 days of retention. Nothing is built here. Every write of a link or a wait already goes through one `Repository` method (`createLink`, `deleteLink`, `createWait`, `deleteWait`), and nothing else touches those keys, so the event can join each transaction without touching a call site. Two things the feed PR must handle: `deleteWait` does not yet say why (stopped by the caller, fired, rolled back), and the registration rollback and the consumer's put-back after a failed wake call `deleteWait` / `createWait`, so they need a flag or they would emit false events.

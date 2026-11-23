@@ -1,0 +1,84 @@
+## Summary
+
+Makes the window's frame quieter and roomier, from feedback after a morning of use. What needs you opens what it points at. The top bar holds the context and what needs you. The agent's name, state and Pause, the folder chip and the withheld sign-ins line move to a footer under the composer. The composer says plainly what it is for, and explains asides only once there is more than one person. The conversation is up to 950 px wide (was 760), and a divider lets the thread's column be sized by drag or keys, remembered on this device.
+
+Closes ?65, ?67, ?68 and ?71 (their closed events are in the branch). ?66 stays open: its done-when asks for before and after screenshots at 1280 px with a long context name, and the run below shows the after only.
+
+Kiro-Remote-Session: 01M83FC1RQ58C3K41E511V7JX2
+
+Decisions:
+
+- **Attention items reuse `ws.open`** (the map's `OpenTarget` path), so there is one way of going to something. `open` now also scrolls to and focuses the block after a thread is moved to the panel, retrying for up to two seconds while it renders. Permission prompts and conclusion cards got a `data-key` so they can be found like interrupts. An item in a conversation that focus hides leaves focus first.
+- **Top bar and footer.** Top: draft, the context and its Contexts menu, the conversation's title, what needs you. Footer: the folder chip and the sign-ins line (its list opens upward) at the left, then an empty `footer-activity` slot for the working indicator, then the agent's name, model, state and Pause or Play against the right edge (last in the keyboard order). A thread's own agent state and picker stay in the thread's header. Test ids are unchanged.
+- **"More than one person" is counted from the log:** `Projection.people()` counts distinct user actor ids on messages and travels on the conversation state as `people`. There is no member list yet.
+- **Paused placeholder:** "The agent is paused and isn’t listening. Write @agent to reach it for one message."
+- **Widths.** 760 px became 950 px for the conversation column and the composer. The thread column stays at 44% (at least 380 px) until sized; it ranges from 320 px and leaves the conversation at least 420 px.
+- **The width is stored in the view state (`device.db`), not `config.json`.** It is how this device looks, like placement and focus, which model.md keeps per device and apart from the log. `config.json` is hand-edited, strictly validated settings. The cost is one width per context on a device.
+- **Divider:** `role="separator"`, `aria-valuenow` is the thread column's width in pixels. Left widens the thread, Right narrows it, Shift moves 64 px instead of 16, Home and End go to the narrowest and widest.
+- Layout rules only in `styles.css`; no colour values changed.
+
+## How tested
+
+- [x] `pnpm check` (typecheck, lint, test, build)
+- [x] `adr verify` and `issues verify` report no errors (two existing warnings)
+
+CI on the pushed head passes (lint, typecheck, test, build, e2e). I read the e2e log (8 of 8 passed) and the `e2e-artifacts` download.
+
+Tests that cover each part:
+
+- **Attention item opens its block**
+  - `e2e/attention.spec.ts`, "what needs you arrives in its thread, in one order, and a thread wraps up": with the thread closed, clicking the permission item brings the thread back to the panel and focuses the request; Enter on the failed-check item focuses it in the main conversation.
+  - `e2e/acceptance.spec.ts`, "an ADR is accepted as you, signed, and its pull request merged as a second acceptance": Enter on an item focuses the acceptance request.
+- **Top bar, footer, placeholders, aside hint, width and divider** (`e2e/frame.spec.ts`, "the frame is quiet: a lean top bar, a footer, plain words, and a thread column you size"):
+  - the top bar holds the context, its menu and no agent state, folder or sign-ins line; the footer holds them, under the composer, with an empty `footer-activity`; Pause works from the keyboard;
+  - the agent's name, state and Pause end within 14 px of the footer's right edge at 1280 px and at 600 px, where the footer wraps; Tab from the sign-ins line reaches Pause next;
+  - the three placeholders (main, thread, paused);
+  - no aside hint with one person, and the hint once a second person has spoken;
+  - the conversation column is wider than 760 px and at most 950 px;
+  - the divider by drag (+120 px) and by keys (Left, Right, Shift, Home, End);
+  - the width restored after a restart.
+- **Unit:** `apps/desktop/test/frame.test.ts` (placeholders, the aside rule, width bounds, "is remembered on this device and comes back after a restart") and `packages/core/test/projection.test.ts` ("counts the people who spoke, never the agent, and each person once").
+- `e2e/app.spec.ts` now checks the paused placeholder instead of the old hint line.
+
+Screenshots from the `e2e-artifacts` of CI run 45181855192, taken on commit `a9c58c0` (the head of this branch when they were taken, rebased on `main` at `93a5637`, with the palette). They are retaken whenever the branch is rebased onto a new `main`, for example after the palette (#41) merges:
+
+Top bar and footer, with the agent at the right end (`f01`):
+
+![The top bar and the footer](https://raw.githubusercontent.com/example-owner/draft/717391e9aa3b31af2e1a171f99c49af7ae459c36/f01-top-bar-and-footer.png)
+
+The footer at 600 px, where it wraps and the agent's controls stay at the right (`f07`):
+
+![The footer at 600 px](https://raw.githubusercontent.com/example-owner/draft/717391e9aa3b31af2e1a171f99c49af7ae459c36/f07-footer-narrow.png)
+
+The composer, paused (`f02`):
+
+![The paused composer](https://raw.githubusercontent.com/example-owner/draft/717391e9aa3b31af2e1a171f99c49af7ae459c36/f02-paused-composer.png)
+
+A thread at its default width, with the divider (`f03`):
+
+![A thread and its divider](https://raw.githubusercontent.com/example-owner/draft/717391e9aa3b31af2e1a171f99c49af7ae459c36/f03-thread-and-divider.png)
+
+A thread at a chosen width (`f04`) and after a restart (`f05`):
+
+![The chosen thread width](https://raw.githubusercontent.com/example-owner/draft/717391e9aa3b31af2e1a171f99c49af7ae459c36/f04-thread-width-chosen.png)
+
+![The width restored after a restart](https://raw.githubusercontent.com/example-owner/draft/717391e9aa3b31af2e1a171f99c49af7ae459c36/f05-width-restored-after-restart.png)
+
+The aside hint with two people (`f06`):
+
+![The aside hint](https://raw.githubusercontent.com/example-owner/draft/717391e9aa3b31af2e1a171f99c49af7ae459c36/f06-aside-hint-with-two-people.png)
+
+The images are in commit `717391e` of the branch `assets/pr-39-screenshots`, which holds only the current set and can be deleted after merge.
+
+## After deploy
+
+Only a look no test can show: whether the window feels quieter and roomier. A test can check what is where and how wide, not how it feels.
+
+1. Run `pkill -f draft-desktop; cd ~/src/github.com/example-owner/draft && git switch main && git pull --ff-only && pnpm install && pnpm --filter @example-owner/draft-desktop dev -- "$HOME/src/github.com/example-owner/kiro-remote"`. You should see draft open on the kiro-remote context.
+2. Open a thread from an agent message and look at the window as you would to work. You should see one short top bar, a thin footer under the composer, and a wide conversation. If it still feels crowded, say what.
+
+## Filed for later
+
+- ?fnw9xyma: reset the thread column to its default width.
+- ?n2j8aqdm: go to an attention item from a block's own window.
+- Left out: the working indicator, which is in the title bar until it moves into the empty `footer-activity` slot (?6xgncgnv); and a width kept once per person rather than per context.

@@ -1,0 +1,79 @@
+Starts every agent's process without the person's GitHub, git, SSH, AWS and npm sign-ins, so acting as the person goes through draft's own steps only. Issue xh46a2ks, ADR zan5vjwz (proposed, refines wkcnp3zr). draft's own process still uses the person's git and gh for acceptance.
+
+- `agentEnvironment(spec, person's env, data dir)` (`apps/desktop/src/main/acp/environment.ts`) is one pure function. It returns the agent's environment and a names-only report: withheld, set instead, passed, refused. Later slices (Kiro rules in the status, routing the agent's tools) add rules there.
+- Withheld by name: draft's own settings, GitHub, git hosts, `GIT_ASKPASS`/`GIT_CONFIG_*`/author variables, SSH agent variables, `AWS_*` except region and similar, npm/Cargo/Twine/uv tokens. `ANTHROPIC_API_KEY` still reaches only an agent that requires it. HOME, PATH, locale, TERM, TMPDIR, `KIRO_*`, `XDG_*` pass.
+- `<data>/agent-env` holds an empty gh folder, the agent's git config, empty AWS files, an empty npmrc and an `ssh` stand-in. Written atomically each time an agent starts, again if missing or changed.
+- `agents.<name>.passEnv` in `config.json` passes a variable on purpose. It never passes draft's own settings.
+- The agent status shows "Your GitHub, git, SSH, AWS and npm sign-ins are withheld from the agent", names on demand, and says when `passEnv` is used. `agent.session_started` carries the report.
+
+## Evidence
+
+Fake ACP agent (`apps/desktop/test/acp-credentials.test.ts`): the person's environment carries a seeded `GH_TOKEN`, AWS keys, `SSH_AUTH_SOCK`, an npmrc token and a git global config with a helper, and the project folder's own git config names a helper. The fake agent runs the commands an agent's shell would and the same commands run in the person's process. Real git, gh, aws, npm and ssh from the build sandbox.
+
+```text
+ ✓ sees the seeded sign-ins in the person's own process (so the checks below can fail)
+ ✓ git finds no credential helper and not the person's identity
+ ✓ gh is not logged in as the person
+ ✓ aws finds no credentials and no profile
+ ✓ npm doesn't read the person's token
+ ✓ ssh offers no key, agent or configuration
+ ✓ the agent's environment carries no seeded value, no draft variable, and what it needs
+ ✓ the session's start event and the status say what was withheld, by name only
+ Test Files  2 passed (2)   Tests  39 passed (39)   (with acp-environment.test.ts)
+```
+
+Inside the agent, outer process in brackets:
+
+- `git credential fill` fails ("terminal prompts disabled") and the repository's own helper is never called [the helper is called, password returned]. `git config user.email` is `agent@draft.invalid` [the person's].
+- `gh auth token --hostname github.com` prints the refused stand-in [the seeded token]. `gh auth status` exits 1: "The token in GH_TOKEN is invalid".
+- `aws configure list`: profile, access_key, secret_key all `<not set>` [access key from env].
+- `npm config get userconfig` is `<data>/agent-env/npmrc` [the person's npmrc with the token].
+- `ssh -G github.com`: `pubkeyauthentication false`, `identitiesonly yes`, `identityagent none`, `identityfile none` [`pubkeyauthentication true`].
+
+The withheld list as the status shows it, for an example environment (names only):
+
+```text
+Your GitHub, git, SSH, AWS and npm sign-ins are withheld from the agent
+  GitHub: GH_TOKEN, GITHUB_TOKEN
+  git: GIT_ASKPASS
+  SSH: SSH_AUTH_SOCK
+  AWS: AWS_ACCESS_KEY_ID, AWS_PROFILE
+  npm and package registries: NPM_TOKEN
+  draft's own settings: DRAFT_AGENT, ELECTRON_RUN_AS_NODE
+  another agent's key: ANTHROPIC_API_KEY
+  Set by draft instead, so the agent's tools find nothing: AWS_CONFIG_FILE, AWS_EC2_METADATA_DISABLED,
+  AWS_SHARED_CREDENTIALS_FILE, GH_CONFIG_DIR, GH_ENTERPRISE_TOKEN, GH_PROMPT_DISABLED, GH_TOKEN,
+  GITHUB_ENTERPRISE_TOKEN, GITHUB_TOKEN, GIT_CONFIG_COUNT, GIT_CONFIG_GLOBAL, GIT_CONFIG_KEY_0,
+  GIT_CONFIG_NOSYSTEM, GIT_CONFIG_VALUE_0, GIT_SSH_COMMAND, GIT_TERMINAL_PROMPT, NPM_CONFIG_USERCONFIG, PATH
+```
+
+`pnpm check` passes (typecheck, lint, 317 core and 156 desktop tests, build). **The end-to-end tests did not run:** Electron fails to start in the build sandbox (`libgtk-3.so.0` missing, no package install possible), so all five specs failed at launch and nothing about them is verified. I added a check to `e2e/app.spec.ts` for the status line and its names on demand; it is untested.
+
+## Decisions
+
+- **Kiro's sign-in.** A file under HOME: `~/Library/Application Support/kiro-cli/data.sqlite3` (macOS), table `auth_kv` ([Kiro issue 9103](https://github.com/kirodotdev/Kiro/issues/9103), [Docker Sandboxes' Kiro page](https://collabnix.com/run-kiro-docker-sandboxes-device-flow-login/)). One report ([issue 3963](https://github.com/kirodotdev/Kiro/issues/3963)) says it also uses the login keychain; the other found no entry. Either way it needs HOME, `KIRO_*` and `XDG_*`, which pass, and holds no GitHub or AWS credential, so the stop condition did not apply. Unverified against a real kiro-cli 3.5 (the docs also mention `KIRO_HOME` and `KIRO_API_KEY`: [ACP](https://kiro.dev/docs/cli/acp/), [CLI 2.31](https://kiro.dev/changelog/cli/2-31/)).
+- **gh with an empty `GH_CONFIG_DIR` is not "not logged in".** In [gh's source](https://github.com/cli/cli/blob/trunk/internal/config/config.go), `ActiveToken` tries the env token, then the active user from hosts.yml, then falls back to the keychain entry stored without a user name, and `setActiveCredential` keeps that entry set to the active token. So the keychain token is found with an empty config folder. draft therefore also sets `GH_TOKEN`, `GITHUB_TOKEN`, `GH_ENTERPRISE_TOKEN` and `GITHUB_ENTERPRISE_TOKEN` to a value GitHub refuses: gh reads those before stored credentials ([gh environment](https://cli.github.com/manual/gh_help_environment)). Side effect: public GitHub reads through gh fail too. Only a real Mac shows the keychain case.
+- **git.** `GIT_CONFIG_NOSYSTEM=1`, `GIT_CONFIG_GLOBAL` at a file draft writes ([git](https://git-scm.com/docs/git)): no helper, `user.name = draft agent`, `user.email = agent@draft.invalid`. `safe.directory` is not needed, the agent runs as the same user. A repository's own `credential.helper` would still be asked, so `GIT_CONFIG_COUNT` adds an empty `credential.helper`, which wins over every file and resets the helper list. Checked with `git credential fill` against a repository with its own helper. `GIT_TERMINAL_PROMPT=0`; the person's `GIT_ASKPASS`, `GIT_SSH` and author variables are withheld.
+- **SSH.** `SSH_AUTH_SOCK` withheld, and `GIT_SSH_COMMAND` with `-F /dev/null`, `IdentityFile=none`, `IdentityAgent=none`, `IdentitiesOnly=yes`, `PubkeyAuthentication=no`, `BatchMode=yes`, no control socket ([ssh_config](https://man.openbsd.org/ssh_config)). `IdentitiesOnly` alone still uses the default `~/.ssh/id_*` files, so `IdentityFile none` and no public-key authentication are needed. ssh has no environment variable for its config or keys and finds the home from the password database, so a plain `ssh -T git@github.com` can't be stopped by variables. draft puts an `ssh` stand-in first on the agent's PATH that runs the next `ssh` with the same options (also covers `scp`). `/usr/bin/ssh` by its path still reads the person's keys.
+- **AWS and npm.** `AWS_*` is withheld except region, output, pager, CA bundle and retry settings. `AWS_CONFIG_FILE` and `AWS_SHARED_CREDENTIALS_FILE` point at empty files, `AWS_EC2_METADATA_DISABLED=true` ([AWS CLI environment variables](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-envvars.html)). `NPM_CONFIG_USERCONFIG` points at an empty file ([npm config](https://docs.npmjs.com/cli/using-npm/config)).
+- **Report.** `withheld` lists a person's variable that did not reach the agent even when draft set another value (`GH_TOKEN`); `overridden` lists what draft set. Names and groups only. The log stores the report in `agent.session_started` (optional field, older logs unchanged).
+- **Sandbox (research only, not turned on).** Kiro's local command sandbox (Seatbelt on macOS, off by default) is configured by `sandbox.json` (`$KIRO_HOME/settings` or `~/.kiro/settings` globally, `<workspace>/.kiro/settings` per project) or `/sandbox` ([sandbox docs](https://kiro.dev/docs/sandbox)). `session/new` takes `_meta.kiro` `modeId`, `modelId` and `effortLevel` only ([ACP migration](https://kiro.dev/docs/cli/v3/acp-migration/)), and neither page documents a session option or `_meta` field for the sandbox. So there is no per-session way that leaves the person's Kiro files alone. Pointing `KIRO_HOME` elsewhere would also drop the person's rules and MCP configuration. It covers shell commands and stdio MCP servers, not file tools or remote MCP servers, and the docs don't say whether it hides `~/.aws`, `~/.ssh` or the keychain.
+
+## After deploy
+
+On the person's Mac, in a draft context, ask the agent to run each of these. All four should fail:
+
+1. `gh auth status`
+2. `git ls-remote` against a private repository over HTTPS
+3. `aws sts get-caller-identity`
+4. `ssh -T git@github.com`
+
+And: accepting a pull request in draft still merges as him, and the Kiro agent still answers (so kiro-cli's sign-in survives this environment). The status line and its names should show in the header. If a Kiro MCP server needed one of the withheld variables, it now needs `passEnv`.
+
+## Next
+
+- Sandbox per session: none found. Revisit when Kiro adds a session option, or decide to run the agent as another operating-system user or in a container.
+- What the agent can still reach (files the user can read): `~/.aws`, `~/.ssh`, `~/.npmrc`, `~/.config/gh`, the keychain through `security`, `/usr/bin/ssh` by its path, and a credential helper named for one URL in a repository's own config. Written down in docs/implementation.md and the ADR.
+- Accept ADR zan5vjwz (`adr accept zan5vjwz`). Issue xh46a2ks stays open for the real-Mac checks.
+
+Kiro-Remote-Session: 01M82609GQES47E9TQ07SBSA9J
