@@ -1016,10 +1016,6 @@ textarea:focus-visible {
   color: var(--moved-strong);
 }
 
-.app[data-focused="true"] .titlebar {
-  background: var(--moved-fill);
-}
-
 .window-bar .title {
   color: var(--ink);
   font-weight: 560;
