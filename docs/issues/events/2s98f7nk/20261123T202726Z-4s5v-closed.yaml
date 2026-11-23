@@ -1,0 +1,16 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M851F4WQY1MXSVGAA1CX4S5V
+subject: 2s98f7nk
+type: closed
+at: 2026-11-23T20:27:26Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: 244629292+kiro-agent@users.noreply.github.com
+reason: The panel divider and the attention list's buttons show keyboard focus as the one 1.5px moved-mark ring (the universal :focus-visible rule); moved-fill stays on their :hover rules only. test/design-focus.test.ts fails on a rule that sets a fill under :focus or :focus-visible, and the app-wide focus check fails an element whose background changes when it has focus.
+data:
+  resolution: done
