@@ -1,0 +1,17 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M8466R8ZJ48FGZ28BG8QR9EN
+subject: n2j8aqdm
+type: opened
+at: 2026-11-23T12:31:00Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: niko.virtala@hey.com
+data:
+  title: Go to an attention item from a block's own window
+  template: task
+  template_version: 1
