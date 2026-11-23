@@ -6,6 +6,7 @@ import { Citation } from "./Conclusion.tsx";
 import { BlockControls } from "./Icons.tsx";
 import { Markdown } from "./Markdown.tsx";
 import { useSelectable } from "./selectable.ts";
+import { Working } from "./Working.tsx";
 
 const WHERE: Record<string, string> = { panel: "In the panel", window: "In a window" };
 
@@ -67,7 +68,13 @@ export function ThreadStub({ thread }: { thread: Thread }) {
           {thread.title}
         </span>
         <span className="thread-agent">{agentName(thread.agent)}</span>
-        {thread.busy && <span className="thread-chip working">Working</span>}
+        <Working
+          active={thread.busy}
+          label="Working"
+          place="turn"
+          showLabel
+          className="thread-chip working"
+        />
         {fresh > 0 && (
           <span className="thread-chip new" data-testid="thread-new">
             {fresh} new

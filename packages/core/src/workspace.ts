@@ -102,6 +102,7 @@ export class Workspace {
     // Each workspace has its own registry: the repositories of a context bring rows of its own.
     this.registry = mapRegistry.fork();
     this.ark = o.ark === undefined ? null : new ArkMap(this.registry, o.ark);
+    if (this.ark !== null) this.ark.onReading = () => this.emitMap();
     this.watch(main);
     for (const c of o.projection.conversations()) {
       if (c.parent !== null) this.attach(c.conversation);
@@ -178,7 +179,7 @@ export class Workspace {
 
   /** Tells the windows that the log has moved since the map was last drawn. */
   private emitMap(): void {
-    const head = `${this.o.log.head()}:${this.ark?.version ?? 0}`;
+    const head = `${this.o.log.head()}:${this.ark?.version ?? 0}${this.ark?.reading === true ? ":reading" : ""}`;
     if (head === this.lastMapHead) return;
     this.lastMapHead = head;
     this.emit({ type: "map", head });
@@ -195,6 +196,7 @@ export class Workspace {
     return foldMap(this.o.log.events(), this.registry, {
       live: { runningSteps },
       sources: this.ark?.sources() ?? {},
+      reading: this.ark?.reading ?? false,
       ...query,
     });
   }

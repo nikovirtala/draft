@@ -60,6 +60,27 @@ describe("the Kiro session resolver", () => {
 });
 
 describe("the stub poller", () => {
+  it("says which stubs are being read while a poll is in flight, and tells when that changes", async () => {
+    const { poller, resolver } = setup();
+    let release: () => void = () => {};
+    const held = new Promise<void>((resolve) => (release = resolve));
+    const fetch = resolver.fetch.bind(resolver);
+    resolver.fetch = async (id) => {
+      await held;
+      return fetch(id);
+    };
+    const seen: string[][] = [];
+    poller.onActivity = () => seen.push(poller.inFlight());
+    poller.setVisible([t(RUNNING)]);
+    expect(poller.inFlight()).toEqual([]);
+    const run = poller.runDue();
+    expect(poller.inFlight()).toEqual([`kiro-session:${RUNNING}`]);
+    release();
+    await run;
+    expect(poller.inFlight()).toEqual([]);
+    expect(seen).toEqual([[`kiro-session:${RUNNING}`], []]);
+  });
+
   it("polls only stubs on screen", async () => {
     const { poller, fake, advance } = setup();
     poller.setVisible([t(RUNNING)]);

@@ -249,6 +249,8 @@ export interface MapQuery {
   live?: LiveInfo | null;
   /** What lives outside the log; see `KindInput.sources`. */
   sources?: Readonly<Record<string, unknown>>;
+  /** A source is being read now; the snapshot says so. Default: no. */
+  reading?: boolean;
 }
 
 function contextOf(events: readonly DraftEvent[]): string {
@@ -416,6 +418,7 @@ export function foldMap(
     transitions,
     edges,
     totals,
+    reading: query.reading ?? false,
     problems,
   };
 }

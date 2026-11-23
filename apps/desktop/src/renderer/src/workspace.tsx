@@ -68,6 +68,8 @@ export interface Workspace {
   leaveFocus: () => void;
   branch: (parentMessage: string, agent?: string) => void;
   threadOf: (conversation: string) => Thread | undefined;
+  /** The stubs being read now, by `type:id`, in any conversation of this window. */
+  resolving: ReadonlySet<string>;
   /** Names the log as the main process last announced it; a map asks again when it changes. */
   mapHead: string;
   /** The cell a map block has open on this device. */
@@ -77,7 +79,8 @@ export interface Workspace {
   open: (target: OpenTarget) => Promise<void>;
 }
 
-const Ctx = createContext<Workspace | null>(null);
+export const WorkspaceContext = createContext<Workspace | null>(null);
+const Ctx = WorkspaceContext;
 
 export function useWorkspace(): Workspace {
   const w = useContext(Ctx);
@@ -206,7 +209,9 @@ export function WorkspaceProvider({ boot, children }: { boot: Ready; children: R
         block: info.address,
       });
     };
+    const resolving = new Set(Object.values(states).flatMap((s) => s.resolving));
     return {
+      resolving,
       mapHead,
       mapCell: (block) => view.cells[block] ?? null,
       selectMapCell: (block, cell) => void window.draft.selectMapCell(block, cell),

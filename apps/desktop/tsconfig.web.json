@@ -10,5 +10,5 @@
     "jsx": "react-jsx",
     "types": []
   },
-  "include": ["src/renderer/src", "src/shared"]
+  "include": ["src/renderer/src", "src/shared", "test/renderer"]
 }

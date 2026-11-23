@@ -11,6 +11,7 @@ import { NoticeBlock } from "./NoticeBlock.tsx";
 import { PromptCard } from "./PromptCard.tsx";
 import { ProposalCard } from "./ProposalCard.tsx";
 import { UnknownBlock } from "./UnknownBlock.tsx";
+import { Working } from "./Working.tsx";
 
 /**
  * One conversation: the main one on the left, or a thread in the panel or a window. Interrupts
@@ -71,6 +72,12 @@ export function ConversationView({ conversation }: { conversation: string }) {
             );
           })}
           {state.streaming && <StreamingMessage text={state.streaming.text} />}
+          <Working
+            active={state.busy}
+            label={`${agentLabel(state.agent)} is working`}
+            place="turn"
+            className="turn-working"
+          />
           {showFull &&
             state.prompts.map((p) => (
               <PromptCard

@@ -142,6 +142,8 @@ export interface MapSnapshot {
   /** The references between the items above, both ends present; see `KindDecl.edges`. */
   edges: MapEdge[];
   totals: { items: number; open: number; waitingOnPerson: number };
+  /** A source is being read now (GitHub, for the repositories the context covers). */
+  reading: boolean;
   /** Kinds that failed to list their items; the rest of the map is still drawn. */
   problems: MapProblem[];
 }

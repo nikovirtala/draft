@@ -4,6 +4,7 @@ import { availableMoves, type Entry, type Placement } from "../../../shared/plac
 import { useWorkspace } from "../workspace.tsx";
 import { BlockControls } from "./Icons.tsx";
 import { useSelectable } from "./selectable.ts";
+import { Working } from "./Working.tsx";
 
 const LABELS: Record<string, string> = {
   provisioning: "Starting",
@@ -275,6 +276,7 @@ function Details({ p, s }: { p: StatusProps; s: Summary }) {
 }
 
 function Line({ p, children }: { p: StatusProps; children?: React.ReactNode }) {
+  const ws = useWorkspace();
   const s = summary(p);
   return (
     <div className="stub-line">
@@ -289,6 +291,11 @@ function Line({ p, children }: { p: StatusProps; children?: React.ReactNode }) {
           s.title
         )}
       </span>
+      <Working
+        active={ws.resolving.has(`${p.target.type}:${p.target.id}`)}
+        label={`Reading ${s.title}`}
+        place="stub"
+      />
       <span
         className={`stub-status${s.kind === KINDS["pull-request"] ? ` pr-state pr-${s.status}` : ""}`}
         data-testid="stub-status"

@@ -56,6 +56,25 @@ const blobs = (r: FakeGithub["requests"], from = 0) =>
   paths(r, from).filter((p) => p.includes("/git/blobs/")).length;
 
 describe("the ark kinds on the map", () => {
+  it("says it is reading GitHub while a read is under way, and tells when that changes", async () => {
+    seedArk(github);
+    const { ark } = open();
+    const seen: boolean[] = [];
+    ark.onReading = () => seen.push(ark.reading);
+    expect(ark.reading).toBe(false);
+    const read = ark.tick();
+    expect(ark.reading).toBe(true);
+    await read;
+    expect(ark.reading).toBe(false);
+    expect(seen).toEqual([true, false]);
+  });
+
+  it("puts what is being read in the snapshot of the map", () => {
+    const { registry } = open();
+    expect(foldMap([], registry, { reading: true }).reading).toBe(true);
+    expect(foldMap([], registry).reading).toBe(false);
+  });
+
   it("shows every decision by the state adr folds it to, one of them only on a pull request", async () => {
     seedArk(github);
     const { ark, map } = open();

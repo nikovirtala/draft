@@ -127,6 +127,8 @@ export class StubPoller {
   private readonly baseMs: number;
   private readonly maxMs: number;
   private readonly now: () => number;
+  /** Called when a poll starts or ends, so what is being read can be shown. */
+  onActivity: () => void = () => {};
 
   constructor(
     private readonly resolvers: ReadonlyMap<string, Resolver>,
@@ -170,6 +172,11 @@ export class StubPoller {
     }
   }
 
+  /** The targets being read now, by `type:id`, in the order their polls started. */
+  inFlight(): string[] {
+    return [...this.tracked.entries()].filter(([, t]) => t.inFlight).map(([k]) => k);
+  }
+
   visible(): Target[] {
     return [...this.tracked.values()].filter((t) => t.visible).map((t) => t.target);
   }
@@ -191,6 +198,7 @@ export class StubPoller {
     const resolver = this.resolvers.get(t.target.type);
     const started = this.now();
     t.inFlight = true;
+    this.onActivity();
     let outcome: PollOutcome["outcome"];
     let retryAfterMs = 0;
     try {
@@ -211,6 +219,7 @@ export class StubPoller {
       if (typeof wait === "number" && wait > 0) retryAfterMs = wait;
     } finally {
       t.inFlight = false;
+      this.onActivity();
     }
     t.intervalMs = outcome === "changed" ? this.baseMs : Math.min(t.intervalMs * 2, this.maxMs);
     t.dueAt = this.now() + Math.max(t.intervalMs, retryAfterMs);
