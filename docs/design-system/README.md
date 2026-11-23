@@ -17,14 +17,14 @@ draft's palette: pastel states on cream.
 
 | Meaning | Fill | Mark | Word | Word on fill |
 | --- | --- | --- | --- | --- |
-| Moved, the agent's activity | #ebe2fd soft, #d7c5fb selected | #9e6ef7 | #b18bf8 pastel; #8c42f6 in chips and badges | 4.0:1 in a chip |
+| Moved, the agent's activity | #ebe2fd soft, #d7c5fb the chosen option of a list or a control | #9e6ef7 | #b18bf8 pastel; #8c42f6 in chips and badges | 4.0:1 in a chip |
 | Done, settled | #d7f2e4 | #009456 | #007a47 | 4.6:1 |
 | Under way elsewhere | #dcefff | #0a7fd1 | #0069b0 | 4.9:1 |
 | Waits on you (and failures) | #fbecc9 | #b87700 | #8a5a00 | 5.1:1 |
 | Not started | none | #b9c4c4 hairline | muted #5d6b6d | 5.2:1 on page |
 | Open loop | none | #929ea0 dashed | muted #5d6b6d | 5.2:1 on page |
 
-Purple follows the Wisteria Lily theme: a soft fill for what moved or is under the pointer, a stronger fill for what is selected with ink words on it, pastel purple words for what changed, and one strong purple only for a small badge or a chip's word. Two of those pairs are below 4.5:1 on purpose (pastel words at 2.5:1, a chip's word at 4.0:1); they are used at 12.5 px and up, weight 500, and never as the only sign. The green, blue and amber fills and marks are the delivery board's; their words are darkened in the same hue just far enough for 4.5:1.
+Purple follows the Wisteria Lily theme: a soft fill for what moved or is under the pointer, a stronger fill for the chosen option of a list or a control (never for a block), with ink words on it, a ring for keyboard focus, pastel purple words for what changed, and one strong purple only for a small badge or a chip's word. Two of those pairs are below 4.5:1 on purpose (pastel words at 2.5:1, a chip's word at 4.0:1); they are used at 12.5 px and up, weight 500, and never as the only sign. The green, blue and amber fills and marks are the delivery board's; their words are darkened in the same hue just far enough for 4.5:1.
 
 ## Ground and words
 

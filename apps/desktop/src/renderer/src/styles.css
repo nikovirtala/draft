@@ -297,8 +297,9 @@ code {
   }
 }
 
-/* Status stub */
-.stub {
+/* Status stub. The map stub, inline, has its own padding. */
+.stub,
+.thread-stub {
   background: var(--raised);
   border: var(--hairline) solid var(--line-strong);
   border-radius: 10px;
@@ -312,6 +313,10 @@ code {
   min-height: 28px;
   flex-wrap: wrap;
   row-gap: var(--space-1);
+}
+
+.map-stub.inline {
+  padding: 8px 12px 12px;
 }
 
 .stub .dot {
@@ -840,10 +845,11 @@ textarea:focus-visible {
   overflow-y: auto;
 }
 
+/* The header of the panel and of a block's window is on the page colour, whatever has focus in it. */
 .block-header {
   padding: 8px 14px 6px 16px;
   border-bottom: var(--hairline) solid var(--line);
-  background: var(--raised);
+  background: var(--page);
 }
 
 .block-full:not(.thread-view) .block-header {
@@ -882,13 +888,7 @@ textarea:focus-visible {
   margin: 4px 0 10px;
 }
 
-/* A block that moved leaves a stub where it was made, saying where it went. */
-.stub.away,
-.thread-stub.away {
-  opacity: 0.8;
-  border-style: dashed;
-}
-
+/* A block that moved leaves a stub where it was made; its "where" chip says where it went, and nothing else changes. */
 .where {
   color: var(--moved-strong);
   background: var(--moved-fill);
@@ -901,13 +901,6 @@ textarea:focus-visible {
   gap: 6px;
   font-family: var(--font-sans);
   font-size: 13px;
-}
-
-.thread-stub {
-  background: var(--raised);
-  border: var(--hairline) solid var(--line-strong);
-  border-radius: 10px;
-  padding: 6px 8px 6px 12px;
 }
 
 .thread-stub.waiting {
@@ -943,48 +936,14 @@ textarea:focus-visible {
 }
 
 /*
- * The block in focus is drawn on moved-selected, as the design system's Selection preview shows:
- * a stub or a thread stub whole, a block in the panel or a window by its header. Words on it are
- * ink or text (5.3:1 and 4.8:1); muted and the strong words fall under 4.5:1 there, so what is
- * muted elsewhere (a stub's reference and status, a thread's agent, a detail's name, an icon, a
- * chip with no fill) becomes text. A chip with a fill keeps it, so no state word is ever bare on
- * moved-selected.
+ * No block is filled with purple: a stub, a thread stub or a block in the panel or a window stays
+ * on its own ground when it is selected, clicked, expanded, open in the panel or has focus inside
+ * it. moved-selected is the chosen option of a list or a control. Keyboard focus on a block is the
+ * ring the inputs use, through :focus-visible only, so a click shows nothing.
  */
-:is(.stub, .thread-stub)[data-selected="true"],
-.block-full[data-selected="true"] > .block-header,
-.block-full.thread-view:focus-within > .block-header {
-  background: var(--moved-selected);
-}
-
-/* A stub that says where its block went is faded; faded words would fall under 4.5:1 on the fill. */
-:is(.stub, .thread-stub).away[data-selected="true"] {
-  opacity: 1;
-}
-
-:is(
-    :is(.stub, .thread-stub)[data-selected="true"],
-    .block-full[data-selected="true"] > .block-header,
-    .block-full.thread-view:focus-within > .block-header
-  )
-  :is(
-    .stub-ref,
-    .stub-status:not(.pr-state),
-    .pr-state.pr-closed,
-    .thread-agent,
-    .thread-chip:not(.new, .waiting),
-    .stub-details dt,
-    button.icon
-  ) {
-  color: var(--text);
-}
-
-:is(
-    :is(.stub, .thread-stub)[data-selected="true"],
-    .block-full[data-selected="true"] > .block-header,
-    .block-full.thread-view:focus-within > .block-header
-  )
-  .thread-mark {
-  color: var(--ink);
+:is(.stub, .thread-stub, .block-full):focus-visible {
+  outline: 1.5px solid var(--moved-mark);
+  outline-offset: 1px;
 }
 
 .thread-chip.working {
@@ -1454,10 +1413,6 @@ textarea:focus-visible {
 }
 
 /* The map: a row for each kind, a column for each state. What waits on you is lit. */
-.map-stub.inline {
-  padding: 8px 12px 12px;
-}
-
 .map {
   display: flex;
   flex-direction: column;
@@ -1620,9 +1575,10 @@ textarea:focus-visible {
   z-index: 1;
 }
 
-.map-cell.selected {
-  outline: 2px solid var(--moved-mark);
-  outline-offset: 1px;
+/* The chosen cell is the chosen option: moved-selected, with ink words. */
+.map-cell.selected:not(:disabled) {
+  color: var(--ink);
+  background: var(--moved-selected);
   position: relative;
   z-index: 2;
 }
@@ -1698,15 +1654,6 @@ textarea:focus-visible {
 
 .map-item.lit {
   border-color: var(--line);
-}
-
-/* The row you are on takes moved-selected, and its muted words become text. */
-.map-item:focus-visible {
-  background: var(--moved-selected);
-}
-
-.map-item:focus-visible :is(.map-item-since, .map-item-where) {
-  color: var(--text);
 }
 
 .map-item-label {

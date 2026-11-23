@@ -1,0 +1,15 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M84WRG5ZZY9192DMRRP0B771
+subject: ynt6qt9k
+type: commented
+at: 2026-11-23T19:05:10Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: 244629292+kiro-agent@users.noreply.github.com
+data:
+  text: "Decision: no block is ever filled with purple, selected or not. moved-selected is for the chosen option of a list or a control only; keyboard focus on a block is a 1.5px moved-mark ring through :focus-visible."
