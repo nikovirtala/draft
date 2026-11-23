@@ -1,0 +1,16 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M84KDCWJ5DKF4N816R2SDH8G
+subject: jqyv4fx0
+type: closed
+at: 2026-11-23T16:21:49Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: niko.virtala@hey.com
+reason: "CI's start job removes packages/core/dist, builds the desktop app with electron-vite and starts it under Xvfb until the renderer draws (apps/desktop/e2e/start.spec.ts). A test commit that removed core's map-graph alias failed it with Rolldown's resolve error: https://github.com/nikovirtala/draft/actions/runs/45214839022/job/137833137144"
+data:
+  resolution: done

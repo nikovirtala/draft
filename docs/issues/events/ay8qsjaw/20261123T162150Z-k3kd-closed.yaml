@@ -1,0 +1,16 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M84KDDK54M1SKJ95S657K3KD
+subject: ay8qsjaw
+type: closed
+at: 2026-11-23T16:21:50Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: niko.virtala@hey.com
+reason: "Every e2e test launches the app through apps/desktop/e2e/harness.ts, which reads the main process's stderr from its first line (capture-main.cjs) and console, and each window's console and uncaught errors. An Electron deprecation, a Node deprecation, an unhandled rejection or a console.error fails the test with the line. The allow-list in console-allowlist.ts is empty. A test commit calling safeStorage.isEncryptionAvailable failed every e2e test with the (electron) line: https://github.com/nikovirtala/draft/actions/runs/45214839022/job/137833137317"
+data:
+  resolution: done
