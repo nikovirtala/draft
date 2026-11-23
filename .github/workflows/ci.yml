@@ -19,10 +19,15 @@ concurrency:
 # e2e: lint still runs (Biome, Markdown, commit messages, adr verify, issues verify), and `check`
 # passes when the skipped jobs were skipped for that reason.
 #
-# The app starts from core's source, with no packages/core/dist (?75): the start job.
-#
-# The map's counts equal what `adr list` and `issues list` report (?77): the test job runs
-# packages/core/test/map-contract.test.ts on this checkout.
+# What a person used to check by hand is checked here:
+# - start: the app builds and starts from core's source, with no packages/core/dist (?75);
+# - e2e: the app prints no Electron deprecation, renderer error or unhandled rejection (?76,
+#   apps/desktop/e2e/harness.ts), and the named states' screenshots and the design's previews are
+#   rendered (?79);
+# - screenshots: one comment on a pull request from this repository shows them side by side. It is
+#   its own job so that only it holds a write token, and it runs no code of the e2e job.
+# - test: the map's counts equal what `adr list` and `issues list` report (?77,
+#   packages/core/test/map-contract.test.ts).
 jobs:
   changes:
     runs-on: ubuntu-latest
@@ -165,7 +170,12 @@ jobs:
       - run: pnpm build
         env:
           DRAFT_BUILD_REVISION: ${{ github.event.pull_request.head.sha || github.sha }}
+      # Chromium renders the design system's previews for the screenshot comment.
+      - run: pnpm --filter @nikovirtala/draft-desktop exec playwright install --with-deps chromium
       - run: xvfb-run -a pnpm test:e2e
+      - name: Render the previews of the named states
+        if: ${{ !cancelled() }}
+        run: pnpm --filter @nikovirtala/draft-desktop exec node scripts/preview-shots.ts
       - if: ${{ !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
@@ -173,23 +183,62 @@ jobs:
           path: apps/desktop/e2e/artifacts/
           if-no-files-found: ignore
 
+  # One comment on the pull request with the named states' screenshots beside the design's previews
+  # (apps/desktop/e2e/states.json). The images are committed to ci/screenshots, a branch only this
+  # job writes, and the comment links them at that commit. Only a pull request from this repository
+  # gets it: a fork's token can't write.
+  screenshots:
+    needs: e2e
+    if: ${{ !cancelled() && github.event_name == 'pull_request' && (needs.e2e.result == 'success' || needs.e2e.result == 'failure') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # the push to ci/screenshots
+      pull-requests: write # the comment
+    steps:
+      - name: Skip a pull request from a fork
+        if: ${{ github.event.pull_request.head.repo.full_name != github.repository }}
+        run: echo "::notice::Screenshots are not posted for a pull request from a fork; they are in the e2e-artifacts of the e2e job."
+      - if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "26"
+      - if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: e2e-artifacts
+          path: apps/desktop/e2e/artifacts
+      - if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+        run: node apps/desktop/scripts/publish-screenshots.ts
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
   # The one status to require in branch protection. It fails unless changes and lint passed and
   # every other job passed, or was skipped because the change touched only docs.
   check:
     if: ${{ always() }}
-    needs: [changes, typecheck, lint, test, build, start, e2e]
+    needs: [changes, typecheck, lint, test, build, start, e2e, screenshots]
     runs-on: ubuntu-latest
     steps:
       - env:
           CHANGES: ${{ needs.changes.result }}
           CODE: ${{ needs.changes.outputs.code }}
           LINT: ${{ needs.lint.result }}
-          RESULTS: ${{ join(needs.*.result, ' ') }}
+          RESULTS: ${{ needs.typecheck.result }} ${{ needs.test.result }} ${{ needs.build.result }} ${{ needs.start.result }} ${{ needs.e2e.result }}
+          SHOTS: ${{ needs.screenshots.result }}
         run: |
-          echo "changes: $CHANGES, code: $CODE, lint: $LINT, results: $RESULTS"
+          echo "changes: $CHANGES, code: $CODE, lint: $LINT, results: $RESULTS, screenshots: $SHOTS"
           [ "$CHANGES" = success ] && [ "$LINT" = success ] || exit 1
           for r in $RESULTS; do
             [ "$r" = success ] && continue
             [ "$r" = skipped ] && [ "$CODE" = false ] && continue
             exit 1
           done
+          # Skipped on a push, for a fork, and when e2e was skipped; a failed post fails the check.
+          case "$SHOTS" in success | skipped) ;; *) exit 1 ;; esac
