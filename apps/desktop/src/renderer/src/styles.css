@@ -1089,6 +1089,12 @@ textarea:focus-visible {
   background: var(--review-fill);
 }
 
+/* Why a session last woke: something moved, in the one purple a chip's word may take. */
+.pending.moved {
+  color: var(--moved-strong);
+  background: var(--moved-fill);
+}
+
 .chip {
   display: inline-block;
   color: var(--waiting-word);
@@ -1870,8 +1876,18 @@ div.map-item {
   stroke-width: 1.6px;
 }
 
+/* A session waits for a pull request: a mark in the waiting colours, as what waits is amber. */
+.graph-edge.waits {
+  stroke: var(--waiting-mark);
+  stroke-width: 1.6px;
+}
+
 .graph-arrowhead {
   fill: var(--moved-mark);
+}
+
+.graph-arrowhead.waits {
+  fill: var(--waiting-mark);
 }
 
 .graph-tether {

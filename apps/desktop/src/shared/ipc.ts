@@ -3,6 +3,7 @@
  * no API key, no token and no file system access crosses it.
  */
 import type { UiCheck } from "@nikovirtala/draft-core/check-types";
+import type { UiSessionFeed } from "@nikovirtala/draft-core/kiro-feed-types";
 import type { MapItem, MapSnapshot, OpenTarget } from "@nikovirtala/draft-core/map-types";
 import type { BlockInfo, Focus, FocusTarget, Layout, Move, Refusal } from "./placement.ts";
 
@@ -66,6 +67,8 @@ export interface Stub {
   id: string;
   state: Record<string, unknown>;
   observedAt: string;
+  /** What Kiro Remote's change feed says of a session: its waits, why it last woke. */
+  feed?: UiSessionFeed;
 }
 
 export interface Prompt {
