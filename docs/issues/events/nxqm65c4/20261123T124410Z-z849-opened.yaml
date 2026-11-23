@@ -1,0 +1,17 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M846YVNK7BHF59SCXXJXZ849
+subject: nxqm65c4
+type: opened
+at: 2026-11-23T12:44:10Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: 244629292+kiro-agent@users.noreply.github.com
+data:
+  title: Mark the block in focus with moved-selected
+  template: task
+  template_version: 1
