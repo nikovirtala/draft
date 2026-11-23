@@ -1,0 +1,16 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M846JNCAXTNY7AERF3RA7YS4
+subject: tpkfyqrz
+type: closed
+at: 2026-11-23T12:37:30Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: 244629292+kiro-agent@users.noreply.github.com
+reason: "A pull request's stub shows open, merged and closed-unmerged as chips of the weight and shape of the checks chip, each with its own look (tests: the three states, merged in the done colour, one shared chip rule). CI's end-to-end screenshots of a merged and an open pull request are in the pull request."
+data:
+  resolution: done
