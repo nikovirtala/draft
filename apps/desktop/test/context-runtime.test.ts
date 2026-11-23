@@ -54,6 +54,7 @@ function depsFor(dataDir: string, registry: ContextRegistry, name: string) {
     resolvers: [],
     github: new GithubClient({ token: null }),
     actions: null,
+    feed: null,
     makeAgent: (spec, place) =>
       new AcpRuntime({
         spec,

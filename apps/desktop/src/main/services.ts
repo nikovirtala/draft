@@ -6,7 +6,9 @@ import {
   ArtifactPageResolver,
   GithubClient,
   githubNote,
+  type KiroFeedApi,
   KiroOAuth,
+  KiroRemoteRest,
   type KiroRemoteTools,
   KiroSessionResolver,
   kiroMcpUrl,
@@ -30,6 +32,8 @@ import { SafeStorageSecretStore } from "./secrets.ts";
 export interface Services {
   user: ReturnType<typeof userActor>;
   actions: (KiroRemoteTools & { close?(): Promise<void> }) | null;
+  /** Kiro Remote's change feed and the sessions' links and waits, over REST; null without a URL. */
+  feed: KiroFeedApi | null;
   resolvers: Resolver[];
   /** The read-only GitHub client: the map reads the repositories a context covers through it. */
   github: GithubClient;
@@ -75,6 +79,21 @@ export async function createServices(o: {
     };
   }
 
+  // The change feed is read in the background, so it never opens a browser to sign in: it waits
+  // until the person has signed in for a session they asked about.
+  const feed =
+    config.kiroRemoteUrl === null
+      ? null
+      : new KiroRemoteRest({
+          baseUrl: config.kiroRemoteUrl,
+          token: async () => {
+            if (oauth === null) return null;
+            if ((await oauth.tokens()) === undefined)
+              throw new Error("not signed in to Kiro Remote");
+            return oauth.accessToken();
+          },
+        });
+
   // GitHub: a token from the environment, else from `gh`, else public access, and only ever reads.
   const githubAuth = await resolveGithubAuth(env);
   const github = new GithubClient({ token: githubAuth.token, baseUrl: config.githubApiUrl });
@@ -111,6 +130,7 @@ export async function createServices(o: {
   return {
     user: userActor(identity),
     actions: tools,
+    feed,
     resolvers,
     github,
     acceptance: personActions(person),
