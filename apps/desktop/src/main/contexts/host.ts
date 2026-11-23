@@ -172,6 +172,12 @@ export class ContextHost {
     return null;
   }
 
+  /** Tells the other windows of a window's context to go to a block: the one that shows it does. */
+  reveal(webContentsId: number, anchor: string): void {
+    const name = this.contextOf(webContentsId);
+    if (name !== null) this.windows.get(name)?.send({ type: "reveal", anchor }, webContentsId);
+  }
+
   /** The started runtime of a window's context; null before it started or while it asks. */
   runtimeOf(webContentsId: number): ContextRuntime | null {
     const name = this.contextOf(webContentsId);

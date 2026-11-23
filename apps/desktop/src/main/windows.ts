@@ -240,8 +240,10 @@ export class WindowManager {
     );
   }
 
-  send(change: Change): void {
+  /** Sends a change to every window, except the one with web contents `except`. */
+  send(change: Change, except?: number): void {
     for (const w of this.all()) {
+      if (w.webContents.id === except) continue;
       if (!w.webContents.isDestroyed()) w.webContents.send(CHANNELS.change, change);
     }
   }

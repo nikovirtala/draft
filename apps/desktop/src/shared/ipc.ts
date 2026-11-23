@@ -241,7 +241,9 @@ export type Change =
   | { type: "threads"; threads: Thread[]; attention: Attention[] }
   | { type: "view"; view: View }
   /** The log moved: a map on screen asks again. */
-  | { type: "map"; head: string };
+  | { type: "map"; head: string }
+  /** A window asked to go to a block: the window that shows it scrolls to it and takes focus. */
+  | { type: "reveal"; anchor: string };
 
 /** The context a window shows, as far as the window needs to say so. */
 export interface ContextView {
@@ -388,6 +390,11 @@ export interface DraftBridge {
   selectMapCell(block: string, cell: MapSelection | null): Promise<void>;
   /** Remembers the width of the thread's column on this device, or forgets it with `null`. */
   setPanelWidth(width: number | null): Promise<void>;
+  /**
+   * Asks every other window of this context to go to the block with this key: the one that shows
+   * it scrolls to it and puts the keyboard on it.
+   */
+  reveal(anchor: string): Promise<void>;
   onChange(cb: (c: Change) => void): () => void;
 }
 
@@ -423,5 +430,6 @@ export const CHANNELS = {
   mapVisible: "draft:map-visible",
   selectMapCell: "draft:select-map-cell",
   setPanelWidth: "draft:set-panel-width",
+  reveal: "draft:reveal",
   change: "draft:change",
 } as const;

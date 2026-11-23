@@ -223,6 +223,10 @@ function run(): void {
         throw new Error("bad request");
       runtimeOf(e)?.layout.setPanelWidth(width);
     });
+    ipcMain.handle(CHANNELS.reveal, (e, anchor: unknown) => {
+      if (!str(anchor, 500)) throw new Error("bad request");
+      host?.reveal(e.sender.id, anchor);
+    });
     ipcMain.handle(CHANNELS.focus, (e, target: unknown) => {
       const parsed = FocusSchema.safeParse(target);
       if (parsed.success) runtimeOf(e)?.layout.focus(parsed.data);

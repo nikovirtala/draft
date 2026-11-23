@@ -134,6 +134,13 @@ export function WorkspaceProvider({ boot, children }: { boot: Ready; children: R
           case "map":
             setMapHead(c.head);
             break;
+          case "reveal":
+            // Another window asked to go to a block. If this one shows it, go there and bring
+            // this window forward; if it doesn't, the search ends quietly.
+            void scrollToAnchor(c.anchor).then((found) => {
+              if (found) window.focus();
+            });
+            break;
         }
       }),
     [],
@@ -169,6 +176,12 @@ export function WorkspaceProvider({ boot, children }: { boot: Ready; children: R
           : { conversation: selection.conversation };
       void window.draft.focus(target);
     };
+    // The block may be in this window or in another one of the context: both go to it, and the
+    // one that doesn't show it gives up quietly.
+    const goTo = (anchor: string) => {
+      void scrollToAnchor(anchor);
+      void window.draft.reveal(anchor);
+    };
     const open = async (target: OpenTarget): Promise<void> => {
       // Something outside draft opens by its links, which the list shows.
       if (target.kind === "links") return;
@@ -188,7 +201,7 @@ export function WorkspaceProvider({ boot, children }: { boot: Ready; children: R
         if (thread === undefined) {
           // The main conversation: bring it to the front, at the block if it has one.
           setSelection({ block: null, conversation: target.conversation });
-          if (target.anchor !== null) void scrollToAnchor(target.anchor);
+          if (target.anchor !== null) goTo(target.anchor);
           return;
         }
         info = {
@@ -211,8 +224,7 @@ export function WorkspaceProvider({ boot, children }: { boot: Ready; children: R
           block: info.address,
         });
       }
-      if (target.kind === "conversation" && target.anchor !== null)
-        void scrollToAnchor(target.anchor);
+      if (target.kind === "conversation" && target.anchor !== null) goTo(target.anchor);
     };
     const openAttention = async (item: Attention): Promise<void> => {
       // Outside the focus an interrupt only counts, and there is nothing on screen to go to: the
