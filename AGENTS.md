@@ -44,3 +44,4 @@ Follow [Conventional Commits 1.0.0](https://www.conventionalcommits.org/en/v1.0.
       - **Sign in once.** Why no test can show it: it needs your Kiro account.
         1. Run `kiro-cli login`. You should see a browser tab open.
 - A merged branch is finished: follow-ups go on a new branch from `main`.
+- Every change to `apps/desktop/src/renderer` follows the draft-design skill: read `.claude/skills/draft-design/SKILL.md` before you start, and work through its pre-merge checklist before the pull request is ready. A new kind of item in the conversation also follows `.claude/skills/draft-block/SKILL.md`.
