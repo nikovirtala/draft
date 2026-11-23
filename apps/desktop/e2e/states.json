@@ -142,5 +142,17 @@
     "screenshot": "m01-empty.png",
     "preview": null,
     "width": 720
+  },
+  {
+    "state": "Window scrolled to the end: title bar and footer stay",
+    "screenshot": "w01-window-scrolled-to-the-end.png",
+    "preview": "docs/design-system/components/Cover/preview.html",
+    "width": 720
+  },
+  {
+    "state": "A block's own window scrolled to the end",
+    "screenshot": "w02-block-window-scrolled-to-the-end.png",
+    "preview": null,
+    "width": 720
   }
 ]

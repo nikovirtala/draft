@@ -539,3 +539,88 @@ test("a failed deployment fixed by a later one is settled by a supersedes edge, 
   await shot(page, "m07-supersedes-edge");
   await electronApp.close();
 });
+
+/** What the window's frame measures: the document, the title bar and the footer. */
+async function frameOf(page: Page) {
+  return page.locator("html").evaluate((html) => {
+    const doc = html.ownerDocument;
+    const scrolling = doc.scrollingElement ?? html;
+    const rect = (selector: string) => doc.querySelector(selector)?.getBoundingClientRect();
+    return {
+      scrollHeight: scrolling.scrollHeight,
+      scrollTop: scrolling.scrollTop,
+      innerHeight: doc.defaultView?.innerHeight ?? 0,
+      titleTop: rect("header.titlebar")?.top ?? null,
+      footerBottom: rect('[data-testid="footer"]')?.bottom ?? null,
+      blockBottom: rect('[data-testid="block-full"]')?.bottom ?? null,
+    };
+  });
+}
+
+test("the window never scrolls: a long conversation, and a long map in a window of its own, scroll inside it", async () => {
+  const dataDir = mkdtempSync(join(tmpdir(), "draft-e2e-map-scroll-"));
+  const log = FileLogStore.open(join(dataDir, "log.jsonl"), { context: "local" });
+  await appendMapFixture(log, Date.now() - 40 * 60_000);
+  log.close();
+  const { electronApp, page } = await launch(dataDir);
+  const main = page.locator('[data-testid="conversation"][data-main="true"]');
+  await expect(main.getByTestId("message-user").first()).toBeVisible();
+  await say(main, "Show me the map");
+  await expect(main.getByTestId("map")).toBeVisible();
+  await showGrid(main);
+  await expect(main.getByTestId("map-row").first()).toBeVisible();
+
+  // A window about 1960 px wide and low, so that the conversation is much taller than it.
+  await page.setViewportSize({ width: 1960, height: 560 });
+  const conversation = main.locator("main.conversation");
+  const overflow = await conversation.evaluate((el) => el.scrollHeight - el.clientHeight);
+  expect(overflow, "the conversation is taller than the window").toBeGreaterThan(500);
+
+  // Scrolled to the end, by script and then by the wheel (which chains to the window when the
+  // conversation has nothing left to scroll).
+  await conversation.evaluate((el) => {
+    el.scrollTop = el.scrollHeight;
+  });
+  await conversation.hover();
+  await page.mouse.wheel(0, 4000);
+  await page.mouse.wheel(0, 4000);
+  const frame = await frameOf(page);
+  expect(frame.scrollHeight).toBe(frame.innerHeight);
+  expect(frame.scrollTop).toBe(0);
+  expect(frame.titleTop).toBe(0);
+  expect(frame.footerBottom).toBe(frame.innerHeight);
+  expect(
+    await conversation.evaluate((el) => el.scrollHeight - el.clientHeight - el.scrollTop),
+  ).toBeLessThan(2);
+  await shot(page, "w01-window-scrolled-to-the-end");
+
+  // The same map popped out into a window of its own: its body scrolls, its header and the
+  // title bar stay.
+  await main.getByTestId("map-block").getByRole("button", { name: "Pop out" }).click();
+  await expect.poll(() => electronApp.windows().length).toBe(2);
+  const popped = electronApp.windows().find((w) => w !== page) as Page;
+  await popped.setViewportSize({ width: 1960, height: 460 });
+  await expect(popped.getByTestId("map")).toBeVisible();
+  await showGrid(popped);
+  const block = popped.getByTestId("block-full");
+  expect(await block.evaluate((el) => el.scrollHeight - el.clientHeight)).toBeGreaterThan(100);
+  await block.evaluate((el) => {
+    el.scrollTop = el.scrollHeight;
+  });
+  await block.hover();
+  await popped.mouse.wheel(0, 4000);
+  const inWindow = await frameOf(popped);
+  expect(inWindow.scrollHeight).toBe(inWindow.innerHeight);
+  expect(inWindow.scrollTop).toBe(0);
+  expect(inWindow.titleTop).toBe(0);
+  expect(inWindow.blockBottom).toBe(inWindow.innerHeight);
+  // The block's header is still at the top of its window.
+  const header = (await block.locator(".block-header").boundingBox()) as { y: number };
+  const bar = (await popped.locator("header.titlebar").boundingBox()) as {
+    y: number;
+    height: number;
+  };
+  expect(Math.abs(header.y - (bar.y + bar.height))).toBeLessThan(1);
+  await shot(popped, "w02-block-window-scrolled-to-the-end");
+  await electronApp.close();
+});

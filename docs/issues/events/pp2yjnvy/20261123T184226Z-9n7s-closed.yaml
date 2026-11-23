@@ -1,0 +1,16 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M84VEW3VM92PGRNMA7G19N7S
+subject: pp2yjnvy
+type: closed
+at: 2026-11-23T18:42:26Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: 244629292+kiro-agent@users.noreply.github.com
+reason: A hidden radio and visually-hidden labels were absolutely positioned with no positioned ancestor, so they escaped the conversation's clip and lengthened the document; a block's body had no scroller at all. .conversation and .block-full now contain what is positioned in them and scroll, with the block's header sticky. The e2e test 'the window never scrolls' measures scrollHeight, title bar top and footer bottom in the main window and in a block's window; its screenshots are in the PR.
+data:
+  resolution: done
