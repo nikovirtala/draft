@@ -175,6 +175,127 @@ test("show the map on a recorded log: counts, a cell, an item, live moves, and a
   await expect(graph.getByTestId("graph-edge").first()).toBeVisible();
   await expect(graph.getByTestId("graph-legend")).toContainText("Open loop");
   await shot(page, "m02-graph");
+
+  // Moving about changes the viewport and nothing else: every node keeps its place.
+  const stage = graph.getByTestId("graph-stage");
+  const scale = async () => Number(await stage.getAttribute("data-scale"));
+  const offset = async () => ({
+    x: Number(await stage.getAttribute("data-x")),
+    y: Number(await stage.getAttribute("data-y")),
+  });
+  // Where each node is, as a percentage of the panel, by what it is.
+  const places = () =>
+    graph.locator('[data-testid^="graph-"][style*="left"]').evaluateAll((els) =>
+      Object.fromEntries(
+        els.map((e) => {
+          const at = (e.getAttribute("style") ?? "").match(/left:\s*([\d.]+)%.*?top:\s*([\d.]+)%/);
+          const key = [
+            e.getAttribute("data-testid"),
+            e.getAttribute("data-kind"),
+            e.getAttribute("data-item") ?? e.getAttribute("data-state"),
+          ].join("|");
+          return [key, [Number(at?.[1]), Number(at?.[2])]];
+        }),
+      ),
+    );
+  // The map may gain nodes while it is open, and a neighbour that grows can nudge a node a little
+  // (never more than the layout's own limit); a viewport moves none of them.
+  const samePlaces = (now: Record<string, number[]>, was: Record<string, number[]>) => {
+    const shared = Object.keys(was).filter((k) => k in now);
+    expect(shared.length).toBeGreaterThan(3);
+    for (const k of shared) {
+      expect(Math.abs((now[k]?.[0] ?? 0) - (was[k]?.[0] ?? 0))).toBeLessThan(1.5);
+      expect(Math.abs((now[k]?.[1] ?? 0) - (was[k]?.[1] ?? 0))).toBeLessThan(2.5);
+    }
+  };
+  const placed = await places();
+  expect(Object.keys(placed).length).toBeGreaterThan(3);
+  // The map is still filling in from GitHub, and the view follows the fit as it does: wait for
+  // the framing to hold still before measuring against it.
+  let last = Number.NaN;
+  await expect
+    .poll(
+      async () => {
+        const now = await scale();
+        const still = now === last;
+        last = now;
+        return still;
+      },
+      { intervals: [600] },
+    )
+    .toBe(true);
+  const fitted = await scale();
+  await expect(stage).toHaveAttribute("data-moved", "false");
+  // Buttons.
+  await graph.getByTestId("graph-zoom-in").click();
+  expect(await scale()).toBeGreaterThan(fitted);
+  await expect(graph.getByTestId("graph-scale")).toHaveText(
+    `${Math.round((await scale()) * 100)}%`,
+  );
+  await graph.getByTestId("graph-zoom-out").click();
+  expect(await scale()).toBeCloseTo(fitted, 3);
+  // Keys, with the stage in focus: Ctrl (Cmd on a Mac) and plus or minus, and the arrow keys.
+  await stage.focus();
+  await page.keyboard.press("Control+Equal");
+  expect(await scale()).toBeGreaterThan(fitted);
+  await page.keyboard.press("Control+Minus");
+  expect(await scale()).toBeCloseTo(fitted, 3);
+  await page.keyboard.press("Control+Equal");
+  const zoomed = await scale();
+  const at = await offset();
+  await page.keyboard.press("ArrowRight");
+  expect((await offset()).x).toBeLessThan(at.x);
+  await page.keyboard.press("ArrowDown");
+  expect((await offset()).y).toBeLessThan(at.y);
+  await page.keyboard.press("ArrowLeft");
+  await page.keyboard.press("ArrowUp");
+  expect((await offset()).x).toBeCloseTo(at.x, 1);
+  expect((await offset()).y).toBeCloseTo(at.y, 1);
+  expect(await scale()).toBeCloseTo(zoomed, 3);
+  await expect(stage).toHaveAttribute("data-moved", "true");
+  // Dragging while Space is held.
+  const box = (await stage.boundingBox()) as {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+  const centre = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+  const beforeDrag = await offset();
+  await page.keyboard.down("Space");
+  await page.mouse.move(centre.x, centre.y);
+  await page.mouse.down();
+  await page.mouse.move(centre.x + 60, centre.y + 30, { steps: 4 });
+  await page.mouse.up();
+  await page.keyboard.up("Space");
+  const afterDrag = await offset();
+  expect(afterDrag.x).toBeGreaterThan(beforeDrag.x);
+  expect(afterDrag.y).toBeGreaterThan(beforeDrag.y);
+  // The drag was no click: the graph is still at the context.
+  await expect(graph).toHaveAttribute("data-zoom", "context");
+  // A two-finger scroll pans, now the view has been moved.
+  await page.mouse.move(centre.x, centre.y);
+  await page.mouse.wheel(40, 0);
+  expect((await offset()).x).toBeLessThan(afterDrag.x);
+  // A pinch (a wheel with the control key down) zooms.
+  const pinched = await scale();
+  await page.keyboard.down("Control");
+  await page.mouse.wheel(0, -40);
+  await page.keyboard.up("Control");
+  expect(await scale()).toBeGreaterThan(pinched);
+  // Fit goes back to the framing, and nothing moved while it was away.
+  await graph.getByTestId("graph-fit").click();
+  expect(await scale()).toBeCloseTo(fitted, 3);
+  await expect(stage).toHaveAttribute("data-moved", "false");
+  samePlaces(await places(), placed);
+  // A new level of the semantic zoom is fitted again, whatever the view was.
+  await graph.getByTestId("graph-zoom-in").click();
+  await clusterOf("pull-request").click();
+  await expect(graph).toHaveAttribute("data-zoom", "kind:pull-request");
+  await expect(stage).toHaveAttribute("data-moved", "false");
+  await graph.getByTestId("graph-crumb").first().click();
+  await expect(graph).toHaveAttribute("data-zoom", "context");
+  samePlaces(await places(), placed);
   await clusterOf("pull-request").click();
   await expect(graph).toHaveAttribute("data-zoom", "kind:pull-request");
   await expect(graph.getByTestId("graph-item")).toHaveCount(3);

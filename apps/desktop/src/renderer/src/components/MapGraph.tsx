@@ -19,7 +19,18 @@ import {
   tetherOf,
   WORLD,
 } from "@nikovirtala/draft-core/map-layout";
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import {
+  applyInput,
+  boundsOf,
+  fitGraph,
+  keyInput,
+  sameViewport,
+  type Viewport,
+  type ViewportInput,
+  wheelInput,
+  ZOOM_STEP,
+} from "@nikovirtala/draft-core/map-viewport";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { ageText } from "../../../shared/attention.ts";
 import type { MapSnapshot } from "../../../shared/ipc.ts";
 import { useWorkspace } from "../workspace.tsx";
@@ -82,6 +93,35 @@ function useLayout(graph: Graph): Layout {
 }
 
 const pct = (v: number, of: number): string => `${(v / of) * 100}%`;
+
+/**
+ * Where the graph is looked at from: a transform kept apart from the layout, so nothing here can
+ * move a node. Until the person moves it, the view follows the fit of the graph (so a map that
+ * fills in as it is read is framed as it grows); a move takes it over, and "Fit" gives it back.
+ * A change of semantic zoom (context, kind, item) fits the new level.
+ */
+function useViewport(graph: Graph, layout: Layout) {
+  const key = zoomKey(graph.zoom);
+  const fit = useMemo(() => fitGraph(graph, layout), [graph, layout]);
+  const bounds = useMemo(() => boundsOf(graph, layout), [graph, layout]);
+  const [own, setOwn] = useState<{ key: string; view: Viewport | null }>({ key, view: null });
+  const taken = own.key === key ? own.view : null;
+  if (own.key !== key) setOwn({ key, view: null });
+  const view = taken ?? fit;
+  const latest = useRef({ view, fit, bounds, taken: taken !== null, key });
+  latest.current = { view, fit, bounds, taken: taken !== null, key };
+  const move = useCallback((input: ViewportInput) => {
+    const now = latest.current;
+    if (input.type === "fit") {
+      setOwn({ key: now.key, view: null });
+      return;
+    }
+    const next = applyInput(now.view, input, { bounds: now.bounds, fit: now.fit });
+    latest.current = { ...now, view: next, taken: true };
+    setOwn({ key: now.key, view: next });
+  }, []);
+  return { view, taken: taken !== null && !sameViewport(view, fit), move, latest };
+}
 
 /** How wide an edge is for the references it carries. */
 export const edgeWidth = (count: number): number => Math.min(12, 1 + 1.6 * count);
@@ -417,12 +457,210 @@ function headingOf(graph: Graph): string {
   return last?.label ?? "";
 }
 
+type Nav = ReturnType<typeof useViewport>;
+
+/** Zoom out, zoom in and fit, with the scale; every one is also a key (see `Stage`). */
+function ViewTools({ nav }: { nav: Nav }) {
+  return (
+    <div className="graph-tools" role="toolbar" aria-label="View" data-testid="graph-tools">
+      <button
+        type="button"
+        className="secondary-button small"
+        aria-label="Zoom out"
+        title="Zoom out (Cmd and −)"
+        data-testid="graph-zoom-out"
+        onClick={() => nav.move({ type: "zoom", factor: 1 / ZOOM_STEP })}
+      >
+        −
+      </button>
+      <output className="graph-scale secondary" data-testid="graph-scale" aria-label="Scale">
+        {Math.round(nav.view.k * 100)}%
+      </output>
+      <button
+        type="button"
+        className="secondary-button small"
+        aria-label="Zoom in"
+        title="Zoom in (Cmd and +)"
+        data-testid="graph-zoom-in"
+        onClick={() => nav.move({ type: "zoom", factor: ZOOM_STEP })}
+      >
+        +
+      </button>
+      <button
+        type="button"
+        className="secondary-button small"
+        title="Fit the graph to the panel (Cmd and 0)"
+        data-testid="graph-fit"
+        onClick={() => nav.move({ type: "fit" })}
+      >
+        Fit
+      </button>
+    </div>
+  );
+}
+
+/**
+ * The panel the graph is drawn in, and every way of moving around it. Keys (with the stage or a
+ * node in focus): Cmd and + or − zoom, Cmd and 0 fits, the arrow keys pan. A pinch zooms about the
+ * pointer and a two-finger scroll pans, once the view has been moved (until then a scroll scrolls
+ * the page, as it does anywhere else). Dragging while Space is held pans too. Each of these moves
+ * the viewport only.
+ */
+function Stage({
+  graph,
+  layout,
+  arrow,
+  named,
+  onZoom,
+  nav,
+}: {
+  graph: Graph;
+  layout: Layout;
+  arrow: string;
+  named: boolean;
+  onZoom: (zoom: GraphZoom) => void;
+  nav: Nav;
+}) {
+  const stage = useRef<HTMLDivElement>(null);
+  const [space, setSpace] = useState(false);
+  const [dragging, setDragging] = useState(false);
+  const drag = useRef<{ id: number; x: number; y: number; moved: boolean } | null>(null);
+  const swallow = useRef(false);
+  const { move, latest } = nav;
+
+  /** How big a screen pixel is in world units, and where a pointer is in them. */
+  const measure = useCallback((clientX: number, clientY: number) => {
+    const r = (stage.current as HTMLDivElement).getBoundingClientRect();
+    const pixel = r.width === 0 ? 1 : WORLD.width / r.width;
+    return { pixel, at: { x: (clientX - r.left) * pixel, y: (clientY - r.top) * pixel } };
+  }, []);
+
+  // A wheel must be able to cancel the page's own scroll and zoom, which a React handler can't.
+  useEffect(() => {
+    const el = stage.current;
+    if (el === null) return;
+    const onWheel = (e: WheelEvent) => {
+      // A pinch is always the graph's; a scroll is, once the person has moved the view.
+      if (!e.ctrlKey && !latest.current.taken) return;
+      e.preventDefault();
+      const { pixel, at } = measure(e.clientX, e.clientY);
+      move(wheelInput(e, at, pixel));
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [latest, measure, move]);
+
+  useEffect(() => {
+    const off = () => setSpace(false);
+    window.addEventListener("blur", off);
+    return () => window.removeEventListener("blur", off);
+  }, []);
+
+  const v = nav.view;
+  return (
+    <div
+      ref={stage}
+      className={`graph-stage${space ? " pan-ready" : ""}${dragging ? " panning" : ""}`}
+      style={{ aspectRatio: `${WORLD.width} / ${WORLD.height}` }}
+      role="application"
+      aria-label="Graph. Cmd and plus or minus zoom, Cmd and 0 fits, arrow keys pan, Space and drag pans."
+      // biome-ignore lint/a11y/noNoninteractiveTabindex: the stage takes the keys that move the view
+      tabIndex={0}
+      data-testid="graph-stage"
+      data-scale={v.k.toFixed(3)}
+      data-x={v.x.toFixed(1)}
+      data-y={v.y.toFixed(1)}
+      data-moved={nav.taken}
+      onKeyDown={(e) => {
+        if (e.key === " ") {
+          // Space is the pan modifier here, not a button press: Enter still opens a node.
+          e.preventDefault();
+          setSpace(true);
+          return;
+        }
+        const input = keyInput(e);
+        if (input === null) return;
+        e.preventDefault();
+        move(input);
+      }}
+      onKeyUp={(e) => {
+        if (e.key !== " ") return;
+        e.preventDefault();
+        setSpace(false);
+      }}
+      onPointerDownCapture={(e) => {
+        if (!space || e.button !== 0) return;
+        e.preventDefault();
+        e.stopPropagation();
+        e.currentTarget.setPointerCapture(e.pointerId);
+        drag.current = { id: e.pointerId, x: e.clientX, y: e.clientY, moved: false };
+        setDragging(true);
+      }}
+      onPointerMove={(e) => {
+        const d = drag.current;
+        if (d === null || d.id !== e.pointerId) return;
+        const { pixel } = measure(e.clientX, e.clientY);
+        move({ type: "pan", dx: (e.clientX - d.x) * pixel, dy: (e.clientY - d.y) * pixel });
+        d.x = e.clientX;
+        d.y = e.clientY;
+        d.moved = true;
+      }}
+      onPointerUp={(e) => {
+        const d = drag.current;
+        if (d === null || d.id !== e.pointerId) return;
+        drag.current = null;
+        setDragging(false);
+        // The click that ends a drag is not a click on whatever is under the pointer.
+        swallow.current = true;
+        setTimeout(() => {
+          swallow.current = false;
+        }, 0);
+      }}
+      onPointerCancel={() => {
+        drag.current = null;
+        setDragging(false);
+      }}
+      onClickCapture={(e) => {
+        if (swallow.current || space) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+      }}
+    >
+      <div
+        className="graph-plane"
+        style={{
+          transform: `translate(${pct(v.x, WORLD.width)}, ${pct(v.y, WORLD.height)}) scale(${v.k})`,
+        }}
+        data-testid="graph-plane"
+      >
+        <Shapes graph={graph} layout={layout} arrow={arrow} />
+        {graph.zoom.level === "kind" &&
+          graph.lanes.map((l) => (
+            <span
+              key={l.id}
+              className={`graph-lane ${l.class}`}
+              style={{ left: pct(laneCenter(graph, l.id), WORLD.width) }}
+              aria-hidden="true"
+            >
+              {l.label}
+            </span>
+          ))}
+        {graph.nodes.map((n) => (
+          <NodeButton key={n.id} node={n} layout={layout} named={named} onZoom={onZoom} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /** The graph of the map, at the zoom it is at. */
 export function MapGraph({ map }: { map: MapSnapshot }) {
   const arrow = `graph-arrow-${useId().replace(/:/g, "")}`;
   const [asked, setZoom] = useState<GraphZoom>({ level: "context" });
   const graph = useMemo(() => projectGraph(map, asked), [map, asked]);
   const layout = useLayout(graph);
+  const nav = useViewport(graph, layout);
   const heading = useRef<HTMLHeadingElement>(null);
   const key = zoomKey(graph.zoom);
   const first = useRef(true);
@@ -470,32 +708,13 @@ export function MapGraph({ map }: { map: MapSnapshot }) {
             );
           })}
         </ol>
+        <ViewTools nav={nav} />
         <span className="secondary graph-hint">Escape zooms out</span>
       </nav>
       <h3 className="graph-heading" tabIndex={-1} ref={heading} data-testid="graph-heading">
         {headingOf(graph)}
       </h3>
-      <div
-        className="graph-stage"
-        style={{ aspectRatio: `${WORLD.width} / ${WORLD.height}` }}
-        data-testid="graph-stage"
-      >
-        <Shapes graph={graph} layout={layout} arrow={arrow} />
-        {graph.zoom.level === "kind" &&
-          graph.lanes.map((l) => (
-            <span
-              key={l.id}
-              className={`graph-lane ${l.class}`}
-              style={{ left: pct(laneCenter(graph, l.id), WORLD.width) }}
-              aria-hidden="true"
-            >
-              {l.label}
-            </span>
-          ))}
-        {graph.nodes.map((n) => (
-          <NodeButton key={n.id} node={n} layout={layout} named={named} onZoom={setZoom} />
-        ))}
-      </div>
+      <Stage graph={graph} layout={layout} arrow={arrow} named={named} onZoom={setZoom} nav={nav} />
       {graph.zoom.level === "kind" && graph.hidden > 0 && (
         <p className="secondary" data-testid="graph-hidden">
           {plural(graph.hidden, "item")} too many to draw one by one: each state shows its count,

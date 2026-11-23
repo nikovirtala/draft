@@ -1767,6 +1767,39 @@ div.map-item {
   overflow: hidden;
 }
 
+.graph-stage:focus-visible {
+  outline: 2px solid var(--moved-mark);
+  outline-offset: 2px;
+}
+
+.graph-stage.pan-ready {
+  cursor: grab;
+}
+
+.graph-stage.panning {
+  cursor: grabbing;
+}
+
+/* The viewport: a transform of everything drawn, so a node is never moved by moving about. */
+.graph-plane {
+  position: absolute;
+  inset: 0;
+  transform-origin: 0 0;
+}
+
+.graph-tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.graph-scale {
+  min-width: 3.5em;
+  text-align: center;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
 .graph-svg {
   position: absolute;
   inset: 0;
@@ -1874,6 +1907,10 @@ div.map-item {
 
 .graph-node:disabled {
   cursor: default;
+}
+
+.graph-stage.pan-ready .graph-node {
+  cursor: inherit;
 }
 
 .graph-node:focus-visible {
