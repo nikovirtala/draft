@@ -1,0 +1,15 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M851HH52P233NAY9KYXFBPFN
+subject: vr20g4rb
+type: commented
+at: 2026-11-23T20:28:45Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: 244629292+kiro-agent@users.noreply.github.com
+data:
+  text: "D5 is done: tokens.json says the chosen option in a list or a control, and the main action button. D6 (the footer's ground) waits on the person's choice; it is filed as its own issue, with both options drawn side by side in the Frame preview."
