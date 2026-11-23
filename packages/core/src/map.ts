@@ -4,6 +4,7 @@ import type { MachineSpec } from "./machine.ts";
 import type {
   Column,
   ItemRef,
+  KindOrder,
   MapCell,
   MapEdge,
   MapItem,
@@ -83,6 +84,8 @@ export interface KindDecl {
   /** Names the row: "thread", "interrupt:permission". */
   id: string;
   label: string;
+  /** Its place in a sequence of kinds that belong together, such as a repository's environments. */
+  order?: KindOrder;
   /** "machine": the states are a state machine's. "derived": there is none yet; see `derivation`. */
   source: "machine" | "derived";
   /** Which machine the states come from, or how they are derived from the resolved state. */
@@ -392,6 +395,7 @@ export function foldMap(
     rows.push({
       kind: kind.id,
       label: kind.label,
+      order: kind.order ?? null,
       source: kind.source,
       derivation: kind.derivation,
       columns,

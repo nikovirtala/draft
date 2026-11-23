@@ -9,9 +9,15 @@ import {
   type DeploymentRecord,
   type IssueRecord,
 } from "./ark-records.ts";
+import {
+  canonicalEnvironment,
+  type EnvironmentTopology,
+  environmentOrder,
+  sameEnvironment,
+} from "./environments.ts";
 import type { EdgeDraft, ItemDraft, KindDecl, KindInput, KindRegistry } from "./map.ts";
 import { mergedPullRequests } from "./map-kinds.ts";
-import type { ItemRef, PathEntry, StateDecl } from "./map-types.ts";
+import type { ItemRef, KindOrder, PathEntry, StateDecl } from "./map-types.ts";
 
 /**
  * The ark kinds as rows of the map: decisions, issues and the deployments of each repository and
@@ -238,34 +244,90 @@ const newer = (a: DeploymentRecord, b: DeploymentRecord): boolean => {
   return at !== bt ? at > bt : a.id > b.id;
 };
 
+/** The topology of a repository, as the snapshot read it; null when none says. */
+const topologyOfRepo = (s: ArkSnapshot | null, repo: string): EnvironmentTopology | null =>
+  s?.environments?.find((t) => t.repo === repo) ?? null;
+
+/** One deployment that fixes a failed one: the edge `supersedes`, from the fixing run to the failure. */
+export interface Supersession {
+  fixing: DeploymentRecord;
+  failed: DeploymentRecord;
+  /** When the fixing run succeeded. */
+  at: string;
+}
+
 /**
- * What happened to a failed deployment after it, from the later deployments of its environment:
- * the first success of any of them settles it as recovered; else any later deployment replaces it
+ * Which deployment fixes which: the one rule of supersession, read by both the settled state and
+ * the `supersedes` edge. A failed or errored deployment is fixed by the first run after it that
+ * succeeded, in the same repository and the same environment: a success in another environment
+ * fixes nothing, whether the two are in sequence (staging, then production) or in parallel
+ * (regions), because a deployment is matched to its own environment, spelled as the topology
+ * spells it. Without a topology the environment is the name the run was recorded under.
+ */
+export function supersessions(
+  deployments: readonly DeploymentRecord[],
+  topology: EnvironmentTopology | null = null,
+): Supersession[] {
+  const inEnvironment = (a: DeploymentRecord, b: DeploymentRecord) =>
+    a.repo === b.repo &&
+    sameEnvironment(
+      canonicalEnvironment(topology, a.environment),
+      canonicalEnvironment(topology, b.environment),
+    );
+  const out: Supersession[] = [];
+  for (const failed of deployments) {
+    if (!failedLatest(failed)) continue;
+    let fix: Supersession | null = null;
+    for (const o of deployments) {
+      if (o.id === failed.id || !newer(o, failed) || !inEnvironment(o, failed)) continue;
+      for (const s of o.statuses) {
+        if (s.state !== "success") continue;
+        const at = time(s.at);
+        if (fix === null || at < fix.at || (at === fix.at && newer(fix.fixing, o)))
+          fix = { fixing: o, failed, at };
+      }
+    }
+    if (fix !== null) out.push(fix);
+  }
+  return out;
+}
+
+/** Whether a deployment's latest status is a failure or an error. */
+const failedLatest = (d: DeploymentRecord): boolean => failed(d.statuses.at(-1)?.state);
+
+/**
+ * What happened to a failed deployment after it: a `supersedes` edge into it settles it as
+ * recovered, when the fixing run succeeded; else a later run of its environment replaces it
  * (the newer one is what waits, if it failed too); else it is the newest and still waits.
  */
-function settlement(d: DeploymentRecord, all: readonly DeploymentRecord[]): PathEntry | null {
-  const later = all.filter((o) => newer(o, d));
-  let recovered: string | null = null;
-  for (const o of later)
-    for (const s of o.statuses)
-      if (s.state === "success" && (recovered === null || time(s.at) < recovered))
-        recovered = time(s.at);
-  if (recovered !== null) return { state: "recovered", at: recovered, seq };
-  const next = later.reduce<DeploymentRecord | null>(
-    (first, o) => (first === null || newer(first, o) ? o : first),
-    null,
-  );
+function settlement(
+  d: DeploymentRecord,
+  all: readonly DeploymentRecord[],
+  fixes: readonly Supersession[],
+): PathEntry | null {
+  const fix = fixes.find((f) => f.failed.id === d.id);
+  if (fix !== undefined) return { state: "recovered", at: fix.at, seq };
+  const next = all
+    .filter((o) => newer(o, d))
+    .reduce<DeploymentRecord | null>(
+      (first, o) => (first === null || newer(first, o) ? o : first),
+      null,
+    );
   return next === null ? null : { state: "replaced", at: time(next.createdAt), seq };
 }
 
-function deployment(d: DeploymentRecord, all: readonly DeploymentRecord[]): ItemDraft {
+function deployment(
+  d: DeploymentRecord,
+  all: readonly DeploymentRecord[],
+  fixes: readonly Supersession[],
+): ItemDraft {
   const path: PathEntry[] = [{ state: "queued", at: time(d.createdAt), seq }];
   for (const s of d.statuses) {
     const state = deploymentState(s.state);
     if (path.at(-1)?.state !== state) path.push({ state, at: time(s.at), seq });
   }
   if (failed(path.at(-1)?.state)) {
-    const settled = settlement(d, all);
+    const settled = settlement(d, all, fixes);
     if (settled !== null) path.push(settled);
   }
   const run = [...d.statuses].reverse().find((s) => s.logUrl !== null || s.environmentUrl !== null);
@@ -284,42 +346,71 @@ function deployment(d: DeploymentRecord, all: readonly DeploymentRecord[]): Item
   };
 }
 
-/** The row of one environment of one repository. */
-export function deploymentKind(repo: string, environment: string): KindDecl {
-  const id = `deployment:${repo}:${environment}`;
+/** The deployments of one environment of a repository, as the topology spells it. */
+function inEnvironment(
+  s: ArkSnapshot | null,
+  repo: string,
+  environment: string,
+): { all: DeploymentRecord[]; topology: EnvironmentTopology | null } {
+  const topology = topologyOfRepo(s, repo);
+  const all = (s?.deployments ?? []).filter(
+    (d) =>
+      d.repo === repo &&
+      sameEnvironment(
+        canonicalEnvironment(topology, d.environment),
+        canonicalEnvironment(topology, environment),
+      ),
+  );
+  return { all, topology };
+}
+
+/** The id of the row of one environment of one repository. */
+export const deploymentKindId = (repo: string, environment: string): string =>
+  `deployment:${repo}:${environment}`;
+
+/**
+ * The row of one environment of one repository. `order` is its place among the repository's
+ * environments, so the graph draws them as the topology orders them.
+ */
+export function deploymentKind(repo: string, environment: string, order?: KindOrder): KindDecl {
+  const id = deploymentKindId(repo, environment);
   return {
     id,
     label: `Deployments: ${short(repo)} · ${environment}`,
+    ...(order === undefined ? {} : { order }),
     source: "derived",
     derivation:
-      "the latest status of each GitHub Deployment of the repository and environment, which @nikovirtala/deployment records for every run; a failed or errored run waits on the person only while it is the newest of its environment (by created_at, then id): a later success settles it as failed, then succeeded, and a later run that did not succeed as failed, then replaced",
+      "the latest status of each GitHub Deployment of the repository and environment, which @nikovirtala/deployment records for every run; a failed or errored run waits on the person only while it is the newest of its environment (by created_at, then id): a later success in the same environment settles it as failed, then succeeded, through a supersedes edge from the run that fixed it, and a later run that did not succeed as failed, then replaced",
     states: DEPLOYMENT_STATES,
     items: (input) => {
-      const all =
-        snapshotOf(input)?.deployments.filter(
-          (d) => d.repo === repo && d.environment === environment,
-        ) ?? [];
-      return all.map((d) => deployment(d, all));
+      const { all, topology } = inEnvironment(snapshotOf(input), repo, environment);
+      const fixes = supersessions(all, topology);
+      return all.map((d) => deployment(d, all, fixes));
     },
-    // A run deploys the pull request whose merge commit it deployed, when the log has that pull request.
     edges: (input) => {
+      const { all, topology } = inEnvironment(snapshotOf(input), repo, environment);
+      // A run that fixes a failed one of its environment supersedes it.
+      const edges: EdgeDraft[] = supersessions(all, topology).map((f) => ({
+        from: { kind: id, id: String(f.fixing.id) },
+        to: { kind: id, id: String(f.failed.id) },
+        rel: "supersedes",
+        at: f.at,
+      }));
+      // A run deploys the pull request whose merge commit it deployed, when the log has that pull request.
       const pulls = input.kindOfTarget("pull-request");
-      if (pulls === null) return [];
+      if (pulls === null) return edges;
       const merged = mergedPullRequests(input.events).filter((m) => m.repo === repo);
-      return (snapshotOf(input)?.deployments ?? []).flatMap((d) => {
-        if (d.repo !== repo || d.environment !== environment) return [];
+      for (const d of all) {
         const pr = merged.find((m) => m.sha === d.sha);
-        return pr === undefined
-          ? []
-          : [
-              {
-                from: { kind: id, id: String(d.id) },
-                to: { kind: pulls, id: pr.id },
-                rel: "deploys",
-                at: time(d.createdAt),
-              },
-            ];
-      });
+        if (pr !== undefined)
+          edges.push({
+            from: { kind: id, id: String(d.id) },
+            to: { kind: pulls, id: pr.id },
+            rel: "deploys",
+            at: time(d.createdAt),
+          });
+      }
+      return edges;
     },
     freshness: (input) => freshness(input, (p) => p.source === "deployments" && p.repo === repo),
   };
@@ -342,6 +433,7 @@ export interface ArkMapOptions extends ArkRecordsOptions {
 export class ArkMap {
   readonly records: ArkRecords;
   private readonly rows = new Map<string, () => void>();
+  private rowsSignature = "";
   private readonly viewers = new Set<string>();
   private inFlight: Promise<boolean> | null = null;
   /** Called when a read starts or ends, so a window can show that the map is being read. */
@@ -399,18 +491,41 @@ export class ArkMap {
     return this.inFlight;
   }
 
-  /** A row for each repository and environment that has a deployment, and no other. */
+  /**
+   * A row for each repository and environment that has a deployment, and no other, in the order
+   * of the repository's topology: its environments one after another, each as the topology spells
+   * it. When the order or the set changes, the rows are registered again in the new order.
+   */
   private syncRows(): void {
-    const wanted = new Map<string, [string, string]>();
-    for (const d of this.records.snapshot().deployments)
-      wanted.set(`${d.repo}:${d.environment}`, [d.repo, d.environment]);
-    for (const [key, remove] of this.rows)
-      if (!wanted.has(key)) {
-        remove();
-        this.rows.delete(key);
-      }
-    for (const [key, [repo, environment]] of [...wanted].sort(([a], [b]) => (a < b ? -1 : 1)))
-      if (!this.rows.has(key))
-        this.rows.set(key, this.registry.register(deploymentKind(repo, environment)));
+    const snapshot = this.records.snapshot();
+    const byRepo = new Map<string, string[]>();
+    for (const d of [...snapshot.deployments].sort((a, b) => a.id - b.id)) {
+      const topology = topologyOfRepo(snapshot, d.repo);
+      byRepo.set(d.repo, [
+        ...(byRepo.get(d.repo) ?? []),
+        canonicalEnvironment(topology, d.environment),
+      ]);
+    }
+    const wanted: { key: string; repo: string; environment: string; order: KindOrder }[] = [];
+    for (const [repo, seen] of [...byRepo].sort(([a], [b]) => (a < b ? -1 : 1))) {
+      const topology = topologyOfRepo(snapshot, repo);
+      const here = environmentOrder(topology, seen).filter((e) =>
+        seen.some((s) => sameEnvironment(s, e)),
+      );
+      for (const [index, environment] of here.entries())
+        wanted.push({
+          key: `${repo}:${environment}`,
+          repo,
+          environment,
+          order: { group: repo, index, of: here.length },
+        });
+    }
+    const signature = JSON.stringify(wanted);
+    if (signature === this.rowsSignature) return;
+    this.rowsSignature = signature;
+    for (const remove of this.rows.values()) remove();
+    this.rows.clear();
+    for (const w of wanted)
+      this.rows.set(w.key, this.registry.register(deploymentKind(w.repo, w.environment, w.order)));
   }
 }

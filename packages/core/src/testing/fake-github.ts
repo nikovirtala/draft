@@ -101,6 +101,8 @@ export class FakeGithub {
   readonly files = new Map<string, Map<string, Map<string, string>>>();
   /** `owner/repo` to its deployments, oldest first. */
   readonly deployments = new Map<string, FakeDeployment[]>();
+  /** `owner/repo` to what its environments endpoint answers; none set: no environments. */
+  readonly environments = new Map<string, unknown>();
   /** `owner/repo` to the bare git repository behind it. */
   readonly gitRepos = new Map<string, string>();
   /** Take writes (merge, close, comment) from a person's tools. Off, anything but GET is refused. */
@@ -386,6 +388,12 @@ export class FakeGithub {
         if (FakeGithub.blobSha(text) === blob[2]) return send(200, text, true);
       return send(404, { message: "Not Found" });
     }
+    const environments = /^\/repos\/([^/]+\/[^/]+)\/environments$/.exec(path);
+    if (environments !== null)
+      return send(
+        200,
+        this.environments.get(environments[1] as string) ?? { total_count: 0, environments: [] },
+      );
     const deployments = /^\/repos\/([^/]+\/[^/]+)\/deployments$/.exec(path);
     if (deployments !== null)
       return send(

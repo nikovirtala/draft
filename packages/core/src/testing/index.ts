@@ -35,6 +35,7 @@ export {
   type ReceivedCall,
   type ToolListEntry,
 } from "./fake-kiro-remote.ts";
+export { GITHUB_ENVIRONMENTS_RESPONSE } from "./github-environments.ts";
 export {
   appendMapFixture,
   at as mapFixtureTime,
