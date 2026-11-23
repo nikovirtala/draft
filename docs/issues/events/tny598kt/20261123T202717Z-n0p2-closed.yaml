@@ -1,0 +1,16 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M851EVCKN0FHEVV4D9CMN0P2
+subject: tny598kt
+type: closed
+at: 2026-11-23T20:27:17Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: 244629292+kiro-agent@users.noreply.github.com
+reason: "One outline rule in styles.css: :focus-visible, 1.5px moved-mark (and the switch's label through :has(input:focus-visible), as its radio is hidden), replacing the 2px rules and the :focus-within one. test/design-focus.test.ts lists every outline in styles.css and finds only that one; a click on a map range option no longer shows a ring (the label's ring comes from its radio's :focus-visible, which a click does not set). The app-wide focus check presses the mouse on every element Tab reaches."
+data:
+  resolution: done

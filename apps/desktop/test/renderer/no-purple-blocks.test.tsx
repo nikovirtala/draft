@@ -255,12 +255,8 @@ describe("no block is filled with purple", () => {
     expect(others.map((r) => r.selectors)).toEqual([]);
   });
 
-  it("shows keyboard focus on a block as a 1.5px moved-mark ring through :focus-visible only", () => {
-    const ring = rules.find((r) =>
-      r.selectors.some((s) => s.includes(".stub") && s.includes(":focus-visible")),
-    );
-    expect(ring?.selectors.join(" ")).toMatch(/\.thread-stub/);
-    expect(ring?.selectors.join(" ")).toMatch(/\.block-full/);
+  it("shows keyboard focus on a block as the one 1.5px moved-mark ring through :focus-visible only", () => {
+    const ring = rules.find((r) => r.selectors.includes(":focus-visible"));
     expect(ring?.body).toMatch(/outline:\s*1\.5px solid var\(--moved-mark\)/);
     expect(ring?.body).not.toMatch(/background/);
     // Nothing draws an outline on a block by its selection or by a plain :focus.
