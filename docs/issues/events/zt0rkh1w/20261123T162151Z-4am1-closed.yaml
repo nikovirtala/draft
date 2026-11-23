@@ -1,0 +1,16 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M84KDE9AEXHH5ZXG4KV14AM1
+subject: zt0rkh1w
+type: closed
+at: 2026-11-23T16:21:51Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: niko.virtala@hey.com
+reason: "packages/core/test/map-contract.test.ts folds this repository's docs/adr and docs/issues through the map's kinds and compares every state's count with adr list --json and issues list --all --json, in CI's test job. It passes on main; two tests in it drop one event from its own files and expect the miscount to be named, and a test commit that made the issue kind skip one issue failed it (issue open: the map shows 56, the tool reports 57): https://github.com/nikovirtala/draft/actions/runs/45214839022/job/137833137450"
+data:
+  resolution: done

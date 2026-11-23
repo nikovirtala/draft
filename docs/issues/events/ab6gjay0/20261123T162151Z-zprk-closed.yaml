@@ -1,0 +1,16 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M84KDEZ8F637TJF63MG9ZPRK
+subject: ab6gjay0
+type: closed
+at: 2026-11-23T16:21:51Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: niko.virtala@hey.com
+reason: "The e2e job renders the design-system preview of each named state in apps/desktop/e2e/states.json; the screenshots job commits both to ci/screenshots and posts or updates one comment on the pull request with the state, the screenshot and the preview, images pinned to the ci/screenshots commit. Shown on pull request #47: https://github.com/nikovirtala/draft/pull/47"
+data:
+  resolution: done
