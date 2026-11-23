@@ -8,6 +8,7 @@ import {
   ARK_REPO,
   appendMapFixture,
   FakeGithub,
+  GITHUB_ENVIRONMENTS_RESPONSE,
   seedArk,
 } from "@nikovirtala/draft-core/testing";
 import {
@@ -26,6 +27,12 @@ import {
  * the map is open, and the map and its open cell are where they were after a restart. An empty
  * context shows what will appear. Screenshots land in e2e/artifacts.
  */
+
+/** GitHub's environments answer, cut to the one environment of kiro-remote. */
+const GITHUB_ENVIRONMENTS_RESPONSE_ONE = {
+  total_count: 1,
+  environments: GITHUB_ENVIRONMENTS_RESPONSE.environments.filter((e) => e.name === "production"),
+};
 
 const here = dirname(fileURLToPath(import.meta.url));
 const app = join(here, "..");
@@ -82,6 +89,12 @@ async function launch(
 
 const shot = (page: Page, name: string) =>
   page.screenshot({ path: join(artifacts, `${name}.png`) });
+
+/** A screenshot of one element, scrolled into view: the graph, whatever the page is scrolled to. */
+async function shotOf(scope: Locator, name: string): Promise<void> {
+  await scope.scrollIntoViewIfNeeded();
+  await scope.screenshot({ path: join(artifacts, `${name}.png`) });
+}
 
 async function say(scope: Locator, text: string): Promise<void> {
   const box = scope.getByLabel("Message");
@@ -189,7 +202,7 @@ test("show the map on a recorded log: counts, a cell, an item, live moves, and a
           (a?.[1] ?? 0) < (b?.[3] ?? 0) &&
           (b?.[1] ?? 0) < (a?.[3] ?? 0),
       ).toBe(false);
-  await shot(page, "m02-graph");
+  await shotOf(graph, "m02-graph");
 
   // Moving about changes the viewport and nothing else: every node keeps its place.
   const stage = graph.getByTestId("graph-stage");
@@ -247,9 +260,13 @@ test("show the map on a recorded log: counts, a cell, an item, live moves, and a
     .toBe(true);
   const fitted = await scale();
   await expect(stage).toHaveAttribute("data-moved", "false");
+  await shotOf(graph, "m02a-graph-fitted");
   // Buttons.
   await graph.getByTestId("graph-zoom-in").click();
   expect(await scale()).toBeGreaterThan(fitted);
+  await graph.getByTestId("graph-zoom-in").click();
+  await shotOf(graph, "m02b-graph-zoomed");
+  await graph.getByTestId("graph-zoom-out").click();
   await expect(graph.getByTestId("graph-scale")).toHaveText(
     `${Math.round((await scale()) * 100)}%`,
   );
@@ -472,5 +489,68 @@ test("show the map on a recorded log: counts, a cell, an item, live moves, and a
     `${(open0 ?? 0) - 1} open · ${(waiting0 ?? 0) - 1} waiting on you`,
   );
   await shot(popped, "m05-window");
+  await electronApp.close();
+});
+
+test("a failed deployment fixed by a later one is settled by a supersedes edge, in the environment it ran in", async () => {
+  // A repository like kiro-remote: one environment, production, whose failed drill deployment was
+  // followed by a successful one. GitHub lists the environment and deploy.toml names it.
+  const repo = "nikovirtala/kiro-remote";
+  github.addFiles(repo, "main", {
+    "deploy.toml": '[project]\nname = "kiro-remote"\nenvironment = "production"\n',
+  });
+  github.environments.set(repo, GITHUB_ENVIRONMENTS_RESPONSE_ONE);
+  const t = (m: number) => new Date(Date.now() - (60 - m) * 60_000).toISOString();
+  github.addDeployment(repo, {
+    id: 9001,
+    sha: `fd81077${"0".repeat(33)}`,
+    ref: "main",
+    environment: "production",
+    createdAt: t(10),
+    statuses: [
+      { state: "queued", at: t(10) },
+      { state: "in_progress", at: t(11) },
+      { state: "failure", at: t(12) },
+    ],
+  });
+  github.addDeployment(repo, {
+    id: 9002,
+    sha: `48e7f4c${"0".repeat(33)}`,
+    ref: "main",
+    environment: "production",
+    createdAt: t(30),
+    statuses: [
+      { state: "queued", at: t(30) },
+      { state: "in_progress", at: t(31) },
+      { state: "success", at: t(32) },
+    ],
+  });
+  const dataDir = mkdtempSync(join(tmpdir(), "draft-e2e-map-env-"));
+  const { electronApp, page } = await launch(dataDir, { remote: repo });
+  const main = page.locator('[data-testid="conversation"][data-main="true"]');
+  await say(main, "show the map");
+  const graph = main.getByTestId("map").getByTestId("map-graph");
+  const production = graph.locator(
+    `[data-testid="graph-cluster"][data-kind="deployment:${repo}:production"]`,
+  );
+  await expect(production).toHaveAttribute("data-count", "2");
+  // Nothing waits on the person: the failure is settled.
+  await expect(production).not.toHaveClass(/waiting/);
+  await expect(main.getByTestId("map-summary")).toHaveText("0 open · 0 waiting on you");
+  await shotOf(graph, "m06-kiro-remote-context");
+  await production.click();
+  await expect(graph).toHaveAttribute("data-zoom", `kind:deployment:${repo}:production`);
+  const failed = graph.locator('[data-testid="graph-item"][data-item="9001"]');
+  const fixed = graph.locator('[data-testid="graph-item"][data-item="9002"]');
+  await expect(failed).toHaveAttribute("aria-label", /Failed, then succeeded/);
+  await expect(fixed).toHaveAttribute("aria-label", /Succeeded/);
+  // The edge runs from the run that fixed to the failure it fixed, and is drawn like any other.
+  const edge = graph.getByTestId("graph-edge");
+  await expect(edge).toHaveCount(1);
+  await expect(edge).toHaveAttribute("data-from", `item:deployment:${repo}:production:9002`);
+  await expect(edge).toHaveAttribute("data-to", `item:deployment:${repo}:production:9001`);
+  await graph.locator("summary").click();
+  await expect(graph.locator(".graph-words")).toContainText("supersedes");
+  await shot(page, "m07-supersedes-edge");
   await electronApp.close();
 });
