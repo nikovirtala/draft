@@ -194,13 +194,10 @@ test("branch threads on two agents, pop a status out into a window, focus, and r
   await expect(inThread.getByRole("button", { name: "Open in panel" })).toHaveCount(0);
   await expect(inThread.getByRole("button", { name: "Pop out" })).toBeVisible();
   await expect(main.getByTestId("message-user")).toHaveCount(1);
-  // The thread is open in the panel with its reply box focused: neither the panel's header nor
-  // the thread's stub is filled, and the stub keeps its "In the panel" chip and nothing else.
+  // The thread is open in the panel with its reply box focused, and the stub keeps its "In the
+  // panel" chip and nothing else. (That neither is filled is checked by the harness.)
   await expect(threadA.getByLabel("Message")).toBeFocused();
-  await expect(panel.locator(".block-header")).toHaveCSS("background-color", "rgb(254, 248, 236)");
   const threadStub = main.getByTestId("thread-stub");
-  await expect(threadStub).toHaveCSS("background-color", "rgb(255, 253, 247)");
-  await expect(threadStub.locator(".stub-line")).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
   await expect(threadStub).toHaveCSS("border-top-style", "solid");
   await expect(threadStub).toHaveCSS("opacity", "1");
   await shot(page, "t04-thread-in-panel-with-live-stub");
