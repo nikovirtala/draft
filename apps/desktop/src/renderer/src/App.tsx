@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
 import type { Boot } from "../../shared/ipc.ts";
 import { windowTitle } from "../../shared/placement.ts";
-import { AgentEnvironment, AgentState, agentLabel } from "./components/AgentState.tsx";
+import { agentLabel } from "./components/AgentState.tsx";
 import { AttentionBar } from "./components/AttentionBar.tsx";
 import { BlockContent } from "./components/BlockContent.tsx";
 import { ContextBar } from "./components/ContextBar.tsx";
 import { ConversationView } from "./components/ConversationView.tsx";
+import { Footer } from "./components/Footer.tsx";
 import { TrustStep } from "./components/TrustStep.tsx";
 import { GlobalWorking, Working } from "./components/Working.tsx";
 import { useVisibleStubs } from "./visibility.ts";
@@ -42,17 +43,10 @@ function MainWindow() {
         <span className="brand">draft</span>
         <ContextBar />
         <span className="title">{main?.title ?? ""}</span>
-        {main !== undefined && (
-          <AgentState
-            agent={main.agent}
-            onChange={(s) => void window.draft.setAgentState(ws.main, s)}
-          />
-        )}
         <GlobalWorking />
         <span className="spacer" />
         <AttentionBar />
       </header>
-      {main?.agent.environment != null && <AgentEnvironment environment={main.agent.environment} />}
       <div className={`workspace${panel === null ? "" : " with-panel"}`}>
         <section className="left" aria-label="Conversation">
           <ConversationView conversation={ws.main} />
@@ -63,6 +57,9 @@ function MainWindow() {
           </aside>
         )}
       </div>
+      {main !== undefined && (
+        <Footer agent={main.agent} onChange={(s) => void window.draft.setAgentState(ws.main, s)} />
+      )}
     </div>
   );
 }
