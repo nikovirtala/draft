@@ -1,0 +1,17 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M83KYJP80C9KYQP2HWJ4R2YJ
+subject: zt0rkh1w
+type: opened
+at: 2026-11-23T07:11:58Z
+actor:
+  kind: agent
+  name: claude
+  email: null
+  agent: claude
+  on_behalf_of: niko.virtala@hey.com
+data:
+  title: Check the map's counts against the repositories' own logs
+  template: task
+  template_version: 1

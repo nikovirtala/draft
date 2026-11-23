@@ -1,0 +1,16 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M83KYFP10CCYZ1DCBX4N02PH
+subject: jqyv4fx0
+type: labeled
+at: 2026-11-23T07:11:55Z
+actor:
+  kind: agent
+  name: claude
+  email: null
+  agent: claude
+  on_behalf_of: niko.virtala@hey.com
+data:
+  set:
+    - type:task
