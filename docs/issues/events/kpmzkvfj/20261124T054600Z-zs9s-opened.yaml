@@ -1,0 +1,17 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M861DX1NWXX136AQ93BJZS9S
+subject: kpmzkvfj
+type: opened
+at: 2026-11-24T05:46:00Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: niko.virtala@hey.com
+data:
+  title: the by-state map's arcs end at one point and cross, against L7
+  template: task
+  template_version: 1
