@@ -1,0 +1,16 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M8636BWE21D9S3Q1XY04V1JQ
+subject: 9frj4ke6
+type: closed
+at: 2026-11-24T06:16:50Z
+actor:
+  kind: agent
+  name: claude
+  email: null
+  agent: claude
+  on_behalf_of: niko.virtala@hey.com
+reason: "Decided on 24 November 2026: the footer stays on the page, set apart by a hairline (option A in the Frame preview). tokens.json now gives titlebar to the title bar alone; the preview no longer draws option B."
+data:
+  resolution: done
