@@ -90,12 +90,14 @@ A context is a log with its projections and view state, a permanent name, and, o
 
 ```text
 contexts.json                the registry: device-local, written atomically
+cache.db                     what the device read from outside; a cache, safe to delete
 log.jsonl views.db device.db agent-workspace/      the context "local", where it always was
 contexts/<name>/{log.jsonl, views.db, device.db, agent-workspace/}
 ```
 
 - **The registry** holds per context its name, title, the folder it is bound to, a folder that was asked about and isn't trusted, the name its log's own addresses carry, its last activity (updated on every write) and which contexts were open at exit. A device with no registry gets one holding only `local`; the files already there are not touched. A registry that can't be read is moved aside and rebuilt from `contexts/*/`.
 - **Names** are address segments, unique on the device and permanent. A new context is named from its folder (`longplay`, then `longplay-2`); `local` is never handed out.
+- **`cache.db`** is one file for the device ([ADR t76jn29d](adr/decisions/t76jn29d-keep-what-draft-reads-from-outside-in-a-persistent-cache-and.md)): git blobs by sha, GitHub responses with their ETag, and each context's last map snapshot with the tree sha and pull request heads it came from. A launch shows that snapshot at once, as of when it was read, and its refresh asks conditionally, so an unchanged repository costs 304s and no file. It is bounded (`READ_CACHE_MAX_BYTES`, 50 MB, least recently used first), never written to a log, and deleting it loses time only.
 - **Per context:** log, projection, device view state, window bounds, agent processes and polling. Nothing is shared but the identity, the Kiro Remote connection and the resolvers.
 
 **Binding a folder.** Opening a folder nobody trusted for a context shows a trust step with its real path and git remote (read from the repository's config file, credentials removed, without running git). The answer is `context.folder_decided` in that context's log, with the person as actor: the decision, the remote and a SHA-256 of the path, never the path. The path is kept in the registry only. Declined or unanswered, the context opens without a folder and the agent stays in its own workspace; opening the same folder again asks again.

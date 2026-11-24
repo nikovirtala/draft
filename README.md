@@ -43,7 +43,7 @@ The first Kiro Remote call opens the browser to sign in (OAuth 2.1 with PKCE); t
 | `DRAFT_AGENT_COMMAND`, `DRAFT_AGENT_ARGS` | The selected agent's command and its arguments (a JSON array), for tests and one-off runs. |
 | `ANTHROPIC_API_KEY` | Claude's Console API key, read by `claude-agent-acp`. |
 | `DRAFT_ACP_TRANSCRIPT` | A file to record the ACP traffic in, with header and env values redacted. |
-| `DRAFT_DATA_DIR` | Where the log (`log.jsonl`), views (`views.db`), device view state (`device.db`), secrets and the agent's working directory (`agent-workspace/`) live. Default: Electron's userData. |
+| `DRAFT_DATA_DIR` | Where the log (`log.jsonl`), views (`views.db`), device view state (`device.db`), a cache of what was read from GitHub (`cache.db`, safe to delete), secrets and the agent's working directory (`agent-workspace/`) live. Default: Electron's userData. |
 | `DRAFT_KIRO_AUTH=none` | No sign-in, for a local fake Kiro Remote. |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | Export traces, metrics and logs over OTLP/HTTP; otherwise they go to the console. |
 

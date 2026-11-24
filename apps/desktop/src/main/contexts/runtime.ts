@@ -7,6 +7,7 @@ import {
   type KiroFeedApi,
   type KiroRemoteTools,
   Projection,
+  type ReadCache,
   type Resolver,
   Workspace,
 } from "@nikovirtala/draft-core";
@@ -32,6 +33,8 @@ export interface RuntimeDeps {
   resolvers: readonly Resolver[];
   /** The read-only GitHub client, for the repositories a context's map covers. */
   github: GithubClient;
+  /** What the device read from outside, kept across launches: a context's map opens from it. */
+  cache?: ReadCache;
   /** Kiro Remote as the person: what answering a permission request and retrying a step call. */
   actions: KiroRemoteTools | null;
   /** Kiro Remote's change feed, read into each context's log; null without a Kiro Remote. */
@@ -100,6 +103,7 @@ export class ContextRuntime {
         github: deps.github,
         repos: coveredRepos(deps, name),
         intervalMs: deps.config.mapPollMs,
+        ...(deps.cache === undefined ? {} : { cache: deps.cache, cacheKey: name }),
       },
       ...(deps.feed === null
         ? {}
