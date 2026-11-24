@@ -1,0 +1,15 @@
+envelope: ledger/v1
+kind: decision
+schema: decision/v1
+id: 01M8647DJZFH3CBBFBBDSAJZ0R
+subject: t76jn29d
+type: accepted
+at: 2026-11-24T06:34:53Z
+actor:
+  kind: human
+  name: Niko Virtala
+  email: niko.virtala@hey.com
+  agent: null
+  on_behalf_of: null
+data:
+  body_sha256: 867401634a03956a083b18a68175d93d780bbfb7926644ef687b82a7db705eb3
