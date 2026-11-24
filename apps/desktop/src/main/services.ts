@@ -16,6 +16,7 @@ import {
   PersonTools,
   PullRequestResolver,
   personActions,
+  ReadCache,
   type Resolver,
   resolveGithubAuth,
 } from "@nikovirtala/draft-core";
@@ -37,6 +38,8 @@ export interface Services {
   resolvers: Resolver[];
   /** The read-only GitHub client: the map reads the repositories a context covers through it. */
   github: GithubClient;
+  /** What this device read from outside, kept across launches (`cache.db`); never a source of truth. */
+  cache: ReadCache;
   /** How an answer to an acceptance request is carried out: the person's own git, gh and adr. */
   acceptance: AcceptanceActions;
   /** How draft reaches GitHub, for the note the main conversation shows; null for nothing to say. */
@@ -96,7 +99,13 @@ export async function createServices(o: {
 
   // GitHub: a token from the environment, else from `gh`, else public access, and only ever reads.
   const githubAuth = await resolveGithubAuth(env);
-  const github = new GithubClient({ token: githubAuth.token, baseUrl: config.githubApiUrl });
+  // One cache for the device, in a file of its own: delete it and the next launch reads again.
+  const cache = new ReadCache(join(config.dataDir, "cache.db"));
+  const github = new GithubClient({
+    token: githubAuth.token,
+    baseUrl: config.githubApiUrl,
+    store: cache,
+  });
   let viewer: Promise<string | null> | null = null;
   // Who "you" are on GitHub, asked once: a review requested from you needs it.
   const viewerLogin = () =>
@@ -133,6 +142,7 @@ export async function createServices(o: {
     feed,
     resolvers,
     github,
+    cache,
     acceptance: personActions(person),
     githubNote: githubNote(githubAuth),
     // One ACP agent process per agent a conversation chose, in each context, started where that
@@ -158,6 +168,7 @@ export async function createServices(o: {
       }),
     close: async () => {
       await tools?.close?.();
+      cache.close();
     },
   };
 }

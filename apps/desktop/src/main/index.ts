@@ -72,6 +72,7 @@ function run(): void {
           user: s.user,
           resolvers: s.resolvers,
           github: s.github,
+          cache: s.cache,
           actions: s.actions,
           feed: s.feed,
           acceptance: s.acceptance,
