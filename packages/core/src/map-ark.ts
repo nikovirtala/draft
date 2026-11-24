@@ -61,6 +61,11 @@ function freshness(input: KindInput, wanted: (p: ArkProblem) => boolean): string
   if (s === null || s.repos.length === 0) return null;
   if (s.loading) return `still reading ${s.repos.join(", ")} from GitHub`;
   const messages = [...new Set(s.problems.filter(wanted).map((p) => p.message))];
+  // What an earlier launch kept is on screen until a refresh has read it all again.
+  if (s.asOf != null)
+    messages.unshift(
+      `as of ${s.asOf.slice(0, 16).replace("T", " ")} UTC, as the last launch read it; reading GitHub for what changed`,
+    );
   return messages.length === 0 ? null : messages.join("; ");
 }
 
