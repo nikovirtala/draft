@@ -39,6 +39,7 @@ export * from "./oauth.ts";
 export * from "./person-tools.ts";
 export * from "./projection.ts";
 export * from "./pull-request.ts";
+export * from "./read-cache.ts";
 export * from "./resolver.ts";
 export * from "./telemetry.ts";
 export * from "./thread.ts";
