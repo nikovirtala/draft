@@ -61,11 +61,19 @@ export class GithubError extends Error {
   }
 }
 
+/** Where answers outlive the process: a response by key with its ETag (see read-cache.ts). */
+export interface ResponseStore {
+  response(key: string): { etag: string; body: string } | null;
+  putResponse(key: string, etag: string, body: string): void;
+}
+
 export interface GithubClientOptions {
   token: string | null;
   baseUrl?: string;
   fetch?: typeof fetch;
   now?: () => number;
+  /** Keeps answers across launches, so an unchanged one is a 304 after a restart too. */
+  store?: ResponseStore;
 }
 
 interface Cached {
@@ -84,6 +92,24 @@ export class GithubClient {
   private readonly fetchFn: typeof fetch;
   private readonly now: () => number;
   private readonly cache = new Map<string, Cached>();
+  /** What was seen of a request: in memory, else kept from an earlier launch. */
+  private readonly lookup = (key: string, raw: boolean): Cached | undefined => {
+    const known = this.cache.get(key);
+    if (known !== undefined) return known;
+    const stored = this.o.store?.response(key);
+    if (stored == null) return undefined;
+    try {
+      const entry = {
+        etag: stored.etag,
+        body: raw ? stored.body : (JSON.parse(stored.body) as unknown),
+      };
+      this.cache.set(key, entry);
+      return entry;
+    } catch {
+      return undefined;
+    }
+  };
+
   /** Requests made, and how many were answered from the ETag cache (for tests and telemetry). */
   requests = 0;
   notModified = 0;
@@ -98,9 +124,19 @@ export class GithubClient {
     return this.o.token !== null;
   }
 
-  private async request(path: string, accept: string): Promise<{ status: number; body: unknown }> {
+  /**
+   * With `conditional` off the answer is neither sent with an ETag nor kept: for content that
+   * can't change (a blob by its sha), which the caller keeps by its address.
+   */
+  private async request(
+    path: string,
+    accept: string,
+    conditional = true,
+  ): Promise<{ status: number; body: unknown }> {
     const url = `${this.base}${path}`;
-    const cached = this.cache.get(`${accept}\u0000${url}`);
+    const key = `${accept}\u0000${url}`;
+    const raw = accept.includes("raw");
+    const cached = conditional ? this.lookup(key, raw) : undefined;
     const headers: Record<string, string> = {
       accept,
       "x-github-api-version": "2022-11-28",
@@ -126,12 +162,13 @@ export class GithubClient {
         limited ? this.retryAfter(res) : null,
       );
     }
-    const body: unknown = accept.includes("raw") ? await res.text() : await res.json();
+    const body: unknown = raw ? await res.text() : await res.json();
     const etag = res.headers.get("etag");
-    if (etag !== null) {
+    if (etag !== null && conditional) {
       if (this.cache.size >= MAX_CACHED)
         this.cache.delete(this.cache.keys().next().value as string);
-      this.cache.set(`${accept}\u0000${url}`, { etag, body });
+      this.cache.set(key, { etag, body });
+      this.o.store?.putResponse(key, etag, raw ? (body as string) : JSON.stringify(body));
     }
     return { status: res.status, body };
   }
@@ -151,9 +188,12 @@ export class GithubClient {
     return r.status === 404 ? null : (r.body as T);
   }
 
-  /** A file's content as text, or null. */
-  async getText(path: string): Promise<string | null> {
-    const r = await this.request(path, "application/vnd.github.raw+json");
+  /**
+   * A file's content as text, or null. `immutable` is for a path that names its content (a blob
+   * by sha): it is read without an ETag and not kept here, since it can't change.
+   */
+  async getText(path: string, o: { immutable?: boolean } = {}): Promise<string | null> {
+    const r = await this.request(path, "application/vnd.github.raw+json", o.immutable !== true);
     return r.status === 404 ? null : (r.body as string);
   }
 }
