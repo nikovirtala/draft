@@ -2,6 +2,7 @@ import { ARK_ID, type ArkIssueEvent, dataField, dataList, parseEventFiles } from
 import { canonicalJson } from "./canonical.ts";
 import { type EnvironmentTopology, parseGithubEnvironments, topologyOf } from "./environments.ts";
 import { type GithubClient, GithubError } from "./github.ts";
+import type { ReadCache } from "./read-cache.ts";
 
 /**
  * What the ark kinds of a context are made from: every decision, every issue and every deployment
@@ -25,7 +26,21 @@ import { type GithubClient, GithubError } from "./github.ts";
  * - Requests carry the ETag of what was seen, so an unchanged answer is a 304, which GitHub doesn't
  *   count against the rate limit. When GitHub says the limit is used up, nothing is asked until it
  *   resets, and the map says its counts are from before.
+ *
+ * With a `ReadCache` (ADR t76jn29d) what was read outlives the process: a blob is fetched once per
+ * device, a response keeps its ETag, and the last snapshot is shown at launch, as of when it was
+ * read, until the first refresh replaces it. Without a cache each launch starts from nothing.
  */
+
+/** How many files a refresh reads at once. */
+export const BLOB_CONCURRENCY = 6;
+/** How many files the first refresh of a context may fetch, to fill a map that has nothing yet. */
+export const FIRST_REFRESH_BLOBS = 600;
+/** How many files a later refresh may fetch. */
+export const REFRESH_BLOBS = 100;
+
+/** The shape of what is stored for a context; a stored snapshot of another shape is not shown. */
+const STORED = 1;
 
 export interface ArkRecordsOptions {
   github: GithubClient;
@@ -37,8 +52,16 @@ export interface ArkRecordsOptions {
   /** How many open pull requests are searched for proposals, and deployments are read. */
   maxPulls?: number;
   maxDeployments?: number;
-  /** How many files one refresh may fetch; the rest wait for the next one. */
+  /** How many files one refresh may fetch; the rest wait for the next one. Default `REFRESH_BLOBS`. */
   maxBlobsPerRefresh?: number;
+  /** How many files the first refresh may fetch. Default `FIRST_REFRESH_BLOBS`. */
+  firstRefreshBlobs?: number;
+  /** How many files are read at once. Default `BLOB_CONCURRENCY`. */
+  blobConcurrency?: number;
+  /** Keeps what was read across launches. Without it every launch starts from nothing. */
+  cache?: ReadCache;
+  /** Names this context's stored snapshot in the cache. */
+  cacheKey?: string;
   now?: () => number;
 }
 
@@ -114,6 +137,11 @@ export interface ArkSnapshot {
   repos: string[];
   /** When the last refresh ended; null before the first. */
   readAt: string | null;
+  /**
+   * When what is shown was read, while it is the snapshot kept from an earlier launch and no
+   * refresh has replaced it yet; null otherwise.
+   */
+  asOf?: string | null;
   adrs: AdrRecord[];
   issues: IssueRecord[];
   deployments: DeploymentRecord[];
@@ -138,6 +166,28 @@ interface EventFile extends ArkIssueEvent {
 interface Parsed {
   adrs: Map<string, EventFile[]>;
   issues: Map<string, EventFile[]>;
+}
+/** What a context's cache entry holds: where each repository was read to, and what it showed. */
+interface StoredMarker {
+  v: number;
+  repos: {
+    repo: string;
+    treeSha: string | null;
+    headKey: string;
+    deployToml: string | null;
+    deploymentIds: string;
+    unread: boolean;
+  }[];
+}
+interface StoredData {
+  v: number;
+  repos: {
+    repo: string;
+    adrs: AdrRecord[];
+    issues: IssueRecord[];
+    deployments: DeploymentRecord[];
+    topology: EnvironmentTopology | null;
+  }[];
 }
 interface PullHead {
   number: number;
@@ -176,6 +226,18 @@ function pick<T extends object, K extends keyof T>(o: T, keys: readonly K[]): Pi
   return out;
 }
 
+/** The files of a record that its title, relations and resolution are read from, in order. */
+function filesToRead(files: readonly EventFile[]): string[] {
+  const closed = [...files].reverse().find((f) => f.type === "closed");
+  return files
+    .filter(
+      (f) =>
+        ["proposed", "opened", "superseded", "linked", "unlinked"].includes(f.type) ||
+        (f === closed && files.at(-1)?.type === "closed"),
+    )
+    .map((f) => f.blob);
+}
+
 const sameFiles = (a: readonly EventFile[], b: readonly EventFile[]): boolean =>
   a.length === b.length && a.every((e, i) => e.blob === b[i]?.blob);
 
@@ -208,6 +270,11 @@ export class ArkRecords {
   private shown = "";
   private readAt: string | null = null;
   private loaded = false;
+  /** When the snapshot kept from an earlier launch was read, until a refresh replaces it. */
+  private restoredAt: string | null = null;
+  private refreshes = 0;
+  /** What was last written to the cache, without the time, to write only what moved. */
+  private stored = "";
   private nextAt = 0;
   private blocked = 0;
   private budget = 0;
@@ -216,6 +283,80 @@ export class ArkRecords {
 
   constructor(o: ArkRecordsOptions) {
     this.o = { ...o, now: o.now ?? Date.now };
+    this.restore();
+  }
+
+  private get sourceKey(): string {
+    return `ark-records:${this.o.cacheKey ?? "default"}`;
+  }
+
+  /** Takes the snapshot kept by an earlier launch, so the map has something to show at once. */
+  private restore(): void {
+    const mark = this.o.cache?.source(this.sourceKey);
+    if (mark == null || mark.data === null) return;
+    try {
+      const m = JSON.parse(mark.marker) as StoredMarker;
+      const d = JSON.parse(mark.data) as StoredData;
+      if (m.v !== STORED || d.v !== STORED) return;
+      const wanted = new Set(this.o.repos());
+      for (const r of m.repos) {
+        const shown = d.repos.find((x) => x.repo === r.repo);
+        if (!wanted.has(r.repo) || shown === undefined) continue;
+        this.repos.set(r.repo, {
+          treeSha: r.treeSha,
+          adrs: shown.adrs,
+          issues: shown.issues,
+          deployments: shown.deployments,
+          topology: shown.topology,
+          deployToml: r.deployToml,
+          heads: new Map<string, Parsed>(),
+          deploymentIds: r.deploymentIds,
+          headKey: r.headKey,
+          unread: r.unread,
+          problems: [],
+        });
+      }
+      if (this.repos.size === 0) return;
+      this.restoredAt = mark.at;
+      this.readAt = mark.at;
+      this.stored = canonicalJson(m.repos);
+    } catch {
+      this.repos.clear();
+    }
+  }
+
+  /** Writes what was read to the cache: the markers every time, what was derived when it moved. */
+  private persist(moved: boolean): void {
+    const cache = this.o.cache;
+    if (cache === undefined || this.readAt === null) return;
+    const repos: StoredMarker["repos"] = [...this.repos.entries()]
+      .sort(([a], [b]) => (a < b ? -1 : 1))
+      .map(([repo, d]) => ({
+        repo,
+        treeSha: d.treeSha,
+        headKey: d.headKey,
+        deployToml: d.deployToml,
+        deploymentIds: d.deploymentIds,
+        unread: d.unread,
+      }));
+    const core = canonicalJson(repos);
+    const marker = JSON.stringify({ v: STORED, repos } satisfies StoredMarker);
+    if (!moved && core === this.stored) {
+      cache.putSource(this.sourceKey, marker, this.readAt);
+      return;
+    }
+    const data: StoredData = {
+      v: STORED,
+      repos: [...this.repos.entries()].map(([repo, d]) => ({
+        repo,
+        adrs: d.adrs,
+        issues: d.issues,
+        deployments: d.deployments,
+        topology: d.topology,
+      })),
+    };
+    cache.putSource(this.sourceKey, marker, this.readAt, JSON.stringify(data));
+    this.stored = core;
   }
 
   private get adrRoot(): string {
@@ -230,14 +371,20 @@ export class ArkRecords {
     return this.count;
   }
 
+  /** Something was left for a later refresh: a file the budget of the last one didn't reach. */
+  get unfinished(): boolean {
+    return [...this.repos.values()].some((d) => d.unread);
+  }
+
   /** What the kinds show, as of the last refresh. */
   snapshot(): ArkSnapshot {
     const data = [...this.repos.entries()].sort(([a], [b]) => (a < b ? -1 : 1));
     return {
       version: this.count,
-      loading: !this.loaded,
+      loading: !this.loaded && this.restoredAt === null,
       repos: [...this.o.repos()],
       readAt: this.readAt,
+      asOf: this.restoredAt,
       adrs: data.flatMap(([, d]) => d.adrs),
       issues: data.flatMap(([, d]) => d.issues),
       deployments: data.flatMap(([, d]) => d.deployments),
@@ -262,7 +409,10 @@ export class ArkRecords {
    */
   async refresh(intervalMs: number): Promise<boolean> {
     this.nextAt = this.o.now() + intervalMs;
-    this.budget = this.o.maxBlobsPerRefresh ?? 100;
+    this.budget =
+      this.refreshes++ === 0
+        ? (this.o.firstRefreshBlobs ?? FIRST_REFRESH_BLOBS)
+        : (this.o.maxBlobsPerRefresh ?? REFRESH_BLOBS);
     this.starved = 0;
     const wanted = new Set(this.o.repos());
     for (const r of this.repos.keys()) if (!wanted.has(r)) this.repos.delete(r);
@@ -290,10 +440,15 @@ export class ArkRecords {
       });
     }
     this.loaded = true;
-    this.readAt = new Date(this.o.now()).toISOString();
+    // What an earlier launch kept is replaced once a refresh has read everything it asked for.
+    const complete = [...this.repos.values()].every((d) => d.problems.length === 0);
+    if (complete) this.restoredAt = null;
+    if (this.restoredAt === null) this.readAt = new Date(this.o.now()).toISOString();
     const { version: _v, readAt: _r, ...shown } = this.snapshot();
     const key = canonicalJson(shown);
-    if (key === this.shown) return false;
+    const changed = key !== this.shown;
+    this.persist(changed);
+    if (!changed) return false;
     this.shown = key;
     this.count++;
     return true;
@@ -328,20 +483,68 @@ export class ArkRecords {
 
   private limitMessage(): string {
     const seconds = Math.max(1, Math.ceil((this.blocked - this.o.now()) / 1000));
-    return `GitHub's rate limit is used up: these counts are from before, and it asks again in ${seconds} s`;
+    return `GitHub's rate limit is used up: these counts are from before, and it asks again in ${seconds} s${this.needsToken()}`;
+  }
+
+  /** What to say when the first load can't finish for lack of a token (60 requests an hour). */
+  private needsToken(): string {
+    return this.o.github.authenticated
+      ? ""
+      : ". draft has no GitHub token, and without one GitHub allows 60 requests an hour: a token is needed for the first load to finish (set GITHUB_TOKEN, or sign in with `gh auth login`)";
   }
 
   /** A file's content by blob sha, once; null when the refresh's budget for files is spent. */
   private async blob(repo: string, sha: string): Promise<string | null> {
-    if (this.blobs.has(sha)) return this.blobs.get(sha) ?? null;
+    if (this.known(sha)) return this.blobs.get(sha) ?? null;
     if (this.budget <= 0) {
       this.starved++;
       return null;
     }
     this.budget--;
-    const text = await this.o.github.getText(`/repos/${repo}/git/blobs/${sha}`);
+    await this.fetchBlob(repo, sha);
+    return this.blobs.get(sha) ?? null;
+  }
+
+  /** Whether a file is at hand, in memory or kept from an earlier launch. */
+  private known(sha: string): boolean {
+    if (this.blobs.has(sha)) return true;
+    const kept = this.o.cache?.blob(sha);
+    if (kept == null) return false;
+    this.blobs.set(sha, kept);
+    return true;
+  }
+
+  private async fetchBlob(repo: string, sha: string): Promise<void> {
+    // A blob can't change, so it is asked for without an ETag and kept by its sha.
+    const text = await this.o.github.getText(`/repos/${repo}/git/blobs/${sha}`, {
+      immutable: true,
+    });
     this.blobs.set(sha, text);
-    return text;
+    if (text !== null) this.o.cache?.putBlob(sha, text);
+  }
+
+  /**
+   * Reads the files a refresh will need, several at once, within the refresh's budget. What the
+   * budget leaves out is asked for later by `blob`, which counts it as starved. A failure stops
+   * the rest and is thrown once what was under way has ended.
+   */
+  private async prefetch(repo: string, shas: readonly string[]): Promise<void> {
+    const todo = [...new Set(shas)].filter((sha) => !this.known(sha)).slice(0, this.budget);
+    this.budget -= todo.length;
+    let next = 0;
+    let failure: unknown = null;
+    const worker = async () => {
+      while (failure === null && next < todo.length) {
+        try {
+          await this.fetchBlob(repo, todo[next++] as string);
+        } catch (err) {
+          failure ??= err;
+        }
+      }
+    };
+    const width = Math.max(1, Math.min(this.o.blobConcurrency ?? BLOB_CONCURRENCY, todo.length));
+    await Promise.all(Array.from({ length: width }, worker));
+    if (failure !== null) throw failure;
   }
 
   private async titleOf(repo: string, files: readonly EventFile[], type: string) {
@@ -430,9 +633,18 @@ export class ArkRecords {
     for (const sha of [...data.heads.keys()])
       if (!heads.some((h) => h.headSha === sha)) data.heads.delete(sha);
 
+    const adrIds = [...new Set([...base.adrs.keys(), ...proposed.keys()])].sort();
+    const issueIds = [...base.issues].sort(([a], [b]) => (a < b ? -1 : 1));
+    // Every file the records below need is read now, several at once, then the records are made.
+    await this.prefetch(repo, [
+      ...adrIds.flatMap((id) =>
+        filesToRead(proposed.get(id)?.files ?? (base.adrs.get(id) as EventFile[])),
+      ),
+      ...issueIds.flatMap(([, files]) => filesToRead(files)),
+    ]);
     const starvedBefore = this.starved;
     const adrs: AdrRecord[] = [];
-    for (const id of [...new Set([...base.adrs.keys(), ...proposed.keys()])].sort()) {
+    for (const id of adrIds) {
       const onBranch = proposed.get(id);
       const files = onBranch?.files ?? (base.adrs.get(id) as EventFile[]);
       adrs.push({
@@ -449,7 +661,7 @@ export class ArkRecords {
       });
     }
     const issues: IssueRecord[] = [];
-    for (const [id, files] of [...base.issues].sort(([a], [b]) => (a < b ? -1 : 1))) {
+    for (const [id, files] of issueIds) {
       const closed = [...files].reverse().find((f) => f.type === "closed");
       issues.push({
         repo,
@@ -473,6 +685,12 @@ export class ArkRecords {
       this.starved > starvedBefore ||
       adrs.some((a) => a.title === null && a.events.some((e) => e.type === "proposed")) ||
       issues.some((i) => i.title === null && i.events.some((e) => e.type === "opened"));
+    if (data.unread && !github.authenticated)
+      data.problems.push({
+        repo,
+        source: "records",
+        message: `${repo}: some titles are not read yet${this.needsToken()}`,
+      });
   }
 
   private async pullHeads(repo: string): Promise<PullHead[]> {

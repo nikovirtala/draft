@@ -85,6 +85,8 @@ export interface RecordedRequest {
   body: string | null;
   /** Who the sender says it is acting for (the fake `gh`); null for anything else. */
   user: string | null;
+  /** What it was answered with: 304 for an unchanged answer; null while it is being answered. */
+  status: number | null;
 }
 
 type Send = (
@@ -117,6 +119,13 @@ export class FakeGithub {
   viewer = "niko";
   /** Answer the next n requests as rate limited. */
   rateLimited = 0;
+  /** How long every answer takes, in milliseconds: what a real network costs a sequential reader. */
+  latencyMs = 0;
+  /** While set, no request is answered until it resolves; for tests of what is on screen meanwhile. */
+  gate: Promise<void> | null = null;
+  /** The most requests that were under way at once, for tests of concurrent reads. */
+  peak = 0;
+  private active = 0;
   baseUrl = "";
   private server: Server | null = null;
 
@@ -126,13 +135,22 @@ export class FakeGithub {
       const chunks: Buffer[] = [];
       for await (const c of req) chunks.push(c as Buffer);
       const body = chunks.length === 0 ? null : Buffer.concat(chunks).toString("utf8");
-      this.requests.push({
+      const recorded: RecordedRequest = {
         method: req.method ?? "GET",
         path: `${url.pathname}${url.search}`,
         authorization: req.headers.authorization ?? null,
         body,
         user: (req.headers["x-fake-gh-user"] as string | undefined) ?? null,
-      });
+        status: null,
+      };
+      this.requests.push(recorded);
+      this.peak = Math.max(this.peak, ++this.active);
+      try {
+        if (this.gate !== null) await this.gate;
+        if (this.latencyMs > 0) await new Promise((r) => setTimeout(r, this.latencyMs));
+      } finally {
+        this.active--;
+      }
       const send = (
         status: number,
         body: unknown,
@@ -141,6 +159,7 @@ export class FakeGithub {
       ) => {
         const text = raw ? String(body) : JSON.stringify(body);
         const etag = `"${createHash("sha1").update(text).digest("hex")}"`;
+        recorded.status = status === 200 && req.headers["if-none-match"] === etag ? 304 : status;
         if (status === 200 && req.headers["if-none-match"] === etag) {
           res.writeHead(304, { etag });
           res.end();

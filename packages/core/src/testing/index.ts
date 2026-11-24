@@ -39,6 +39,17 @@ export {
 } from "./fake-kiro-remote.ts";
 export { GITHUB_ENVIRONMENTS_RESPONSE } from "./github-environments.ts";
 export {
+  ARK_LEDGER,
+  addLedgerEvent,
+  DRAFT_LEDGER,
+  type LedgerSize,
+  ledgerEvent,
+  ledgerFileCount,
+  ledgerFiles,
+  ledgerId,
+  seedLedger,
+} from "./ledger-fixture.ts";
+export {
   appendMapFixture,
   at as mapFixtureTime,
   MAP_CONTEXT,
