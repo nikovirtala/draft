@@ -1,4 +1,4 @@
-<!-- @dsCard group="Window" height=1900 subtitle="Title bar, conversation, footer, the side panel, what needs you, scrolled windows; and the footer's ground, two ways" -->
+<!-- @dsCard group="Window" height=1900 subtitle="Title bar, conversation, footer, the side panel, what needs you, scrolled windows" -->
 <!doctype html>
 <html lang="en">
 <head><meta charset="utf-8"><title>The frame</title>
@@ -45,7 +45,6 @@ body{margin:0;font-family:var(--font-sans);background:var(--page);color:var(--te
 .titlebar .spacer{flex:1}
 .attention{font-weight:560;color:var(--waiting-word)}
 .footer{display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px;padding:6px 12px;border-top:var(--hairline) solid var(--line);font-size:12px;color:var(--muted)}
-.footer.on-titlebar{background:var(--titlebar)}
 .footer .agent-state{margin-left:auto;display:flex;gap:8px;align-items:center}
 .footer .chip{padding:6px 9px}
 .footer .agent-state .who{color:var(--ink)}
@@ -124,13 +123,6 @@ kbd{font:11px var(--font-sans);border:var(--hairline) solid var(--line-strong);b
 <div style="flex:1;overflow:hidden;padding:0 16px"><p class="t" style="margin:10px 0 4px">Recent moves</p><div>main · 3333333 <span class="secondary">Deployments: draft · staging: In progress → Failed, 6:57:57 PM</span></div><div>Change 1 <span class="secondary">Acceptance requests: Requested → Accepted, 6:55:06 PM</span></div><div>main · 1111111 <span class="secondary">Deployments: draft · production: Succeeded → Inactive, 6:53:57 PM</span></div></div></div>
 </section>
 
-<section id="footer-ground">
-<p class="k"><b>To decide: the footer's ground.</b> The same window twice, only the footer differs.</p>
-<div class="pair">
-<div><p class="k ab"><b>A. Footer on the page</b>, as built (<code>.footer</code> has no background).</p><div class="win"><header class="titlebar"><b>draft</b><b>local</b><span class="ctx">Contexts ▾</span><span class="title">Conversation</span><span class="spacer"></span></header><div class="workspace"><section class="left"><div class="conversation"><div class="column"><p class="empty">Ask about your Kiro sessions.</p></div></div><div class="composer-wrap"><div class="composer"><div class="field ph">Ask, describe, or type @ to reference anything</div><span class="primary-button off">Send</span></div></div></section></div><footer class="footer "><span>▸ Your GitHub, git, SSH, AWS and npm sign-ins are withheld from the agent</span><span class="agent-state"><span class="who">the agent · fake-model-1</span><span class="chip moved">Active</span><span class="secondary-button small">Pause</span></span></footer></div></div>
-<div><p class="k ab"><b>B. Footer on the title bar</b>, as <code>tokens.json</code> says ("The title bar and the footer").</p><div class="win"><header class="titlebar"><b>draft</b><b>local</b><span class="ctx">Contexts ▾</span><span class="title">Conversation</span><span class="spacer"></span></header><div class="workspace"><section class="left"><div class="conversation"><div class="column"><p class="empty">Ask about your Kiro sessions.</p></div></div><div class="composer-wrap"><div class="composer"><div class="field ph">Ask, describe, or type @ to reference anything</div><span class="primary-button off">Send</span></div></div></section></div><footer class="footer on-titlebar"><span>▸ Your GitHub, git, SSH, AWS and npm sign-ins are withheld from the agent</span><span class="agent-state"><span class="who">the agent · fake-model-1</span><span class="chip moved">Active</span><span class="secondary-button small">Pause</span></span></footer></div></div>
-</div>
-</section>
 </div>
 </body>
 </html>

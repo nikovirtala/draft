@@ -249,6 +249,7 @@ Answers to earlier questions, with the reason, so later work does not reopen the
     - The **focus** check accepts a computed outline of 1px to 1.5px, because Chromium draws a width below a device pixel as one pixel at 1x; a 2px ring reads 2px at any scale, and the stylesheet test holds the declared 1.5px.
     - The **focus** check presses the mouse on each element Tab reached and releases it elsewhere, so nothing is activated. Text fields are left out of that half: see Open questions.
     - A diagram that is drawing or did not render lost the `pending` chip class it had borrowed, which gave the whole figure the waiting fill; it is plain, with its source and, on failure, the caption. How it should say a failure is an open question.
+11. **2026-11-24, this PR: the footer stays on the page.** Drawn both ways in the Frame preview, the footer on `page` with a hairline above it looked better than a band on `titlebar`, so the code stays and `titlebar` is the title bar's alone (D6).
 
 ## Open questions
 
@@ -274,7 +275,7 @@ Every place the code breaks a rule above today. Each is also an issue (ids from 
 | D3 | A5: focus is a ring, never a fill | `styles.css:805-807` (`.panel-divider:focus-visible`) and `:1145-1147` (`.attention-open:focus-visible`) | 2s98f7nk | fixed |
 | D4 | M2: every animation stops under reduced motion | `.caret` (`styles.css:284-292`) and `.message-actions` (`:967-968`) are outside the block at `:2150` | edenwvc1 | fixed |
 | D5 | Meanings: `moved-selected` is not for a block | `docs/design-system/tokens.json`, usage of `moved-selected` says "the block in focus", copied into `palette.ts` | vr20g4rb | fixed |
-| D6 | Meanings: the footer is `titlebar` | `tokens.json` says the title bar and the footer; `styles.css:592` draws the footer on `page` | 9frj4ke6 | open |
+| D6 | Meanings: the footer is `titlebar` | `tokens.json` says the title bar and the footer; `styles.css:592` draws the footer on `page` | 9frj4ke6 | fixed |
 | D7 | L3: every state has a preview to be compared with | `e2e/states.json` maps the frame, the composer and the map's cells to previews that draw other things, and does not list the checks' screenshots `k01` to `k04` (`e2e/checks.spec.ts`) at all | t9s857yn | fixed |
 | D8 | The frame, Scrolling: only a code block, a table and a map row scroll sideways | the conversation shows a horizontal scrollbar when an expanded stub's details end in a long link (screenshots a03, a04) | qxaqfz2b | bug |
 | D9 | L7: arcs stack and never cross, their ends spread along a cell's edge | the by-state arcs of Issues and Decisions end at one point and cross (screenshots m10, m11) | kpmzkvfj | bug |
