@@ -1,0 +1,17 @@
+envelope: ledger/v1
+kind: decision
+schema: decision/v1
+id: 01M8628TKHWGGHDMNEG45Y2BFW
+subject: t76jn29d
+type: proposed
+at: 2026-11-24T06:00:42Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: niko.virtala@hey.com
+data:
+  title: Keep what draft reads from outside in a persistent cache and show the last snapshot at launch
+  template: nygard
+  template_version: 1

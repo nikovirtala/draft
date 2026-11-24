@@ -1,0 +1,19 @@
+envelope: ledger/v1
+kind: decision
+schema: decision/v1
+id: 01M86291E5XT9WWEBZ5JNWC9S9
+subject: t76jn29d
+type: scoped
+at: 2026-11-24T06:00:49Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: niko.virtala@hey.com
+data:
+  set:
+    - packages/core/src/ark-records.ts
+    - packages/core/src/github.ts
+    - packages/core/src/map-ark.ts
+    - packages/core/src/read-cache.ts
