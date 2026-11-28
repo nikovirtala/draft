@@ -132,6 +132,7 @@ Focus folds everything except what you're working on. Every open block minimizes
 A thread is a block whose content is a conversation. It branches off any message and continues in the panel, while the main conversation stays on the left.
 
 - The main conversation keeps a thread stub where the thread branched off. It shows live state: "2 new", "waiting on you", "1 artifact".
+- **A thread says where it stands in one word,** the same in its stub and wherever threads are listed: *needs you*, *running*, *answered*, *shipped* or *resolved*, with needs you first. Answered is not resolved: the agent has said its piece and nothing waits on you, but what the thread produced hasn't closed yet (below).
 - When a thread wraps up, its conclusion returns to the main conversation as a summary, so decisions don't disappear into threads.
 - Blocks made inside a thread follow the same rules but can't take the panel, because the thread holds it. They go inline, minimized or into a window.
 - A window popped out of a thread names the thread it came from, and the thread keeps a stub.
@@ -150,6 +151,16 @@ A thread is a block whose content is a conversation. It branches off any message
 - **A second opinion is a fork, not a switch.** "Ask Claude about this" opens a sub-thread with the other agent, seeded with the same projection. Its answer comes back as a reference, and the original agent keeps its context.
 
 Rejected alternative: opening a thread's artifact in the panel and pushing the thread out to a window. It's more flexible, but layouts would start rearranging themselves.
+
+## Asking once
+
+An interrupt asks a person for something. Every ask costs attention, so draft asks once, and says what it wants before you read on.
+
+- **Three kinds of ask.** *Do*: something only you can do, such as a sign-in, an access only you can grant, or a check no test can make. *Decide*: an acceptance, a permission, a conclusion to confirm. *Stuck*: an agent can't go on without you. The kind is the ask's first word.
+- **Stuck is noticed, not confessed.** An agent rarely says it is stuck, so draft raises it from the log: the same step failing again and again, turns that go round without a result, a session past its timeout with nothing new. The ask cites the events it rests on and says what would unblock it, if the log tells.
+- **Repeats fold.** The same ask raised again, by its key, adds to the one already open instead of opening another. It shows how many times it was raised and its age from the first time, and the latest evidence replaces what it showed before; every raise stays in the log.
+- **Told once.** A notification outside draft goes once per ask, never per repeat, and only for what blocks work. The rest waits in the attention order.
+- **A new episode is a new ask.** Once settled, the same thing arising on new evidence (a new commit, a new run) is a new ask, the way keys already work.
 
 ## Multiplayer and audience
 
@@ -211,6 +222,8 @@ Views of the graph are blocks too, so they follow the placement rules:
 - **Linear** shows the log in order, with references as arcs and thread items indented. The arcs may later live in the conversation's own left margin.
 - **Backlinks** on every block list what references it and what it references.
 
+**What rests on this.** Any item answers what depends on it: the decisions, issues, pull requests, threads and deployments that reference it, followed outward. The answer is a list by distance, what references it directly first and then each hop further, drawn fainter as it goes, with each row's kind and state. The agent asks it before proposing to change a decision or remove something, and an acceptance request carries it, so you see what you change before you change it. An item that much rests on is watched more closely: its resolver reads it more often, and re-checking reaches it first.
+
 References also choose the agent's context. "Does @ADR 0007 change @Design doc?" tells the agent exactly what to load, plus what those two link to. This overlaps with the `context` tool planned for ark.
 
 ## Contexts and the universe
@@ -240,6 +253,8 @@ Every human gate is the same act: something waits for your yes, with evidence at
 
 - **An acceptance request is an interrupt.** It arrives in the thread it belongs to, in the same attention order, with the record or diff and its evidence: the ADR body and `adr verify`, a PR's checks and summary, a generation's diff.
 - **It's shown only once its evidence is green,** so you're never asked to approve something whose checks haven't run.
+- **An agent's work is checked by a second agent first.** Before the request appears, an agent that didn't see the work being made checks its claims against the evidence. The checker reads and tests and never changes the work. Its verdict is one row of evidence, a claim it couldn't confirm is struck through with its reason, and a request whose claims don't hold isn't shown. The checker's yes is evidence, never the acceptance: that stays yours.
+- **What rests on the record is evidence too,** as the list by distance in [References and the graph](#references-and-the-graph).
 - **Three answers:** accept; request changes, which goes back into the thread as a message to the agent; or reject, with a reason.
 - **Only you can accept.** Accepting is a UI action that calls ark or GitHub directly and never goes through the agent. The agent's MCP configuration leaves the accepting tools out, so "draft proposes, you accept" is enforced by structure, not by the agent's behaviour.
 - **It's done as you.** draft runs locally, so an acceptance commit uses your own git identity and signing key, while the agent's commits keep its own. The log records the acceptance with you as the actor and links the evidence you saw.
@@ -446,6 +461,8 @@ Fitness checks are pure functions from the graph to a verdict, in the evolutiona
 | Ladder | silent | A check that never fires: perfect or dead, worth asking which |
 
 Checks run in three places: as a gate at intake, on every change, and on a schedule, since expiry and timeouts only show with time. Every verdict is recorded as a fact, and every failure opens an instance of a kind, so a fitness check is feedback the moment it runs.
+
+**Re-checking, on a schedule.** A finding stays reliable until it is checked again and fails, so its date says when it was last checked, not when it expires. A scheduled pass re-reads every finding that standing or an open kind rests on against its source (the code, a configuration, a page, a measurement), most-relied-on first, and records the result as a fact: it still holds, with the new date, or it no longer holds, with what was found, superseding the old finding. A finding that no longer holds makes what rests on it stale, which opens a decision as usual. Each correction is its own fact citing its evidence, so it can be read and reverted on its own. The same pass leaves a short summary of the day, so a new agent session starts from standing, the open kinds and the last few days, and searches the rest.
 
 ### Feedback
 
@@ -659,15 +676,27 @@ Time is the hard part. When later work is built on what you revert, the revert c
 
 Testable: for a reversible change, applying it and then reverting it must give the graph you started with, plus the revert events. That is a property test for every kind.
 
+## Why
+
+"Why did this happen?" gets a chain, not a graph. The chain is a block: a verdict in one sentence, then the links from what was seen back to what started it, read left to right in the order of causes, then what was ruled out. It reads like a sentence, so causality is there at a glance, without learning a map first.
+
+- **Each link is typed and opens its evidence.** Its kind is written above it (signal, measurement, deployment, commit, pull request, issue, decision, thread, command) and its name and state in it, and choosing it opens the event it rests on. The problem is marked once, where it was seen.
+- **Recorded or unproven.** A link whose cause a source recorded is solid. A link the agent proposes while investigating, with no recorded cause, is marked *unproven* until evidence backs it, and stays unproven if none does. draft never turns a guess into a cause, the rule of [Facts, kinds and standing](#facts-kinds-and-standing).
+- **What was ruled out is part of the answer.** The causes checked and dropped are listed under the chain, each with why. When no cause is found, the chain says so, and what was ruled out is the answer.
+- **The work shows under it.** While the chain is being worked out, its steps appear under the links as a short checklist, done or running, so you can follow it and stop it.
+- **It is an investigation's conclusion.** An investigation is already a kind that closes with a conclusion; for a "why", the chain is the shape of that conclusion, and a fix, when one is needed, follows it as a proposal.
+- **The map draws the same chain.** Opened from the chain, the map shows the same events in place ("Why it moved", below). The chain is the answer; the map is where you look around it.
+
 ## The map
 
 The big picture is the graph seen from further away: one view at every distance, not a second view beside it. Zoomed out, items gather into clusters by kind; zoomed in, a cluster opens into its items, their states and their references. It is the map the name promises, drawn as the work goes.
 
-- **Nodes and edges.** An item is a node, coloured by its state, and a reference is a typed edge: implements, supersedes, closes, deployed by, cites. A cluster is a node too, sized by its count, and the edges between clusters are bundled and weighted by the references they carry.
+- **Nodes and edges.** An item is a node, coloured by its state, and a reference is a typed edge: implements, supersedes, closes, deployed by, cites. A cluster is the region its items gather in, as large as its count, and the edges between clusters are bundled and weighted by the references they carry.
+- **Quiet ground, few names.** Every item is a small dot in its state's colour, at its own place, so how much there is and where it piles up is seen before anything is read. Only what moves or waits on you is lifted out of the ground as a named pill: its kind's mark, its name and its state in words. The pills are capped, which keeps names from crowding each other; anything else is named when you point at it or zoom to it.
 - **Movement.** A transition recolours its node, and a pulse runs along the edge that caused it, leaving a fading trail, so the last hour reads as motion.
 - **Waits age.** A waiting node warms from neutral to amber to red as it nears its timeout. Stuck things stand out without anyone writing a rule for them.
 - **Cascades.** When one kind's transition triggers another's, the edges between them light up in turn: a signal contradicts an assumption, the decision resting on it goes under review, an issue opens. A cascade is drawn from the causes the facts record, never from timing alone.
-- **Why it moved.** Choose an event and the map shows it as a causal trace: events in the order of causes, each with its source and time beside it, and an arrow for each recorded cause. There are no lanes; what an event is and where it came from is said next to it. What a person or an agent did (merge, send, launch) is a command, said as one and drawn apart from states: a command is a cause, never a state. Its causes light up back to the root, its effects forward to where they stop; the rest stays grey. A reference that is not a cause (the notes a lost delivery was about) is dashed, an unknown cause is a dashed stub, and an effect that led nowhere is an open end. The design system's CausalTrace preview draws two real chains.
+- **Why it moved.** Choose an event and the map shows it as a causal trace, the [chain](#why) drawn in place: the ground fades, and the events line up left to right in the order of causes, each a small card with its kind above it and its source and time beside it, and an arrow for each recorded cause. There are no lanes; what an event is and where it came from is said next to it. What a person or an agent did (merge, send, launch) is a command, said as one and drawn apart from states: a command is a cause, never a state. Its causes light up back to the root, its effects forward to where they stop; the rest stays grey. A reference that is not a cause (the notes a lost delivery was about) is dashed, an unknown cause is a dashed stub, and an effect that led nowhere is an open end. The design system's CausalTrace preview draws two real chains.
 - **Open loops.** A path that stops before an answer is marked as an open end.
 - **A layout that stays put.** Positions are seeded by ids and change a little at a time, so when the log moves, a node stays where you last saw it. A layout is never recomputed from scratch, or nobody could learn their own map.
 - **Moving about.** Zooming and panning change the viewport and never the layout, so a node is where it was when you come back. Buttons, Cmd and plus or minus, and a pinch zoom; the arrow keys, dragging with Space held and a two-finger scroll pan; a button fits the graph to the panel. The zoom levels below are a different move, made on purpose, and each fits its own view.
@@ -689,7 +718,9 @@ Like everything else, the map is a block. "Show me everything that's moving" bri
 - [ ] Later, not for the first version: who can join a context in multiplayer, and in which roles? It needs identities and a shared log, neither of which the local, single-user first version has. Until then, every event's actor stays a real identity, never an assumed "me", so adding people later is cheap.
 - [ ] How long is the usage window after a deploy, and how much line-level evidence is enough to close a thread?
 - [ ] How fine-grained is standing? "pnpm, CDK, Rebase and merge" as one stack given or three: finer gives better tripwires but more decisions.
-- [ ] How long do findings stay valid: a default shelf life by source (release notes, a spec), or a date on each finding?
+- [ ] How often does re-checking run, and is its cost budgeted per context or across all of them?
+- [ ] What counts as stuck: how many failures of the same step, and how long without a result?
+- [ ] Does a second agent check every record an agent produced, or only those above some size or risk?
 - [ ] Which rules are bootstrap axioms? Whether "agents read, people act" is an axiom or ordinary standing is a real choice.
 - [ ] Which way should intake err when unsure? Something filed as standing that is really a kind never closes, while a kind with a timeout fails loudly, which argues for erring toward kind.
 - [ ] Standing has no states to plot on the map. Does it need its own view, such as the ladder by scope with orphaned, blind, stale and contradicted items lit?
