@@ -33,4 +33,4 @@ Cream page (#fef8ec), a darker surface for panels (#f9f1e1), lighter raised card
 
 ## Components
 
-The previews show each part of draft that carries a state: the state chips (with the board's chips beside draft's for comparison), pull request stubs, acceptance evidence, a failure notice and the working indicator, the map's switches, selection and change the Wisteria Lily way, and the map's graph.
+The previews show each part of draft that carries a state: the state chips (with the board's chips beside draft's for comparison), pull request stubs, acceptance evidence, a failure notice and the working indicator, the map's switches, selection and change the Wisteria Lily way, the map's graph, the causal trace, and the chain that answers "why did this happen?" (a verdict, typed links, what was ruled out). The graph's quiet ground, dots in their state's colour with only what moves or waits on you named, replaces the discs sized by count.
