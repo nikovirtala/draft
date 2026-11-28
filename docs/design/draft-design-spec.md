@@ -263,6 +263,8 @@ Answers to earlier questions, with the reason, so later work does not reopen the
 8. **A budget for the renderer.** Which numbers (start time, a long conversation, a large map) and how they are measured.
 9. **A click in a text field.** `:focus-visible` always matches a text field, so a click in the composer or a reply box shows the ring, while the rule says a click shows nothing. Keep the platform's behaviour (a field you can type in shows where it is) as the one exception, or suppress it?
 10. **A diagram that did not render.** It shows its source and a caption on the plain ground. Should it be a failure notice (A8)?
+11. **The pill cap.** How many named pills the quiet ground lifts before the rest are counted instead, and whether the cap follows the size of the block.
+12. **A dot on the ground.** One size for every dot, or a little larger for what moved in the window? A larger dot reads as importance, which a state doesn't claim.
 
 ## Drift
 
@@ -293,8 +295,12 @@ The next design slices, one coherent slice each, each a small pull request (a ha
 5. **Loading states.** M4: a part that loads keeps its size (the map before its first snapshot, a stub before its first read), in the preview first.
 6. **The map's by-state lens as a lens.** The by-state layout exists (`state`); the model's lenses (only what is moving, waiting on me, open loops) are planned and each is a switch option (A2) over the same cells.
 7. **The count badge.** The one small `moved-strong` badge with a number (A6), for what changed since the person last looked.
+8. **The chain.** The answer to "why" (docs/model.md, "Why"): a new `Chain` preview with a verdict, the links left to right in the order of causes (each a small card with its kind above it, its name and state chip in it), the problem marked once, an unproven link, what was ruled out under it and the steps of a running investigation as a checklist. It shares its marks with the CausalTrace preview, which is its form in the map.
+9. **Quiet ground, few names.** The Graph preview redrawn (docs/model.md, "The map"): items as small dots in their state's colour, a kind as the region its dots gather in, and a capped set of named pills for what moves or waits on you. A second state of the preview draws a chosen event's trace over the faded ground. It replaces the discs sized by count.
+10. **Asks.** An interrupt's first word says its kind (Do, Decide, Stuck), and an ask raised again shows its count and its age from the first time, in the PromptAndInterrupt preview.
+11. **What rests on this.** A list by distance, each hop fainter, with each row's kind and state, as a block and as an evidence row in an acceptance request.
 
-The first and third slices are done; the next is the second.
+The first and third slices are done. The eighth and ninth come next, ahead of the second, because the map doesn't show causality yet, and the second waits on its picture.
 
 ## Why this is not an ADR
 
