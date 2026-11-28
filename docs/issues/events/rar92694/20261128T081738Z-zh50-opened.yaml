@@ -1,0 +1,17 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M8GKPD9HN7H35PQHH94TZH50
+subject: rar92694
+type: opened
+at: 2026-11-28T08:17:38Z
+actor:
+  kind: agent
+  name: Claude
+  email: null
+  agent: Claude
+  on_behalf_of: niko.virtala@hey.com
+data:
+  title: Draw the map as quiet ground with named pills for what moves or waits
+  template: task
+  template_version: 1

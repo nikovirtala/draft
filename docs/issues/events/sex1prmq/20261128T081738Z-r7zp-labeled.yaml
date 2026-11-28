@@ -1,0 +1,16 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M8GKPE49VZW04QY5JHD8R7ZP
+subject: sex1prmq
+type: labeled
+at: 2026-11-28T08:17:38Z
+actor:
+  kind: agent
+  name: Claude
+  email: null
+  agent: Claude
+  on_behalf_of: niko.virtala@hey.com
+data:
+  set:
+    - type:feature
