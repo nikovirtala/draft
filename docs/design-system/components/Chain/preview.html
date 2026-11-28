@@ -1,0 +1,125 @@
+<!-- @dsCard group="Map" height=1130 subtitle="Why it happened: a verdict, typed links, what was ruled out" -->
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>The chain</title>
+<style>
+body{margin:0;font-family:var(--font-sans);background:var(--page);color:var(--text);font-size:13px}
+.cap{color:var(--muted);font-size:12px;margin:0 0 8px 4px}.cap b{color:var(--ink);font-weight:500}
+/* chip rules: the StateChip preview's, unchanged */
+.chip{display:inline-flex;align-items:center;gap:var(--space-1);font-size:12.5px;line-height:1;font-weight:500;padding:7px var(--space-3);border-radius:var(--radius-chip);border:1px solid transparent;white-space:nowrap}
+.chip i{font-style:normal;font-size:11px}
+.moved{background:var(--moved-fill);color:var(--moved-strong)}
+.done{background:var(--done-fill);color:var(--done-word)}
+.review{background:var(--review-fill);color:var(--review-word)}
+.waiting{background:var(--waiting-fill);color:var(--waiting-word)}
+.failed{background:var(--waiting-fill);color:var(--waiting-word);border:var(--hairline-dashed) dashed var(--waiting-mark)}
+.idle{background:transparent;color:var(--muted);border:var(--hairline) solid var(--idle-line)}
+.command{background:var(--raised);color:var(--ink);border:var(--hairline) solid var(--line-strong)}
+/* the chain's parts. The link card (.chain-link, .chain-kind, .chain-card, .chain-name, .chain-seen,
+   .chain-when) is written the same in the Graph preview's trace; change one, change both. */
+.chain-link{width:112px;flex:none;font-size:12px}
+.chain-kind{display:flex;justify-content:space-between;align-items:baseline;height:16px;margin-bottom:4px;font-size:11px;line-height:16px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);white-space:nowrap}
+.chain-seen{letter-spacing:0;text-transform:none;font-weight:500;color:var(--waiting-word)}
+.chain-card{box-sizing:border-box;height:70px;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;gap:6px;padding:0 10px;background:var(--raised);border:var(--hairline) solid var(--line);border-radius:var(--radius-card)}
+.chain-card.seen{border-color:var(--waiting-mark)}
+.chain-name{font-size:13px;line-height:18px;font-weight:600;color:var(--ink);white-space:nowrap}
+.chain-when{margin-top:6px;font-size:11.5px;line-height:16px;color:var(--muted)}.chain-when b{font-weight:400;color:var(--text)}
+.chain{padding:16px 16px 14px}
+.chain+.chain{border-top:var(--hairline) solid var(--line)}
+.chain-title{margin:0 0 4px;font-size:14px;line-height:20px;font-weight:600;color:var(--ink)}
+.chain-verdict{margin:0 0 16px;max-width:760px;font:15px/24px var(--font-serif);color:var(--text)}
+.chain-row{display:flex;align-items:flex-start}
+.chain-arrow{flex:none;position:relative;width:22px;height:12px;margin-top:49px}
+.chain-arrow svg{display:block;overflow:visible}
+.chain-arrow.long{width:84px}
+.chain-arrow .on{fill:none;stroke:var(--moved-mark);stroke-width:1.6}
+.chain-arrow .unproven{fill:none;stroke:var(--loop-mark);stroke-width:1;stroke-dasharray:3 2}
+.chain-arrow .word{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);padding:0 5px;background:var(--page);font-size:11.5px;line-height:14px;color:var(--muted);white-space:nowrap}
+.chain-stub{flex:none;box-sizing:border-box;align-self:flex-start;margin-top:41px;height:26px;padding:0 10px;display:flex;align-items:center;border:var(--hairline-dashed) dashed var(--loop-mark);border-radius:var(--radius-chip);font-size:12.5px;color:var(--muted)}
+.chain-open{flex:none;width:76px;text-align:center}
+.chain-open svg{display:block;margin:41px auto 0}
+.chain-open span{display:block;margin-top:14px;font-size:11.5px;color:var(--muted)}
+.chain-ruled-out,.chain-steps{margin:18px 0 0;padding:0;list-style:none;max-width:760px}
+.chain-ruled-out h4,.chain-steps h4{margin:0 0 6px;font-size:11px;line-height:16px;letter-spacing:.06em;text-transform:uppercase;font-weight:400;color:var(--muted)}
+.chain-ruled-out ul,.chain-steps ul{margin:0;padding:0;list-style:none}
+.chain-ruled-out li,.chain-steps li{display:flex;gap:10px;align-items:flex-start;padding:3px 0;font-size:13px;line-height:20px;color:var(--text)}
+.chain-ruled-out .why{color:var(--muted)}
+.mark{flex:none;margin-top:5px}
+.mark.x path{stroke:var(--loop-mark);stroke-width:1.4;stroke-linecap:round;fill:none}
+.mark.ok path{stroke:var(--done-mark);stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;fill:none}
+.mark.todo{width:10px;height:10px;margin-top:5px;box-sizing:border-box;border-radius:50%;border:var(--hairline) solid var(--idle-line);background:transparent}
+.ring{flex:none;box-sizing:border-box;width:12px;height:12px;margin-top:4px;border-radius:50%;border:2px solid var(--moved-fill);border-top-color:var(--moved-mark)}
+@media (prefers-reduced-motion:no-preference){.ring{animation:s 1s linear infinite}}@keyframes s{to{transform:rotate(360deg)}}
+.leg{display:flex;flex-wrap:wrap;gap:14px;margin:18px 0 0;font-size:12px;color:var(--muted);align-items:center}
+.leg svg{vertical-align:middle;margin-right:4px}
+</style></head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><marker id="chain-head" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 1L9 5L0 9z" fill="context-stroke"/></marker></defs></svg>
+<div style="padding:16px">
+
+<p class="cap"><b>A finished chain.</b> The 23 November cascade: a verdict, then the links in the order of causes, each with its kind above it and its source and time under it.</p>
+<section class="chain" aria-label="Why did the issue close?">
+<h3 class="chain-title">Why did the issue close?</h3>
+<p class="chain-verdict">It closed because #51 merged, a merge you made at 21:09 once its checks had passed on the branch Kiro rebased after #50 landed.</p>
+<div class="chain-row">
+<div class="chain-link"><div class="chain-kind">Pull request</div><div class="chain-card"><span class="chain-name">#50</span><span class="chip done">✓ Merged</span></div><div class="chain-when"><b>GitHub</b> · 20:25</div></div>
+<div class="chain-arrow"><svg width="22" height="12" aria-hidden="true"><path class="on" d="M1 6H20" marker-end="url(#chain-head)"/></svg></div>
+<div class="chain-link"><div class="chain-kind">Signal</div><div class="chain-card"><span class="chain-name">wait fired</span><span class="chip moved">Fired</span></div><div class="chain-when"><b>kiro-remote</b> · 20:25</div></div>
+<div class="chain-arrow"><svg width="22" height="12" aria-hidden="true"><path class="on" d="M1 6H20" marker-end="url(#chain-head)"/></svg></div>
+<div class="chain-link"><div class="chain-kind">Session</div><div class="chain-card"><span class="chain-name">woke, rebased</span><span class="chip moved">Rebased</span></div><div class="chain-when"><b>Kiro session</b> · 20:26</div></div>
+<div class="chain-arrow"><svg width="22" height="12" aria-hidden="true"><path class="on" d="M1 6H20" marker-end="url(#chain-head)"/></svg></div>
+<div class="chain-link"><div class="chain-kind">Commit</div><div class="chain-card"><span class="chain-name">rebase of #51</span><span class="chip done">✓ Passed</span></div><div class="chain-when"><b>CI</b></div></div>
+<div class="chain-arrow"><svg width="22" height="12" aria-hidden="true"><path class="on" d="M1 6H20" marker-end="url(#chain-head)"/></svg></div>
+<div class="chain-link"><div class="chain-kind">Command</div><div class="chain-card"><span class="chip command">› merge</span></div><div class="chain-when"><b>you</b> · 21:09</div></div>
+<div class="chain-arrow"><svg width="22" height="12" aria-hidden="true"><path class="on" d="M1 6H20" marker-end="url(#chain-head)"/></svg></div>
+<div class="chain-link"><div class="chain-kind">Pull request</div><div class="chain-card"><span class="chain-name">#51</span><span class="chip done">✓ Merged</span></div><div class="chain-when"><b>GitHub</b> · 21:09</div></div>
+<div class="chain-arrow"><svg width="22" height="12" aria-hidden="true"><path class="on" d="M1 6H20" marker-end="url(#chain-head)"/></svg></div>
+<div class="chain-link"><div class="chain-kind">Issue<span class="chain-seen">seen here</span></div><div class="chain-card seen"><span class="chain-name">?86</span><span class="chip done">✓ Closed</span></div><div class="chain-when"><b>issues</b> · 21:09</div></div>
+</div>
+</section>
+
+<p class="cap"><b>"Cause unknown" is the answer.</b> The lost notes: no source recorded why the session was deleted, so the chain stops at a stub and says what was ruled out.</p>
+<section class="chain" aria-label="Why were 3 notes lost?">
+<h3 class="chain-title">Why were 3 notes lost?</h3>
+<p class="chain-verdict">No source recorded why: the session was deleted at 21:14, and the 3 queued notes went with it.</p>
+<div class="chain-row">
+<div class="chain-stub">cause unknown</div>
+<div class="chain-arrow" style="margin-top:49px"><svg width="22" height="12" aria-hidden="true"><path class="unproven" d="M1 6H20" marker-end="url(#chain-head)"/></svg></div>
+<div class="chain-link"><div class="chain-kind">Session</div><div class="chain-card"><span class="chain-name">session</span><span class="chip idle">Deleted</span></div><div class="chain-when"><b>Kiro session</b> · 21:14</div></div>
+<div class="chain-arrow"><svg width="22" height="12" aria-hidden="true"><path class="on" d="M1 6H20" marker-end="url(#chain-head)"/></svg></div>
+<div class="chain-link"><div class="chain-kind">Thread<span class="chain-seen">seen here</span></div><div class="chain-card seen"><span class="chain-name">3 notes</span><span class="chip failed"><i>✕</i> 3 lost</span></div><div class="chain-when"><b>kiro-remote</b></div></div>
+<div class="chain-arrow"><svg width="22" height="12" aria-hidden="true"><path class="unproven" d="M1 6H20"/></svg></div>
+<div class="chain-open"><svg width="16" height="16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="none" stroke="var(--loop-mark)" stroke-width=".75" stroke-dasharray="3 2"/></svg><span>open end</span></div>
+</div>
+<div class="chain-ruled-out"><h4>Ruled out</h4><ul>
+<li><svg class="mark x" width="10" height="10" aria-hidden="true"><path d="M2 2L8 8M8 2L2 8"/></svg><span><span>You deleted it.</span> <span class="why">No command of yours is in the log between 21:02 and 21:14.</span></span></li>
+<li><svg class="mark x" width="10" height="10" aria-hidden="true"><path d="M2 2L8 8M8 2L2 8"/></svg><span><span>The wait timed out.</span> <span class="why">The wait for #52 ended with its merge at 21:13, before any timeout.</span></span></li>
+</ul></div>
+</section>
+
+<p class="cap"><b>The same investigation, while it runs.</b> One link is only proposed, so its arrow is dashed and says "unproven". The steps show under the links; one is running.</p>
+<section class="chain" aria-label="Why were 3 notes lost? Under way">
+<h3 class="chain-title">Why were 3 notes lost?</h3>
+<p class="chain-verdict">Not yet known: the session was deleted a minute after #52 merged, and the merge is the only cause proposed so far.</p>
+<div class="chain-row">
+<div class="chain-link"><div class="chain-kind">Pull request</div><div class="chain-card"><span class="chain-name">#52</span><span class="chip done">✓ Merged</span></div><div class="chain-when"><b>GitHub</b> · 21:13</div></div>
+<div class="chain-arrow long"><svg width="84" height="12" aria-hidden="true"><path class="unproven" d="M1 6H82" marker-end="url(#chain-head)"/></svg><span class="word">unproven</span></div>
+<div class="chain-link"><div class="chain-kind">Session</div><div class="chain-card"><span class="chain-name">session</span><span class="chip idle">Deleted</span></div><div class="chain-when"><b>Kiro session</b> · 21:14</div></div>
+<div class="chain-arrow"><svg width="22" height="12" aria-hidden="true"><path class="on" d="M1 6H20" marker-end="url(#chain-head)"/></svg></div>
+<div class="chain-link"><div class="chain-kind">Thread<span class="chain-seen">seen here</span></div><div class="chain-card seen"><span class="chain-name">3 notes</span><span class="chip failed"><i>✕</i> 3 lost</span></div><div class="chain-when"><b>kiro-remote</b></div></div>
+</div>
+<div class="chain-ruled-out"><h4>Ruled out so far</h4><ul>
+<li><svg class="mark x" width="10" height="10" aria-hidden="true"><path d="M2 2L8 8M8 2L2 8"/></svg><span><span>You deleted it.</span> <span class="why">No command of yours is in the log between 21:02 and 21:14.</span></span></li>
+</ul></div>
+<div class="chain-steps"><h4>Steps</h4><ul>
+<li><svg class="mark ok" width="10" height="10" aria-hidden="true"><path d="M1.5 5.5L4 8L8.5 2.5"/></svg><span>Read the log from 21:02 to 21:14</span></li>
+<li><svg class="mark ok" width="10" height="10" aria-hidden="true"><path d="M1.5 5.5L4 8L8.5 2.5"/></svg><span>Looked for a delete command of yours</span></li>
+<li><span class="ring" role="img" aria-label="Working"></span><span>Checking whether a merge ever deletes a session</span></li>
+<li><span class="mark todo" role="img" aria-label="Not started"></span><span>Look for who else can delete one</span></li>
+</ul></div>
+</section>
+
+<div class="leg"><span><svg width="34" height="10" aria-hidden="true"><path d="M2 5H30" stroke="var(--moved-mark)" stroke-width="1.6"/></svg>caused, recorded by a source</span><span><svg width="34" height="10" aria-hidden="true"><path d="M2 5H30" stroke="var(--loop-mark)" stroke-dasharray="3 2"/></svg>unproven, or cause unknown</span><span><svg width="40" height="14" aria-hidden="true"><rect x="1" y="1" width="38" height="12" rx="5" fill="var(--raised)" stroke="var(--waiting-mark)" stroke-width=".5"/></svg>where the problem was seen</span><span><svg width="40" height="14" aria-hidden="true"><rect x="1" y="1" width="38" height="12" rx="5" fill="var(--raised)" stroke="var(--line-strong)" stroke-width=".5"/></svg>a command: what you or Claude did</span></div>
+</div>
+</body>
+</html>
