@@ -1,0 +1,17 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M8GKPESBTZ5FE2898730DPQR
+subject: a2naxk3d
+type: opened
+at: 2026-11-28T08:17:39Z
+actor:
+  kind: agent
+  name: Claude
+  email: null
+  agent: Claude
+  on_behalf_of: niko.virtala@hey.com
+data:
+  title: Raise a stuck ask from the log when an agent can't go on
+  template: task
+  template_version: 1
