@@ -6,7 +6,7 @@ The map's graph in the palette: a quiet ground, and a trace over it. It replaces
 
 Every item is a dot at its own place, so how much there is and where it piles up is seen before anything is read. The first state has 60 items in 6 kinds: 55 dots and 5 pills.
 
-- **A dot** is 4px across, in its state's `*-mark`: `moved-mark`, `waiting-mark` and `review-mark` at full strength; `done-mark` (settled) and `idle-line` (not started) at 40%.
+- **A dot** is 4px across, the same for every state (to confirm, spec open question 12), in its state's `*-mark`: `moved-mark`, `waiting-mark` and `review-mark` at full strength; `done-mark` (settled) and `idle-line` (not started) at 40%.
 - **A kind** is the region its dots gather in. It has no disc and no outline. Its mark (a small outline shape, in `ink`), its name and its count, in `muted`, sit at its edge. The name and count are not part of the ground, so they never fade.
 - **A pill** is a named item lifted out of the ground: StateChip-shaped, `raised`, a `line-strong` hairline, `--radius-chip`. It holds the kind's mark, the name in `ink` and the state's chip. It has no state fill of its own.
 - **A wait** stays an edge: a session that waits for a pull request, as Kiro Remote's change feed says, is a `waiting-mark` line with an arrow to what it waits for, at the weight of a cascade (1.6px). It goes when the wait ends. The legend names it, so no meaning rests on colour alone.
