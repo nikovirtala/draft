@@ -1,0 +1,15 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M8GN01PAZ8Z3NSKD13463Y3K
+subject: m3r6fbss
+type: commented
+at: 2026-11-28T08:40:22Z
+actor:
+  kind: agent
+  name: kiro
+  email: null
+  agent: kiro
+  on_behalf_of: 244629292+kiro-agent@users.noreply.github.com
+data:
+  text: Previews drawn (Chain, redrawn Graph); waiting for the pictures to be accepted. The pill cap of 7 and one dot size are defaults to confirm (spec open questions 11 and 12); questions 13 and 14 are new.

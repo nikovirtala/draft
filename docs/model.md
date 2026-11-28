@@ -689,26 +689,49 @@ Testable: for a reversible change, applying it and then reverting it must give t
 
 ## The map
 
-The big picture is the graph seen from further away: one view at every distance, not a second view beside it. Zoomed out, items gather into clusters by kind; zoomed in, a cluster opens into its items, their states and their references. It is the map the name promises, drawn as the work goes.
+The big picture is the graph seen from further away: one canvas at every distance and every moment, not a second view beside it. It zooms, pans and tilts, and it travels in time. Zoomed out, it is one cloud of dots in their states' colours; zoomed in, names appear, then each item's states and references. Turned back, it shows the work as it was; tilted, it shows how it got here. It is the map the name promises, drawn as the work goes.
 
-- **Nodes and edges.** An item is a node, coloured by its state, and a reference is a typed edge: implements, supersedes, closes, deployed by, cites. A cluster is the region its items gather in, as large as its count, and the edges between clusters are bundled and weighted by the references they carry.
-- **Quiet ground, few names.** Every item is a small dot in its state's colour, at its own place, so how much there is and where it piles up is seen before anything is read. Only what moves or waits on you is lifted out of the ground as a named pill: its kind's mark, its name and its state in words. The pills are capped, which keeps names from crowding each other; anything else is named when you point at it or zoom to it.
-- **Movement.** A transition recolours its node, and a pulse runs along the edge that caused it, leaving a fading trail, so the last hour reads as motion.
-- **Waits age.** A waiting node warms from neutral to amber to red as it nears its timeout. Stuck things stand out without anyone writing a rule for them.
+- **One mesh.** Every item of a context is one dot in one cloud, coloured by its state. A reference is a typed edge: implements, supersedes, closes, deployed by, cites. There are no regions by kind, no names on the ground and no discs sized by count: how much there is, and where it piles up, is the size and the density of the cloud.
+- **Position comes from references.** A dot sits near what it references and what references it: a decision near the issues and pull requests that implement it, a session near what it works on. The shape of the mesh is the shape of the work, and items of one kind are close only when they refer to each other.
+- **A layout that stays put.** Positions are seeded by ids and change a little at a time as references arrive, so a dot stays where you last saw it. A layout is never recomputed from scratch, or nobody could learn their own map. Nothing moves when the lens, the zoom or the moment changes.
+- **Few names.** Only what moves or waits on you is lifted out as a named pill beside its dot: its kind's mark, its name and its state in words. The pills are capped, which keeps names from crowding each other; anything else is named when you point at it or zoom to it.
+- **Lenses.** A lens is a way of looking at the same mesh. It lights the dots that answer it, fades the rest, draws faint lines between lit neighbours so you see why they sit together, and lifts the lit items that move or wait on you into pills, up to the cap. Nothing is removed. A lens is chosen by asking ("what waits on me?", "why did this happen?", "what rests on this?") or with the map's lens switch.
+- **Why it moved.** The causal trace is a lens. Choose an event, or open the map from a [chain](#why), and the chain lights as a path through the mesh: its dots lit, an arrow along each recorded cause, a small pill on each with its name and state. Because related items are near each other, the path is short. The full cards, verdict and what was ruled out stay in the chain block; choosing a pill on the path opens it there. A command (merge, send, launch) is a cause, never a state: it is a small mark on the arrow it caused, not a dot. An unknown cause is a dashed stub and an effect that led nowhere an open end.
+- **Movement.** A transition recolours its dot, and a pulse runs along the edge that caused it, leaving a fading trail, so the last hour reads as motion.
+- **Waits age.** A waiting dot warms from neutral to amber as it nears its timeout. Stuck things stand out without anyone writing a rule for them.
 - **Cascades.** When one kind's transition triggers another's, the edges between them light up in turn: a signal contradicts an assumption, the decision resting on it goes under review, an issue opens. A cascade is drawn from the causes the facts record, never from timing alone.
-- **Why it moved.** Choose an event and the map shows it as a causal trace, the [chain](#why) drawn in place: the ground fades, and the events line up left to right in the order of causes, each a small card with its kind above it and its source and time beside it, and an arrow for each recorded cause. There are no lanes; what an event is and where it came from is said next to it. What a person or an agent did (merge, send, launch) is a command, said as one and drawn apart from states: a command is a cause, never a state. Its causes light up back to the root, its effects forward to where they stop; the rest stays grey. A reference that is not a cause (the notes a lost delivery was about) is dashed, an unknown cause is a dashed stub, and an effect that led nowhere is an open end. The design system's CausalTrace preview draws two real chains.
-- **Open loops.** A path that stops before an answer is marked as an open end.
-- **A layout that stays put.** Positions are seeded by ids and change a little at a time, so when the log moves, a node stays where you last saw it. A layout is never recomputed from scratch, or nobody could learn their own map.
-- **Moving about.** Zooming and panning change the viewport and never the layout, so a node is where it was when you come back. Buttons, Cmd and plus or minus, and a pinch zoom; the arrow keys, dragging with Space held and a two-finger scroll pan; a button fits the graph to the panel. The zoom levels below are a different move, made on purpose, and each fits its own view.
-- **The grid is a layout.** The same nodes arranged with one row per kind and one column per state, from start to terminal, and a crowded cell collapses to a count. It shows where things pile up. Switching to it moves the nodes; it doesn't open another view.
+- **Moving about.** The canvas zooms smoothly and continuously about the pointer, pans, and fits the mesh to the block. A pinch or Cmd with plus or minus zooms; a drag, a two-finger scroll or the arrow keys pan; a button and Cmd-0 fit. Zooming and panning change the viewport and never the layout.
+- **The grid is a layout.** The same dots arranged with one row per kind and one column per state, from start to terminal, and a crowded cell collapses to a count. It shows where things pile up. Switching to it moves the dots on purpose, and switching back returns them to their places.
 
-Zoom levels: the process (the seven steps as stations with live counts), the universe (contexts as regions with their boundaries), a context (its kinds as clusters, with bundled references between them), a kind (its items, laid out along its state machine), an item (its neighbourhood and audit record). Zooming is semantic: a cluster opens into its items when there is room for them, so zooming in never shows a hairball.
+### The time machine
 
-Time: live by default. A scrubber replays the log; because a [durable context](#durable-context) rehydrates from its log, the map can be rebuilt at any moment, and a week can be watched as it happened.
+A context is its log, and any moment of it can be rebuilt, so the map can show any moment, not only now.
 
-Lenses: by state (the grid), causes and effects of one event (the causal trace), only what is moving, waiting on me, open loops, broken invariants, one person's view.
+- **The time bar.** Under the canvas, the context's history as a thin strip of how much happened when, with now at the right. Live by default.
+- **Replay.** Drag the time bar, or press play at a chosen speed, and the mesh rebuilds as the log folds: items appear at their places, recolour and settle, and each causal step pulses along its edge and leaves a fading trail. A dot that doesn't exist yet is absent; a dot never moves in time either. A week can be watched as it happened.
+- **Compare two moments.** Choose a span ("since Monday") and the map lights what is new, what moved and what closed in it, and fades the rest. Comparing is a lens over a span.
+- **Every lens works at any moment.** "What waited on me on Thursday?" is the waiting lens, asked of Thursday.
+- **A moment is referenceable.** The map at a position is an address like anything else, so "the map as it was before the merge" can be cited in the conversation and opens there.
+- **Calm by default.** With reduced motion, replay steps from event to event instead of animating, and pulses become a brief highlight.
 
-Flow is measured, not targeted: how long things take from talk to hearing back, and where they pile up.
+### The time stack
+
+Tilt the canvas and history stacks above the mesh. The floor is the oldest day of the span and each layer above it a day later, up to now on top, with every dot at the same place in every layer.
+
+- **An item is a line through time.** It rises through the layers while it lives, coloured by its state on each day, so one glance shows when it opened, how long it waited and when it closed.
+- **A causal trace is a thread through the stack.** The merge on Tuesday and the failure on Thursday are joined by a thread that climbs through the days between them: what led to what, and how long it took.
+- **Only what the lens lights stands up.** The rest stays a faint floor, so the stack is never a forest.
+- **The camera is held.** Tilt and turn around the vertical axis within limits, with a home position one key away. There is no free flight, so nobody gets lost; tilting back flattens the stack to the mesh of now.
+
+### For every reader
+
+The canvas is drawn, so beside it is the same answer in words: a list of what the lens lights, in reading order, each row a button that opens its item, and the time bar as a slider that says its moment in words. Changing the lens, the moment or the tilt is announced. Everything the canvas does, the keyboard does.
+
+Zoom levels: the process (the seven steps as stations with live counts), the universe (contexts as regions with their boundaries), a context (its mesh), an item (its neighbourhood and audit record). Zooming is semantic: at a distance the mesh is dots, closer in, names appear, and an item's neighbourhood opens when there is room for it, so zooming in never shows a hairball. A kind is a lens, not a level.
+
+Lenses: everything (the default), waiting on me, only what is moving, open loops, one kind (decisions, issues, pull requests, sessions, deployments, signals, threads), one person's view, broken invariants, what rests on an item, the causal trace of a chosen event, and a comparison of two moments. "By state" is the other layout of the same dots, not a lens.
+
+Flow is measured, not targeted: how long things take from talk to hearing back, and where they pile up. The time stack is where it shows.
 
 Like everything else, the map is a block. "Show me everything that's moving" brings it into the conversation; it can be pinned to the panel, popped into a window on a second screen, or minimized to one live line: "14 moving · 3 waiting on you · 1 open loop".
 
@@ -724,4 +747,6 @@ Like everything else, the map is a block. "Show me everything that's moving" bri
 - [ ] Which rules are bootstrap axioms? Whether "agents read, people act" is an axiom or ordinary standing is a real choice.
 - [ ] Which way should intake err when unsure? Something filed as standing that is really a kind never closes, while a kind with a timeout fails loudly, which argues for erring toward kind.
 - [ ] Standing has no states to plot on the map. Does it need its own view, such as the ladder by scope with orphaned, blind, stale and contradicted items lit?
-- [ ] When does a cluster open into its items: at a count, when there is room on screen, or when something in it waits on you?
+- [ ] When does a dot get its name as you zoom in: at a count, when there is room on screen, or when it waits on you?
+- [ ] How far back does the time stack reach by default: a week, the life of the context, or what the lens lights?
+- [ ] Does replay need snapshots per day to scrub a month smoothly, or is folding from the nearest cached snapshot enough?

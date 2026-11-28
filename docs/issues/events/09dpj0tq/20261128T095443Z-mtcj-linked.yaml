@@ -1,0 +1,16 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M8GS85NTBCZA469605N0MTCJ
+subject: 09dpj0tq
+type: linked
+at: 2026-11-28T09:54:43Z
+actor:
+  kind: agent
+  name: Claude
+  email: null
+  agent: Claude
+  on_behalf_of: niko.virtala@hey.com
+data:
+  to: xcr2egxx
+  rel: depends-on

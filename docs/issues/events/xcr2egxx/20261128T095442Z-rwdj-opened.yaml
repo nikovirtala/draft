@@ -1,0 +1,17 @@
+envelope: ledger/v1
+kind: issue
+schema: issue/v1
+id: 01M8GS850G5QXAN9DNC0JARWDJ
+subject: xcr2egxx
+type: opened
+at: 2026-11-28T09:54:42Z
+actor:
+  kind: agent
+  name: Claude
+  email: null
+  agent: Claude
+  on_behalf_of: niko.virtala@hey.com
+data:
+  title: Replay, compare and look back with the time machine
+  template: task
+  template_version: 1
