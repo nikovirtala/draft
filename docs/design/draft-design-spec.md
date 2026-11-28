@@ -266,7 +266,7 @@ Answers to earlier questions, with the reason, so later work does not reopen the
 8. **A budget for the renderer.** Which numbers (start time, a long conversation, a large map) and how they are measured.
 9. **A click in a text field.** `:focus-visible` always matches a text field, so a click in the composer or a reply box shows the ring, while the rule says a click shows nothing. Keep the platform's behaviour (a field you can type in shows where it is) as the one exception, or suppress it?
 10. **A diagram that did not render.** It shows its source and a caption on the plain ground. Should it be a failure notice (A8)?
-11. **The pill cap.** How many named pills the quiet ground lifts before the rest are counted instead, and whether the cap follows the size of the block.
+11. **The pill cap.** How many named pills the quiet ground lifts before the rest are counted instead, and whether the cap follows the size of the block. Default, to confirm: 7 at most, whatever the size of the block; the rest are counted in their region's count and named when pointed at. The preview draws 5.
 12. **A dot on the ground.** One size for every dot, or a little larger for what moved in the window? A larger dot reads as importance, which a state doesn't claim.
 13. **An open loop on the ground.** An open loop is a dashed `loop-mark` ring, and a 4px dot has no room for the dashes. Leave open loops out of the ground until they wait on the person (then they are a pill), or draw a hollow ring at the dot's size?
 14. **Words that fade.** A faded pill's words fall below 4.5:1 on purpose, as the ground recedes while a trace is read. Accept that as a third named pair, or keep the pills' words at full strength and fade only their box?

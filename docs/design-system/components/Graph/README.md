@@ -20,7 +20,7 @@ What may be a pill:
 - an item that moved in the window (`moved`);
 - an item that waits on the person (`waiting`), including a session that waits for a pull request.
 
-Nothing else is a pill. Anything else is named when you point at it or zoom to it.
+Nothing else is a pill. At most 7 pills are lifted at once (to confirm, spec open question 11); the rest stay dots. Anything else is named when you point at it or zoom to it.
 
 What may fade (to 25%, in a trace): dots and pills. Nothing else fades: regions' names and counts, the legend, and the chain's cards stay at full strength.
 
